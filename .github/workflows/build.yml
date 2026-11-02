@@ -42,9 +42,7 @@ jobs:
       - name: Force Dark Theme in WebView
         run: |
           STYLES_FILE="android/app/src/main/res/values/styles.xml"
-          # Меняем светлую тему на темную
           sed -i 's/Theme.AppCompat.Light.NoActionBar/Theme.AppCompat.NoActionBar/g' "$STYLES_FILE"
-          # Добавляем принудительный флаг isLightTheme=false
           sed -i '/<style name="AppTheme.NoActionBar"/a\        <item name="android:isLightTheme">false</item>' "$STYLES_FILE"
           echo "=== styles.xml после изменений ==="
           cat "$STYLES_FILE"
@@ -60,14 +58,15 @@ jobs:
           cd android
           chmod +x gradlew
           ./gradlew assembleRelease \
-            -Pandroid.injected.build.storeFile=$(pwd)/app/release.keystore \
-            -Pandroid.injected.build.storePassword=${{ secrets.ANDROID_KEYSTORE_PASSWORD }} \
-            -Pandroid.injected.build.keyAlias=${{ secrets.ANDROID_KEY_ALIAS }} \
-            -Pandroid.injected.build.keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}
+            -Pandroid.injected.signing.store.file=$(pwd)/app/release.keystore \
+            -Pandroid.injected.signing.store.password=${{ secrets.ANDROID_KEYSTORE_PASSWORD }} \
+            -Pandroid.injected.signing.key.alias=${{ secrets.ANDROID_KEY_ALIAS }} \
+            -Pandroid.injected.signing.key.password=${{ secrets.ANDROID_KEY_PASSWORD }}
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: polka-release-apk
-          path: android/app/build/outputs/apk/release/app-release.apk
+          path: android/app/build/outputs/apk/release/*.apk
           retention-days: 30
