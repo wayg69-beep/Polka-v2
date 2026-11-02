@@ -36,33 +36,34 @@ jobs:
       - name: Set minSdkVersion
         run: |
           sed -i 's/minSdkVersion = 24/minSdkVersion = 26/' android/variables.gradle
+          echo "Проверка variables.gradle:"
+          grep minSdkVersion android/variables.gradle
 
       - name: Force Dark Theme in WebView
         run: |
           STYLES_FILE="android/app/src/main/res/values/styles.xml"
-          sed -i 's|<style name="AppTheme.NoActionBar" parent="Theme.AppCompat.Light.NoActionBar">|<style name="AppTheme.NoActionBar" parent="Theme.AppCompat.NoActionBar">|' "$STYLES_FILE"
+          # Меняем светлую тему на темную
+          sed -i 's/Theme.AppCompat.Light.NoActionBar/Theme.AppCompat.NoActionBar/g' "$STYLES_FILE"
+          # Добавляем принудительный флаг isLightTheme=false
           sed -i '/<style name="AppTheme.NoActionBar"/a\        <item name="android:isLightTheme">false</item>' "$STYLES_FILE"
-          echo "=== styles.xml ==="
+          echo "=== styles.xml после изменений ==="
           cat "$STYLES_FILE"
 
       - name: Sync web assets
         run: npx cap sync android
 
       - name: Decode Keystore
-        env:
-          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-        run: |
-          python3 -c "import base64, os; open('android/app/release.keystore', 'wb').write(base64.b64decode(os.environ['KEYSTORE_BASE64']))"
+        run: echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > android/app/release.keystore
 
       - name: Build Release APK
         run: |
           cd android
           chmod +x gradlew
           ./gradlew assembleRelease \
-            -Pandroid.injected.signing.store.file=$(pwd)/app/release.keystore \
-            -Pandroid.injected.signing.store.password=${{ secrets.KEYSTORE_PASSWORD }} \
-            -Pandroid.injected.signing.key.alias=${{ secrets.ANDROID_KEY_ALIAS }} \
-            -Pandroid.injected.signing.key.password=${{ secrets.KEY_PASSWORD }}
+            -Pandroid.injected.build.storeFile=$(pwd)/app/release.keystore \
+            -Pandroid.injected.build.storePassword=${{ secrets.ANDROID_KEYSTORE_PASSWORD }} \
+            -Pandroid.injected.build.keyAlias=${{ secrets.ANDROID_KEY_ALIAS }} \
+            -Pandroid.injected.build.keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
