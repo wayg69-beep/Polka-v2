@@ -5,7 +5,7 @@
   "dependencies": {
     "@capacitor/android": "^8.6.0",
     "@capacitor/core": "^8.6.0",
-    "@capgo/capacitor-inappbrowser": "^8.11.0",
+    "@capawesome/capacitor-in-app-browser": "^8.0.0",
     "@capacitor/cli": "^8.6.0"
   }
 }
