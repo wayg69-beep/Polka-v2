@@ -1,0 +1,8 @@
+{
+  "appId": "app.polka.tracker",
+  "appName": "Полка",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "https"
+  }
+}
