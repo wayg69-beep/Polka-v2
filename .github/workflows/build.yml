@@ -33,6 +33,12 @@ jobs:
       - name: Add Android platform
         run: npx cap add android
 
+      - name: Set minSdkVersion
+        run: |
+          sed -i 's/minSdkVersion = 24/minSdkVersion = 26/' android/variables.gradle
+          echo "Проверка variables.gradle:"
+          grep minSdkVersion android/variables.gradle
+
       - name: Sync web assets
         run: npx cap sync android
 
