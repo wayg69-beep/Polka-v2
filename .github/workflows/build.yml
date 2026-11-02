@@ -36,6 +36,37 @@ jobs:
       - name: Set minSdkVersion
         run: sed -i 's/minSdkVersion = 24/minSdkVersion = 26/' android/variables.gradle
 
+      # ЖЕСТКИЙ ПАТЧ JAVA-КОДА ПЛАГИНА
+      - name: Patch InAppBrowser Dark Theme
+        run: |
+          FILE="node_modules/@capawesome/capacitor-in-app-browser/android/src/main/java/io/capawesome/capacitorjs/plugins/inappbrowser/classes/WebViewDialog.java"
+          
+          if [ ! -f "$FILE" ]; then
+            echo "❌ ОШИБКА: Файл WebViewDialog.java не найден!"
+            exit 1
+          fi
+
+          echo "=== ПАТЧИМ JAVA-КОД ПЛАГИНА ==="
+          # 1. Меняем тему окна на темную (убираем Light)
+          sed -i 's/android.R.style.Theme_Material_Light_NoActionBar/android.R.style.Theme_Material_NoActionBar/g' "$FILE"
+          
+          # 2. Меняем белый фон контента на черный
+          sed -i 's/contentView.setBackgroundColor(Color.WHITE);/contentView.setBackgroundColor(Color.BLACK);/g' "$FILE"
+          
+          # 3. Меняем цвет текста тулбара с черного на белый
+          sed -i 's/toolbarOptions.getColor() == null ? Color.BLACK :/toolbarOptions.getColor() == null ? Color.WHITE :/g' "$FILE"
+          
+          # 4. Меняем белый фон тулбара на черный
+          sed -i 's/toolbar.setBackgroundColor(toolbarOptions.getBackgroundColor() == null ? Color.WHITE :/toolbar.setBackgroundColor(toolbarOptions.getBackgroundColor() == null ? Color.BLACK :/g' "$FILE"
+
+          echo "=== ПРОВЕРКА ПАТЧА (Ищем следы темной темы) ==="
+          if grep -q 'Theme_Material_NoActionBar' "$FILE" && grep -q 'contentView.setBackgroundColor(Color.BLACK)' "$FILE"; then
+            echo "✅ ТЕСТ ПРОЙДЕН: Java-код успешно пропатчен на темную тему."
+          else
+            echo "❌ ТЕСТ ПРОВАЛЕН: Замены не применились."
+            exit 1
+          fi
+
       - name: Sync web assets
         run: npx cap sync android
 
@@ -46,9 +77,9 @@ jobs:
           sed -i '/<style name="AppTheme.NoActionBar"/a\        <item name="android:isLightTheme">false</item>' "$STYLES_FILE"
           
           if grep -q 'isLightTheme">false' "$STYLES_FILE"; then
-            echo "✅ ТЕМА ТЕМНАЯ. InAppBrowser унаследует её."
+            echo "✅ Основная тема приложения темная."
           else
-            echo "❌ ОШИБКА: НЕ УДАЛОСЬ ПОМЕНЯТЬ ТЕМУ."
+            echo "❌ ОШИБКА: Не удалось поменять тему приложения."
             exit 1
           fi
 
