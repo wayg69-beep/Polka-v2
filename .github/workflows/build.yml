@@ -34,21 +34,23 @@ jobs:
         run: npx cap add android
 
       - name: Set minSdkVersion
-        run: |
-          sed -i 's/minSdkVersion = 24/minSdkVersion = 26/' android/variables.gradle
-          echo "Проверка variables.gradle:"
-          grep minSdkVersion android/variables.gradle
-
-      - name: Force Dark Theme in WebView
-        run: |
-          STYLES_FILE="android/app/src/main/res/values/styles.xml"
-          sed -i 's/Theme.AppCompat.Light.NoActionBar/Theme.AppCompat.NoActionBar/g' "$STYLES_FILE"
-          sed -i '/<style name="AppTheme.NoActionBar"/a\        <item name="android:isLightTheme">false</item>' "$STYLES_FILE"
-          echo "=== styles.xml после изменений ==="
-          cat "$STYLES_FILE"
+        run: sed -i 's/minSdkVersion = 24/minSdkVersion = 26/' android/variables.gradle
 
       - name: Sync web assets
         run: npx cap sync android
+
+      - name: Force Dark Theme in App
+        run: |
+          STYLES_FILE="android/app/src/main/res/values/styles.xml"
+          sed -i 's|parent="Theme.AppCompat.Light.NoActionBar"|parent="Theme.AppCompat.NoActionBar"|' "$STYLES_FILE"
+          sed -i '/<style name="AppTheme.NoActionBar"/a\        <item name="android:isLightTheme">false</item>' "$STYLES_FILE"
+          
+          if grep -q 'isLightTheme">false' "$STYLES_FILE"; then
+            echo "✅ ТЕМА ТЕМНАЯ. InAppBrowser унаследует её."
+          else
+            echo "❌ ОШИБКА: НЕ УДАЛОСЬ ПОМЕНЯТЬ ТЕМУ."
+            exit 1
+          fi
 
       - name: Decode Keystore
         run: echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > android/app/release.keystore
@@ -65,8 +67,6 @@ jobs:
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
-        if: always()
         with:
           name: polka-release-apk
           path: android/app/build/outputs/apk/release/*.apk
-          retention-days: 30
