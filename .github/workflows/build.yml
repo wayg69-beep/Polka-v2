@@ -130,25 +130,22 @@ jobs:
           }
           EOF
 
-          MAIN_ACTIVITY="$PKG_DIR/MainActivity.java"
-          if [ -f "$MAIN_ACTIVITY" ]; then
-            python3 -c "
-          with open('$MAIN_ACTIVITY', 'r') as f:
-              content = f.read()
-          if 'registerPlugin(AppSearchPlugin.class);' not in content:
-              content = content.replace('super.onCreate(savedInstanceState);', 'registerPlugin(AppSearchPlugin.class);\n        super.onCreate(savedInstanceState);')
-              with open('$MAIN_ACTIVITY', 'w') as f:
-                  f.write(content)
-              print('✅ Плагин AppSearch внедрен в MainActivity')
-          else:
-              print('ℹ️ Плагин уже внедрен')
-          "
-            echo "=== Содержимое MainActivity.java ==="
-            cat "$MAIN_ACTIVITY"
-          else
-            echo "❌ MainActivity.java не найден!"
-            exit 1
-          fi
+          # Создаем MainActivity.java с нуля, чтобы гарантировать регистрацию
+          cat << 'EOF' > "$PKG_DIR/MainActivity.java"
+          package app.polka.tracker;
+
+          import android.os.Bundle;
+          import com.getcapacitor.BridgeActivity;
+
+          public class MainActivity extends BridgeActivity {
+              @Override
+              public void onCreate(Bundle savedInstanceState) {
+                  registerPlugin(AppSearchPlugin.class);
+                  super.onCreate(savedInstanceState);
+              }
+          }
+          EOF
+          echo "✅ MainActivity.java перезаписан с регистрацией плагина."
 
       - name: Decode Keystore
         run: echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > android/app/release.keystore
