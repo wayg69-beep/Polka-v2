@@ -47,16 +47,9 @@ jobs:
           fi
 
           echo "=== ПАТЧИМ JAVA-КОД ПЛАГИНА ==="
-          # 1. Меняем тему окна на темную (убираем Light)
           sed -i 's/android.R.style.Theme_Material_Light_NoActionBar/android.R.style.Theme_Material_NoActionBar/g' "$FILE"
-          
-          # 2. Меняем белый фон контента на черный
           sed -i 's/contentView.setBackgroundColor(Color.WHITE);/contentView.setBackgroundColor(Color.BLACK);/g' "$FILE"
-          
-          # 3. Меняем цвет текста тулбара с черного на белый
           sed -i 's/toolbarOptions.getColor() == null ? Color.BLACK :/toolbarOptions.getColor() == null ? Color.WHITE :/g' "$FILE"
-          
-          # 4. Меняем белый фон тулбара на черный
           sed -i 's/toolbar.setBackgroundColor(toolbarOptions.getBackgroundColor() == null ? Color.WHITE :/toolbar.setBackgroundColor(toolbarOptions.getBackgroundColor() == null ? Color.BLACK :/g' "$FILE"
 
           echo "=== ПРОВЕРКА ПАТЧА (Ищем следы темной темы) ==="
@@ -69,6 +62,48 @@ jobs:
 
       - name: Sync web assets
         run: npx cap sync android
+
+      # ДОБАВЛЕНИЕ ПАКЕТА VK X В МАНИФЕСТ
+      - name: Add Queries for VK X
+        run: |
+          MANIFEST="android/app/src/main/AndroidManifest.xml"
+          if [ ! -f "$MANIFEST" ]; then
+            echo "❌ Манифест не найден!"
+            exit 1
+          fi
+
+          # Создаем временный python-скрипт для безопасной правки XML
+          cat << 'EOF' > add_queries.py
+          import sys
+          manifest_path = 'android/app/src/main/AndroidManifest.xml'
+          with open(manifest_path, 'r', encoding='utf-8') as f:
+              content = f.read()
+
+          vkx_pkg = '        <package android:name="ua.itaysonlab.vkx" />'
+
+          if '<queries>' in content:
+              if 'ua.itaysonlab.vkx' not in content:
+                  content = content.replace('<queries>', '<queries>\n' + vkx_pkg)
+                  print('✅ Пакет VK X добавлен в существующий блок queries')
+              else:
+                  print('ℹ️ Пакет VK X уже есть в queries')
+          else:
+              queries_block = '    <queries>\n' + vkx_pkg + '\n    </queries>\n</manifest>'
+              content = content.replace('</manifest>', queries_block)
+              print('✅ Создан новый блок queries и добавлен VK X')
+
+          with open(manifest_path, 'w', encoding='utf-8') as f:
+              f.write(content)
+          EOF
+          
+          python3 add_queries.py
+
+          if grep -q 'ua.itaysonlab.vkx' "$MANIFEST"; then
+            echo "✅ Проверка пройдена: VK X есть в манифесте."
+          else
+            echo "❌ ОШИБКА: VK X не попал в манифест."
+            exit 1
+          fi
 
       - name: Force Dark Theme in App
         run: |
