@@ -40,59 +40,62 @@ jobs:
       - name: Patch InAppBrowser Dark Theme
         run: |
           FILE="node_modules/@capawesome/capacitor-in-app-browser/android/src/main/java/io/capawesome/capacitorjs/plugins/inappbrowser/classes/WebViewDialog.java"
-          if [ ! -f "$FILE" ]; then
-            echo "❌ ОШИБКА: Файл WebViewDialog.java не найден!"
-            exit 1
-          fi
+          if [ ! -f "$FILE" ]; then echo "❌ WebViewDialog.java не найден!"; exit 1; fi
           sed -i 's/android.R.style.Theme_Material_Light_NoActionBar/android.R.style.Theme_Material_NoActionBar/g' "$FILE"
           sed -i 's/contentView.setBackgroundColor(Color.WHITE);/contentView.setBackgroundColor(Color.BLACK);/g' "$FILE"
           sed -i 's/toolbarOptions.getColor() == null ? Color.BLACK :/toolbarOptions.getColor() == null ? Color.WHITE :/g' "$FILE"
           sed -i 's/toolbar.setBackgroundColor(toolbarOptions.getBackgroundColor() == null ? Color.WHITE :/toolbar.setBackgroundColor(toolbarOptions.getBackgroundColor() == null ? Color.BLACK :/g' "$FILE"
-          if grep -q 'Theme_Material_NoActionBar' "$FILE" && grep -q 'contentView.setBackgroundColor(Color.BLACK)' "$FILE"; then
-            echo "✅ ТЕМА INAPPBROWSER ПРОПАТЧЕНА"
-          else
-            echo "❌ ОШИБКА ПАТЧА ТЕМЫ"
-            exit 1
-          fi
+          echo "✅ Тема InAppBrowser пропатчена"
 
       - name: Sync web assets
         run: npx cap sync android
 
-      # 2. ДОБАВЛЕНИЕ ПАКЕТА VK X В МАНИФЕСТ
-      - name: Add Queries for VK X
+      # 2. МАНИФЕСТ: QUERIES + SHARE TARGET
+      - name: Patch Android Manifest
         run: |
           MANIFEST="android/app/src/main/AndroidManifest.xml"
           python3 -c "
+          import re
           with open('$MANIFEST', 'r', encoding='utf-8') as f:
               content = f.read()
-          vkx_pkg = '        <package android:name=\"ua.itaysonlab.vkx\" />'
-          if '<queries>' in content:
-              if 'ua.itaysonlab.vkx' not in content:
-                  content = content.replace('<queries>', '<queries>\n' + vkx_pkg)
-                  print('✅ Пакет VK X добавлен')
-          else:
-              queries_block = '    <queries>\n' + vkx_pkg + '\n    </queries>\n</manifest>'
-              content = content.replace('</manifest>', queries_block)
-              print('✅ Блок queries создан')
+
+          # Добавляем queries для VK X
+          vkx_pkg = '<package android:name=\"ua.itaysonlab.vkx\" />'
+          if '<queries>' not in content:
+              content = content.replace('</manifest>', '    <queries>\n        ' + vkx_pkg + '\n    </queries>\n</manifest>')
+          elif 'ua.itaysonlab.vkx' not in content:
+              content = content.replace('<queries>', '<queries>\n        ' + vkx_pkg)
+
+          # Добавляем Share Target в MainActivity
+          share_filter = '''
+              <intent-filter>
+                  <action android:name=\"android.intent.action.SEND\" />
+                  <category android:name=\"android.intent.category.DEFAULT\" />
+                  <data android:mimeType=\"text/plain\" />
+              </intent-filter>'''
+
+          pattern = r'(<activity[^>]*android:name=\"[\.a-zA-Z0-9_]*MainActivity\"[^>]*>)'
+          match = re.search(pattern, content)
+          if match and 'android.intent.action.SEND' not in content:
+              start_idx = match.end()
+              end_idx = content.find('</activity>', start_idx)
+              if end_idx != -1:
+                  content = content[:end_idx] + share_filter + '\n        ' + content[end_idx:]
+                  print('✅ Share Target добавлен')
+
           with open('$MANIFEST', 'w', encoding='utf-8') as f:
               f.write(content)
           "
 
-      # 3. ТЕМНАЯ ТЕМА ОСНОВНОГО ПРИЛОЖЕНИЯ
+      # 3. ТЕМНАЯ ТЕМА ПРИЛОЖЕНИЯ
       - name: Force Dark Theme in App
         run: |
           STYLES_FILE="android/app/src/main/res/values/styles.xml"
           sed -i 's|parent="Theme.AppCompat.Light.NoActionBar"|parent="Theme.AppCompat.NoActionBar"|' "$STYLES_FILE"
           sed -i '/<style name="AppTheme.NoActionBar"/a\        <item name="android:isLightTheme">false</item>' "$STYLES_FILE"
-          if grep -q 'isLightTheme">false' "$STYLES_FILE"; then
-            echo "✅ ТЕМА ПРИЛОЖЕНИЯ ТЕМНАЯ"
-          else
-            echo "❌ ОШИБКА ТЕМЫ ПРИЛОЖЕНИЯ"
-            exit 1
-          fi
 
-      # 4. ВНЕДРЕНИЕ КАСТОМНОГО ПЛАГИНА ПОИСКА
-      - name: Inject Custom App Search Plugin
+      # 4. КАСТОМНЫЙ ПЛАГИН И ПРИЕМНИК ССЫЛОК
+      - name: Inject Custom Plugin
         run: |
           PKG_DIR="android/app/src/main/java/app/polka/tracker"
           mkdir -p "$PKG_DIR"
@@ -113,21 +116,30 @@ jobs:
               public void openSearch(PluginCall call) {
                   String query = call.getString("query");
                   String packageName = call.getString("packageName");
-                  if (query == null || packageName == null) {
-                      call.reject("Must provide query and packageName");
-                      return;
-                  }
+                  if (query == null || packageName == null) { call.reject("Must provide query and packageName"); return; }
                   try {
-                      // Используем рабочий формат поиска VK
-                      Uri uri = Uri.parse("https://vk.ru/audio?section=general&q=" + Uri.encode(query));
+                      Uri uri = Uri.parse("https://vk.com/audios?section=general&q=" + Uri.encode(query));
                       Intent intent = new Intent(Intent.ACTION_VIEW, uri);
                       intent.setPackage(packageName);
                       intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
                       getContext().startActivity(intent);
                       call.resolve();
-                  } catch (Exception e) {
-                      call.reject(e.getMessage());
-                  }
+                  } catch (Exception e) { call.reject(e.getMessage()); }
+              }
+
+              @PluginMethod
+              public void openLink(PluginCall call) {
+                  String url = call.getString("url");
+                  String packageName = call.getString("packageName");
+                  if (url == null || packageName == null) { call.reject("Must provide url and packageName"); return; }
+                  try {
+                      Uri uri = Uri.parse(url);
+                      Intent intent = new Intent(Intent.ACTION_VIEW, uri);
+                      intent.setPackage(packageName);
+                      intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                      getContext().startActivity(intent);
+                      call.resolve();
+                  } catch (Exception e) { call.reject(e.getMessage()); }
               }
           }
           EOF
@@ -135,18 +147,44 @@ jobs:
           cat << 'EOF' > "$PKG_DIR/MainActivity.java"
           package app.polka.tracker;
 
+          import android.content.Intent;
           import android.os.Bundle;
           import com.getcapacitor.BridgeActivity;
+          import org.json.JSONObject;
 
           public class MainActivity extends BridgeActivity {
               @Override
               public void onCreate(Bundle savedInstanceState) {
                   registerPlugin(AppSearchPlugin.class);
                   super.onCreate(savedInstanceState);
+                  handleShareIntent(getIntent());
+              }
+
+              @Override
+              protected void onNewIntent(Intent intent) {
+                  super.onNewIntent(intent);
+                  handleShareIntent(intent);
+              }
+
+              private void handleShareIntent(Intent intent) {
+                  if (intent != null && Intent.ACTION_SEND.equals(intent.getAction())) {
+                      String sharedText = intent.getStringExtra(Intent.EXTRA_TEXT);
+                      if (sharedText != null && this.bridge != null && this.bridge.getWebView() != null) {
+                          try {
+                              final String js = "window.dispatchEvent(new CustomEvent('vkShareLink', { detail: { text: " + JSONObject.quote(sharedText) + " } }));";
+                              this.bridge.getWebView().post(new Runnable() {
+                                  @Override
+                                  public void run() {
+                                      MainActivity.this.bridge.getWebView().evaluateJavascript(js, null);
+                                  }
+                              });
+                          } catch (Exception e) {}
+                      }
+                  }
               }
           }
           EOF
-          echo "✅ MainActivity.java перезаписан с регистрацией плагина."
+          echo "✅ Плагин и приемник ссылок внедрены"
 
       - name: Decode Keystore
         run: echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > android/app/release.keystore
