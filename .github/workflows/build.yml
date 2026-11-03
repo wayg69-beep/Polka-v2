@@ -101,6 +101,7 @@ jobs:
           package app.polka.tracker;
 
           import android.content.Intent;
+          import android.net.Uri;
           import com.getcapacitor.Plugin;
           import com.getcapacitor.PluginCall;
           import com.getcapacitor.PluginMethod;
@@ -117,9 +118,10 @@ jobs:
                       return;
                   }
                   try {
-                      Intent intent = new Intent(Intent.ACTION_SEARCH);
+                      // Используем рабочий формат поиска VK
+                      Uri uri = Uri.parse("https://vk.ru/audio?section=general&q=" + Uri.encode(query));
+                      Intent intent = new Intent(Intent.ACTION_VIEW, uri);
                       intent.setPackage(packageName);
-                      intent.putExtra("query", query);
                       intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
                       getContext().startActivity(intent);
                       call.resolve();
@@ -130,7 +132,6 @@ jobs:
           }
           EOF
 
-          # Создаем MainActivity.java с нуля, чтобы гарантировать регистрацию
           cat << 'EOF' > "$PKG_DIR/MainActivity.java"
           package app.polka.tracker;
 
