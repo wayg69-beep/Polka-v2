@@ -36,7 +36,7 @@ jobs:
       - name: Set minSdkVersion
         run: sed -i 's/minSdkVersion = 24/minSdkVersion = 26/' android/variables.gradle
 
-      # ЖЕСТКИЙ ПАТЧ JAVA-КОДА ПЛАГИНА
+      # 1. ЖЕСТКИЙ ПАТЧ JAVA-КОДА ПЛАГИНА (темная тема)
       - name: Patch InAppBrowser Dark Theme
         run: |
           FILE="node_modules/@capawesome/capacitor-in-app-browser/android/src/main/java/io/capawesome/capacitorjs/plugins/inappbrowser/classes/WebViewDialog.java"
@@ -52,7 +52,7 @@ jobs:
           sed -i 's/toolbarOptions.getColor() == null ? Color.BLACK :/toolbarOptions.getColor() == null ? Color.WHITE :/g' "$FILE"
           sed -i 's/toolbar.setBackgroundColor(toolbarOptions.getBackgroundColor() == null ? Color.WHITE :/toolbar.setBackgroundColor(toolbarOptions.getBackgroundColor() == null ? Color.BLACK :/g' "$FILE"
 
-          echo "=== ПРОВЕРКА ПАТЧА (Ищем следы темной темы) ==="
+          echo "=== ПРОВЕРКА ПАТЧА ==="
           if grep -q 'Theme_Material_NoActionBar' "$FILE" && grep -q 'contentView.setBackgroundColor(Color.BLACK)' "$FILE"; then
             echo "✅ ТЕСТ ПРОЙДЕН: Java-код успешно пропатчен на темную тему."
           else
@@ -63,40 +63,31 @@ jobs:
       - name: Sync web assets
         run: npx cap sync android
 
-      # ДОБАВЛЕНИЕ ПАКЕТА VK X В МАНИФЕСТ
+      # 2. ДОБАВЛЕНИЕ ПАКЕТА VK X В МАНИФЕСТ (для Android 11+)
       - name: Add Queries for VK X
         run: |
           MANIFEST="android/app/src/main/AndroidManifest.xml"
-          if [ ! -f "$MANIFEST" ]; then
-            echo "❌ Манифест не найден!"
-            exit 1
-          fi
-
-          # Создаем временный python-скрипт для безопасной правки XML
-          cat << 'EOF' > add_queries.py
-          import sys
-          manifest_path = 'android/app/src/main/AndroidManifest.xml'
-          with open(manifest_path, 'r', encoding='utf-8') as f:
+          
+          python3 -c "
+          with open('$MANIFEST', 'r', encoding='utf-8') as f:
               content = f.read()
 
-          vkx_pkg = '        <package android:name="ua.itaysonlab.vkx" />'
+          vkx_pkg = '        <package android:name=\"ua.itaysonlab.vkx\" />'
 
           if '<queries>' in content:
               if 'ua.itaysonlab.vkx' not in content:
                   content = content.replace('<queries>', '<queries>\n' + vkx_pkg)
-                  print('✅ Пакет VK X добавлен в существующий блок queries')
+                  print('✅ Пакет VK X добавлен в существующий queries')
               else:
-                  print('ℹ️ Пакет VK X уже есть в queries')
+                  print('ℹ️ Пакет VK X уже есть')
           else:
               queries_block = '    <queries>\n' + vkx_pkg + '\n    </queries>\n</manifest>'
               content = content.replace('</manifest>', queries_block)
-              print('✅ Создан новый блок queries и добавлен VK X')
+              print('✅ Создан новый блок queries')
 
-          with open(manifest_path, 'w', encoding='utf-8') as f:
+          with open('$MANIFEST', 'w', encoding='utf-8') as f:
               f.write(content)
-          EOF
-          
-          python3 add_queries.py
+          "
 
           if grep -q 'ua.itaysonlab.vkx' "$MANIFEST"; then
             echo "✅ Проверка пройдена: VK X есть в манифесте."
@@ -105,6 +96,7 @@ jobs:
             exit 1
           fi
 
+      # 3. ТЕМНАЯ ТЕМА ОСНОВНОГО ПРИЛОЖЕНИЯ
       - name: Force Dark Theme in App
         run: |
           STYLES_FILE="android/app/src/main/res/values/styles.xml"
@@ -114,7 +106,55 @@ jobs:
           if grep -q 'isLightTheme">false' "$STYLES_FILE"; then
             echo "✅ Основная тема приложения темная."
           else
-            echo "❌ ОШИБКА: Не удалось поменять тему приложения."
+            echo "❌ ОШИБКА: Не удалось поменять тему."
+            exit 1
+          fi
+
+      # 4. ВНЕДРЕНИЕ КАСТОМНОГО JAVA-ПЛАГИНА ДЛЯ ПОИСКА В VK X
+      - name: Inject Custom App Search Plugin
+        run: |
+          PKG_DIR="android/app/src/main/java/app/polka/tracker"
+          mkdir -p "$PKG_DIR"
+
+          cat << 'EOF' > "$PKG_DIR/AppSearchPlugin.java"
+          package app.polka.tracker;
+
+          import android.content.Intent;
+          import com.getcapacitor.Plugin;
+          import com.getcapacitor.PluginCall;
+          import com.getcapacitor.PluginMethod;
+          import com.getcapacitor.annotation.CapacitorPlugin;
+
+          @CapacitorPlugin(name = "AppSearch")
+          public class AppSearchPlugin extends Plugin {
+              @PluginMethod
+              public void openSearch(PluginCall call) {
+                  String query = call.getString("query");
+                  String packageName = call.getString("packageName");
+                  if (query == null || packageName == null) {
+                      call.reject("Must provide query and packageName");
+                      return;
+                  }
+                  try {
+                      Intent intent = new Intent(Intent.ACTION_SEARCH);
+                      intent.setPackage(packageName);
+                      intent.putExtra("query", query);
+                      intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                      getContext().startActivity(intent);
+                      call.resolve();
+                  } catch (Exception e) {
+                      call.reject(e.getMessage());
+                  }
+              }
+          }
+          EOF
+
+          MAIN_ACTIVITY="$PKG_DIR/MainActivity.java"
+          if [ -f "$MAIN_ACTIVITY" ]; then
+            sed -i '/super.onCreate(savedInstanceState);/a \        registerPlugin(AppSearchPlugin.class);' "$MAIN_ACTIVITY"
+            echo "✅ Плагин AppSearch внедрен в MainActivity"
+          else
+            echo "❌ MainActivity.java не найден по пути $MAIN_ACTIVITY!"
             exit 1
           fi
 
