@@ -36,7 +36,6 @@ jobs:
       - name: Set minSdkVersion
         run: sed -i 's/minSdkVersion = 24/minSdkVersion = 26/' android/variables.gradle
 
-      # 1. ПАТЧ ТЕМЫ ПЛАГИНА INAPPBROWSER
       - name: Patch InAppBrowser Dark Theme
         run: |
           FILE="node_modules/@capawesome/capacitor-in-app-browser/android/src/main/java/io/capawesome/capacitorjs/plugins/inappbrowser/classes/WebViewDialog.java"
@@ -45,12 +44,10 @@ jobs:
           sed -i 's/contentView.setBackgroundColor(Color.WHITE);/contentView.setBackgroundColor(Color.BLACK);/g' "$FILE"
           sed -i 's/toolbarOptions.getColor() == null ? Color.BLACK :/toolbarOptions.getColor() == null ? Color.WHITE :/g' "$FILE"
           sed -i 's/toolbar.setBackgroundColor(toolbarOptions.getBackgroundColor() == null ? Color.WHITE :/toolbar.setBackgroundColor(toolbarOptions.getBackgroundColor() == null ? Color.BLACK :/g' "$FILE"
-          echo "✅ Тема InAppBrowser пропатчена"
 
       - name: Sync web assets
         run: npx cap sync android
 
-      # 2. МАНИФЕСТ: QUERIES + SHARE TARGET
       - name: Patch Android Manifest
         run: |
           MANIFEST="android/app/src/main/AndroidManifest.xml"
@@ -58,22 +55,17 @@ jobs:
           import re
           with open('$MANIFEST', 'r', encoding='utf-8') as f:
               content = f.read()
-
-          # Добавляем queries для VK X
           vkx_pkg = '<package android:name=\"ua.itaysonlab.vkx\" />'
           if '<queries>' not in content:
               content = content.replace('</manifest>', '    <queries>\n        ' + vkx_pkg + '\n    </queries>\n</manifest>')
           elif 'ua.itaysonlab.vkx' not in content:
               content = content.replace('<queries>', '<queries>\n        ' + vkx_pkg)
-
-          # Добавляем Share Target в MainActivity
           share_filter = '''
               <intent-filter>
                   <action android:name=\"android.intent.action.SEND\" />
                   <category android:name=\"android.intent.category.DEFAULT\" />
                   <data android:mimeType=\"text/plain\" />
               </intent-filter>'''
-
           pattern = r'(<activity[^>]*android:name=\"[\.a-zA-Z0-9_]*MainActivity\"[^>]*>)'
           match = re.search(pattern, content)
           if match and 'android.intent.action.SEND' not in content:
@@ -81,20 +73,16 @@ jobs:
               end_idx = content.find('</activity>', start_idx)
               if end_idx != -1:
                   content = content[:end_idx] + share_filter + '\n        ' + content[end_idx:]
-                  print('✅ Share Target добавлен')
-
           with open('$MANIFEST', 'w', encoding='utf-8') as f:
               f.write(content)
           "
 
-      # 3. ТЕМНАЯ ТЕМА ПРИЛОЖЕНИЯ
       - name: Force Dark Theme in App
         run: |
           STYLES_FILE="android/app/src/main/res/values/styles.xml"
           sed -i 's|parent="Theme.AppCompat.Light.NoActionBar"|parent="Theme.AppCompat.NoActionBar"|' "$STYLES_FILE"
           sed -i '/<style name="AppTheme.NoActionBar"/a\        <item name="android:isLightTheme">false</item>' "$STYLES_FILE"
 
-      # 4. КАСТОМНЫЙ ПЛАГИН И ПРИЕМНИК ССЫЛОК
       - name: Inject Custom Plugin
         run: |
           PKG_DIR="android/app/src/main/java/app/polka/tracker"
@@ -147,6 +135,7 @@ jobs:
           cat << 'EOF' > "$PKG_DIR/MainActivity.java"
           package app.polka.tracker;
 
+          import android.content.ClipData;
           import android.content.Intent;
           import android.os.Bundle;
           import com.getcapacitor.BridgeActivity;
@@ -167,24 +156,49 @@ jobs:
               }
 
               private void handleShareIntent(Intent intent) {
-                  if (intent != null && Intent.ACTION_SEND.equals(intent.getAction())) {
-                      String sharedText = intent.getStringExtra(Intent.EXTRA_TEXT);
-                      if (sharedText != null && this.bridge != null && this.bridge.getWebView() != null) {
-                          try {
-                              final String js = "window.dispatchEvent(new CustomEvent('vkShareLink', { detail: { text: " + JSONObject.quote(sharedText) + " } }));";
-                              this.bridge.getWebView().post(new Runnable() {
-                                  @Override
-                                  public void run() {
-                                      MainActivity.this.bridge.getWebView().evaluateJavascript(js, null);
-                                  }
-                              });
-                          } catch (Exception e) {}
+                  if (intent == null || !Intent.ACTION_SEND.equals(intent.getAction())) return;
+                  
+                  String text = intent.getStringExtra(Intent.EXTRA_TEXT);
+                  String title = intent.getStringExtra(Intent.EXTRA_SUBJECT);
+                  String html = intent.getStringExtra(Intent.EXTRA_HTML_TEXT);
+                  
+                  // Fallback: ClipData (сюда VK X обычно кладет ссылку и заголовок)
+                  if (intent.getClipData() != null && intent.getClipData().getItemCount() > 0) {
+                      ClipData.Item item = intent.getClipData().getItemAt(0);
+                      if (item != null) {
+                          if ((text == null || text.isEmpty()) && item.getText() != null) {
+                              text = item.getText().toString();
+                          }
+                          if ((text == null || text.isEmpty()) && item.getUri() != null) {
+                              text = item.getUri().toString();
+                          }
+                          if ((title == null || title.isEmpty()) && item.getHtmlText() != null) {
+                              // Можно попытаться вытащить title из HTML, но для начала хватит text
+                          }
                       }
                   }
+                  
+                  if (text == null && title == null && html == null) return;
+                  
+                  try {
+                      JSONObject payload = new JSONObject();
+                      payload.put("text", text != null ? text : "");
+                      payload.put("title", title != null ? title : "");
+                      payload.put("html", html != null ? html : "");
+                      
+                      final String js = "window.dispatchEvent(new CustomEvent('vkShareLink', { detail: " + payload.toString() + " }));";
+                      if (this.bridge != null && this.bridge.getWebView() != null) {
+                          this.bridge.getWebView().post(new Runnable() {
+                              @Override
+                              public void run() {
+                                  MainActivity.this.bridge.getWebView().evaluateJavascript(js, null);
+                              }
+                          });
+                      }
+                  } catch (Exception e) {}
               }
           }
           EOF
-          echo "✅ Плагин и приемник ссылок внедрены"
 
       - name: Decode Keystore
         run: echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > android/app/release.keystore
@@ -197,10 +211,4 @@ jobs:
             -Pandroid.injected.signing.store.file=$(pwd)/app/release.keystore \
             -Pandroid.injected.signing.store.password=${{ secrets.ANDROID_KEYSTORE_PASSWORD }} \
             -Pandroid.injected.signing.key.alias=${{ secrets.ANDROID_KEY_ALIAS }} \
-            -Pandroid.injected.signing.key.password=${{ secrets.ANDROID_KEY_PASSWORD }}
-
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: polka-release-apk
-          path: android/app/build/outputs/apk/release/*.apk
+            -Pandroid.injected.signing.key.password=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
