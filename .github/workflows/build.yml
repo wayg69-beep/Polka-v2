@@ -48,41 +48,41 @@ jobs:
       - name: Sync web assets
         run: npx cap sync android
 
-      # 2. МАНИФЕСТ: QUERIES + SHARE TARGET
       - name: Patch Android Manifest
         run: |
-          MANIFEST="android/app/src/main/AndroidManifest.xml"
-          python3 -c "
+          cat << 'EOF' > patch_manifest.py
           import re
-          with open('$MANIFEST', 'r', encoding='utf-8') as f:
+
+          manifest_path = 'android/app/src/main/AndroidManifest.xml'
+          with open(manifest_path, 'r', encoding='utf-8') as f:
               content = f.read()
 
-          # Добавляем queries для VK X
-          vkx_pkg = '        <package android:name=\"ua.itaysonlab.vkx\" />'
+          # 1. Добавляем queries для VK X
+          vkx_pkg = '        <package android:name="ua.itaysonlab.vkx" />'
           if '<queries>' not in content:
               content = content.replace('</manifest>', '    <queries>\n' + vkx_pkg + '\n    </queries>\n</manifest>')
           elif 'ua.itaysonlab.vkx' not in content:
               content = content.replace('<queries>', '<queries>\n' + vkx_pkg)
 
-          # Добавляем Share Target в MainActivity
+          # 2. Добавляем Share Target в MainActivity
           share_filter = '''            <intent-filter>
-                <action android:name=\"android.intent.action.SEND\" />
-                <category android:name=\"android.intent.category.DEFAULT\" />
-                <data android:mimeType=\"text/plain\" />
-            </intent-filter>
-        </activity>'''
+                      <action android:name="android.intent.action.SEND" />
+                      <category android:name="android.intent.category.DEFAULT" />
+                      <data android:mimeType="text/plain" />
+                  </intent-filter>
+              </activity>'''
 
-          # Надежный поиск конкретного блока MainActivity
-          pattern = r'(<activity[^>]*android:name=\"[\.a-zA-Z0-9_]*MainActivity\"[^>]*>.*?)(</activity>)'
+          pattern = r'(<activity[^>]*android:name="[\.a-zA-Z0-9_]*MainActivity"[^>]*>.*?)(</activity>)'
           if 'android.intent.action.SEND' not in content:
               content = re.sub(pattern, r'\1' + share_filter, content, flags=re.DOTALL)
               print('✅ Share Target добавлен в MainActivity')
           else:
               print('ℹ️ Share Target уже есть')
 
-          with open('$MANIFEST', 'w', encoding='utf-8') as f:
+          with open(manifest_path, 'w', encoding='utf-8') as f:
               f.write(content)
-          "
+          EOF
+          python3 patch_manifest.py
 
       - name: Force Dark Theme in App
         run: |
@@ -90,7 +90,6 @@ jobs:
           sed -i 's|parent="Theme.AppCompat.Light.NoActionBar"|parent="Theme.AppCompat.NoActionBar"|' "$STYLES_FILE"
           sed -i '/<style name="AppTheme.NoActionBar"/a\        <item name="android:isLightTheme">false</item>' "$STYLES_FILE"
 
-      # 4. КАСТОМНЫЙ ПЛАГИН И ПРИЕМНИК ССЫЛОК
       - name: Inject Custom Plugin
         run: |
           PKG_DIR="android/app/src/main/java/app/polka/tracker"
@@ -165,11 +164,11 @@ jobs:
 
               private void handleShareIntent(Intent intent) {
                   if (intent == null || !Intent.ACTION_SEND.equals(intent.getAction())) return;
-                  
+
                   String text = intent.getStringExtra(Intent.EXTRA_TEXT);
                   String title = intent.getStringExtra(Intent.EXTRA_SUBJECT);
                   String html = intent.getStringExtra(Intent.EXTRA_HTML_TEXT);
-                  
+
                   if (intent.getClipData() != null && intent.getClipData().getItemCount() > 0) {
                       ClipData.Item item = intent.getClipData().getItemAt(0);
                       if (item != null) {
@@ -181,15 +180,15 @@ jobs:
                           }
                       }
                   }
-                  
+
                   if (text == null && title == null && html == null) return;
-                  
+
                   try {
                       JSONObject payload = new JSONObject();
                       payload.put("text", text != null ? text : "");
                       payload.put("title", title != null ? title : "");
                       payload.put("html", html != null ? html : "");
-                      
+
                       final String js = "window.dispatchEvent(new CustomEvent('vkShareLink', { detail: " + payload.toString() + " }));";
                       if (this.bridge != null && this.bridge.getWebView() != null) {
                           this.bridge.getWebView().post(new Runnable() {
