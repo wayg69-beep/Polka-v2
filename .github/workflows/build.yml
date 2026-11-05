@@ -56,12 +56,25 @@ jobs:
           with open(manifest_path, 'r', encoding='utf-8') as f:
               content = f.read()
 
+          # 1. Разрешения для MediaSession (Android 14+ требует FOREGROUND_SERVICE_MEDIA_PLAYBACK)
+          permissions = (
+              '    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />\n'
+              '    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />\n'
+              '    <uses-permission android:name="android.permission.WAKE_LOCK" />\n'
+              '    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />\n'
+              '    <application'
+          )
+          if 'FOREGROUND_SERVICE_MEDIA_PLAYBACK' not in content:
+              content = content.replace('<application', permissions, 1)
+
+          # 2. queries для VK X
           vkx_pkg = '        <package android:name="ua.itaysonlab.vkx" />'
           if '<queries>' not in content:
               content = content.replace('</manifest>', '    <queries>\n' + vkx_pkg + '\n    </queries>\n</manifest>')
           elif 'ua.itaysonlab.vkx' not in content:
               content = content.replace('<queries>', '<queries>\n' + vkx_pkg)
 
+          # 3. Share target
           share_filter = '''            <intent-filter>
                       <action android:name="android.intent.action.SEND" />
                       <category android:name="android.intent.category.DEFAULT" />
@@ -107,7 +120,6 @@ jobs:
                   String packageName = call.getString("packageName");
                   if (query == null || packageName == null) { call.reject("Must provide query and packageName"); return; }
                   try {
-                      // Используем медиа-интент, который VK X должен понимать
                       Intent intent = new Intent(MediaStore.INTENT_ACTION_MEDIA_PLAY_FROM_SEARCH);
                       intent.setPackage(packageName);
                       intent.putExtra(SearchManager.QUERY, query);
@@ -208,5 +220,3 @@ jobs:
         with:
           name: polka-release-apk
           path: android/app/build/outputs/apk/release/*.apk
-
-          
