@@ -8,6 +8,7 @@
     "@capacitor/cli": "^8.6.0",
     "@capawesome/capacitor-in-app-browser": "0.2.2",
     "@capawesome/capacitor-android-dark-mode-support": "^8.0.1",
-    "@capawesome/capacitor-app-launcher": "^0.1.2"
+    "@capawesome/capacitor-app-launcher": "^0.1.2",
+    "@capgo/capacitor-media-session": "^8.0.0"
   }
 }
