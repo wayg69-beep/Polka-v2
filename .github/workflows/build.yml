@@ -30,21 +30,6 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Copy OCR assets
-        run: |
-          mkdir -p www/lib
-          
-          # Копируем весь пакет Paddle целиком, чтобы сохранить структуру папок
-          cp -r node_modules/ppu-paddle-ocr www/lib/ppu-paddle-ocr
-          
-          # Копируем onnxruntime-web со всеми wasm-файлами
-          cp -r node_modules/onnxruntime-web/dist www/lib/onnxruntime-web
-          
-          echo "─── Проверка ppu-paddle-ocr/web ───"
-          ls -la www/lib/ppu-paddle-ocr/web/ || echo "Нет папки web!"
-          echo "─── Проверка onnxruntime-web ───"
-          ls -la www/lib/onnxruntime-web/ | grep wasm || echo "Нет wasm!"
-
       - name: Add Android platform
         run: npx cap add android
 
