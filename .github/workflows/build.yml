@@ -32,29 +32,18 @@ jobs:
 
       - name: Copy OCR assets
         run: |
-          echo "═══ capacitor.config.json ═══"
-          cat capacitor.config.json || cat capacitor.config.ts || echo "(нет capacitor.config)"
+          mkdir -p www/lib
           
-          mkdir -p www/lib/ocr
+          # Копируем весь пакет Paddle целиком, чтобы сохранить структуру папок
+          cp -r node_modules/ppu-paddle-ocr www/lib/ppu-paddle-ocr
           
-          if [ -d node_modules/ppu-paddle-ocr/dist/web ]; then
-            echo "Копирую из dist/web..."
-            cp -r node_modules/ppu-paddle-ocr/dist/web/. www/lib/ocr/
-          elif [ -d node_modules/ppu-paddle-ocr/dist ]; then
-            echo "Копирую из dist (без /web)..."
-            cp -r node_modules/ppu-paddle-ocr/dist/. www/lib/ocr/
-          else
-            echo "❌ Папка с кодом OCR не найдена. Вот что есть в пакете:"
-            ls -R node_modules/ppu-paddle-ocr | head -n 50
-            exit 1
-          fi
-
-          cp node_modules/onnxruntime-web/dist/ort.min.js www/lib/ocr/ 2>/dev/null || true
-          cp node_modules/onnxruntime-web/dist/*.wasm www/lib/ocr/ 2>/dev/null || true
-          cp node_modules/onnxruntime-web/dist/*.mjs www/lib/ocr/ 2>/dev/null || true
-
-          echo "─── Итог в www/lib/ocr/ ───"
-          ls -la www/lib/ocr/
+          # Копируем onnxruntime-web со всеми wasm-файлами
+          cp -r node_modules/onnxruntime-web/dist www/lib/onnxruntime-web
+          
+          echo "─── Проверка ppu-paddle-ocr/web ───"
+          ls -la www/lib/ppu-paddle-ocr/web/ || echo "Нет папки web!"
+          echo "─── Проверка onnxruntime-web ───"
+          ls -la www/lib/onnxruntime-web/ | grep wasm || echo "Нет wasm!"
 
       - name: Add Android platform
         run: npx cap add android
