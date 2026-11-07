@@ -32,21 +32,28 @@ jobs:
 
       - name: Copy OCR assets
         run: |
+          echo "═══ capacitor.config.json ═══"
+          cat capacitor.config.json || cat capacitor.config.ts || echo "(нет capacitor.config)"
+          
           mkdir -p www/lib/ocr
-          if [ -f node_modules/ppu-paddle-ocr/dist/web/index.js ]; then
-            cp node_modules/ppu-paddle-ocr/dist/web/index.js www/lib/ocr/paddle.js
-          elif [ -f node_modules/ppu-paddle-ocr/web/index.js ]; then
-            cp node_modules/ppu-paddle-ocr/web/index.js www/lib/ocr/paddle.js
-          elif [ -f node_modules/ppu-paddle-ocr/dist/index.js ]; then
-            cp node_modules/ppu-paddle-ocr/dist/index.js www/lib/ocr/paddle.js
+          
+          if [ -d node_modules/ppu-paddle-ocr/dist/web ]; then
+            echo "Копирую из dist/web..."
+            cp -r node_modules/ppu-paddle-ocr/dist/web/. www/lib/ocr/
+          elif [ -d node_modules/ppu-paddle-ocr/dist ]; then
+            echo "Копирую из dist (без /web)..."
+            cp -r node_modules/ppu-paddle-ocr/dist/. www/lib/ocr/
           else
-            echo "❌ paddle OCR bundle не найден. Доступные файлы:"
-            find node_modules/ppu-paddle-ocr -maxdepth 3 -name "*.js" | head -40
+            echo "❌ Папка с кодом OCR не найдена. Вот что есть в пакете:"
+            ls -R node_modules/ppu-paddle-ocr | head -n 50
             exit 1
           fi
-          cp node_modules/onnxruntime-web/dist/ort.min.js www/lib/ocr/ort.min.js 2>/dev/null || true
+
+          cp node_modules/onnxruntime-web/dist/ort.min.js www/lib/ocr/ 2>/dev/null || true
           cp node_modules/onnxruntime-web/dist/*.wasm www/lib/ocr/ 2>/dev/null || true
-          echo "─── www/lib/ocr/ ───"
+          cp node_modules/onnxruntime-web/dist/*.mjs www/lib/ocr/ 2>/dev/null || true
+
+          echo "─── Итог в www/lib/ocr/ ───"
           ls -la www/lib/ocr/
 
       - name: Add Android platform
@@ -75,7 +82,6 @@ jobs:
           with open(manifest_path, 'r', encoding='utf-8') as f:
               content = f.read()
 
-          # 1. Разрешения для MediaSession (Android 14+ требует FOREGROUND_SERVICE_MEDIA_PLAYBACK)
           permissions = (
               '    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />\n'
               '    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />\n'
@@ -86,14 +92,12 @@ jobs:
           if 'FOREGROUND_SERVICE_MEDIA_PLAYBACK' not in content:
               content = content.replace('<application', permissions, 1)
 
-          # 2. queries для VK X
           vkx_pkg = '        <package android:name="ua.itaysonlab.vkx" />'
           if '<queries>' not in content:
               content = content.replace('</manifest>', '    <queries>\n' + vkx_pkg + '\n    </queries>\n</manifest>')
           elif 'ua.itaysonlab.vkx' not in content:
               content = content.replace('<queries>', '<queries>\n' + vkx_pkg)
 
-          # 3. Share target
           share_filter = '''            <intent-filter>
                       <action android:name="android.intent.action.SEND" />
                       <category android:name="android.intent.category.DEFAULT" />
