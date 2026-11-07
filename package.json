@@ -10,6 +10,8 @@
     "@capawesome/capacitor-android-dark-mode-support": "^8.0.1",
     "@capawesome/capacitor-app-launcher": "^0.1.2",
     "@capgo/capacitor-media-session": "^8.0.0",
-    "@capacitor/app": "^8.0.0"
+    "@capacitor/app": "^8.0.0",
+    "ppu-paddle-ocr": "^6.6.0",
+    "onnxruntime-web": "^1.20.0"
   }
 }
