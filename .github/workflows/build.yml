@@ -30,6 +30,25 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      - name: Copy OCR assets
+        run: |
+          mkdir -p www/lib/ocr
+          if [ -f node_modules/ppu-paddle-ocr/dist/web/index.js ]; then
+            cp node_modules/ppu-paddle-ocr/dist/web/index.js www/lib/ocr/paddle.js
+          elif [ -f node_modules/ppu-paddle-ocr/web/index.js ]; then
+            cp node_modules/ppu-paddle-ocr/web/index.js www/lib/ocr/paddle.js
+          elif [ -f node_modules/ppu-paddle-ocr/dist/index.js ]; then
+            cp node_modules/ppu-paddle-ocr/dist/index.js www/lib/ocr/paddle.js
+          else
+            echo "❌ paddle OCR bundle не найден. Доступные файлы:"
+            find node_modules/ppu-paddle-ocr -maxdepth 3 -name "*.js" | head -40
+            exit 1
+          fi
+          cp node_modules/onnxruntime-web/dist/ort.min.js www/lib/ocr/ort.min.js 2>/dev/null || true
+          cp node_modules/onnxruntime-web/dist/*.wasm www/lib/ocr/ 2>/dev/null || true
+          echo "─── www/lib/ocr/ ───"
+          ls -la www/lib/ocr/
+
       - name: Add Android platform
         run: npx cap add android
 
