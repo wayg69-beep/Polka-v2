@@ -19102,6 +19102,8 @@ const SlashLibReader = {
   _prevChapter: null,
   _settings: {},
   _autoLoading: false,
+  _prevLoading: false,
+  _restoring: false,
   _opening: false,
 
   init() {
@@ -19193,35 +19195,37 @@ const SlashLibReader = {
     };
   },
 
-/* Синхронизирует статус-бар ОС с текущим состоянием UI.
-   UI скрыт тапом → статус-бар скрыт (fullscreen).
-   UI показан → статус-бар показан (видно время). */
-_syncStatusBar() {
-  const modal = document.getElementById('readerModal');
-  const isUIHidden = modal && modal.classList.contains('ui-hidden');
-
-  // 1) Нативный плагин Capacitor (основной путь)
-  const SB = window.Capacitor?.Plugins?.StatusBar;
-  if (SB && typeof SB.hide === 'function') {
+  /* Синхронизирует статус-бар ОС с текущим состоянием UI.
+     UI скрыт тапом → статус-бар скрыт (без анимации).
+     UI показан → статус-бар показан (без анимации). */
+  _syncStatusBar() {
+    const modal = document.getElementById('readerModal');
+    const isUIHidden = modal && modal.classList.contains('ui-hidden');
+  
+    const SB = window.Capacitor?.Plugins?.StatusBar;
+    if (SB) {
+      try {
+        // Отключаем нативную анимацию — она самая долгая (~500-1000ms).
+        // setAnimation применяется к текущей и следующим операциям плагина.
+        if (typeof SB.setAnimation === 'function') {
+          SB.setAnimation({ type: 'none', duration: 0 }).catch(() => {});
+        }
+        if (isUIHidden) SB.hide();
+        else SB.show();
+        return;
+      } catch(e) {
+        console.warn('[StatusBar plugin]', e);
+      }
+    }
+  
     try {
-      if (isUIHidden) SB.hide();
-      else SB.show();
-      return;
-    } catch(e) {
-      console.warn('[StatusBar plugin]', e);
-    }
-  }
-
-  // 2) Fallback: браузерный Fullscreen API (в WebView обычно не работает,
-  //    но если плагин не установлен — пусть хоть что-то попробуется)
-  try {
-    if (isUIHidden && document.documentElement.requestFullscreen) {
-      document.documentElement.requestFullscreen().catch(() => {});
-    } else if (!isUIHidden && document.exitFullscreen && document.fullscreenElement) {
-      document.exitFullscreen().catch(() => {});
-    }
-  } catch(e) { /* тихо */ }
-},
+      if (isUIHidden && document.documentElement.requestFullscreen) {
+        document.documentElement.requestFullscreen().catch(() => {});
+      } else if (!isUIHidden && document.exitFullscreen && document.fullscreenElement) {
+        document.exitFullscreen().catch(() => {});
+      }
+    } catch(e) { /* тихо */ }
+  },
   
   async open(fullSlug, chapterId, volume, number, pagesList, title, progress, chaptersList) {
     if (this._opening) return;
@@ -19324,23 +19328,32 @@ _syncStatusBar() {
           if (prevIdx.length) await this.loadPagesBatch(prevIdx, 6);
           // 2. Текущая
           await this.loadPage(this._currentIndex);
-  
+      
           // 3. Два rAF — гарантирует, что браузер уложил layout (offsetTop'ы посчитаны)
           await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
-  
-          // 4. Восстановить скролл до того, как пользователь увидит контент
+      
+          // 4. Восстановить скролл под защитой _restoring,
+          //    чтобы onsсroll не пересчитал _currentIndex по пустым img
+          this._restoring = true;
           this.restoreScroll(progress && typeof progress.offset === 'number' ? progress.offset : 0);
-  
+      
           // 5. Показать
           wrap.style.visibility = 'visible';
           const ov = document.getElementById('readerLoadingOverlay');
           if (ov) ov.remove();
-  
+      
           // 6. Фоном — остальные
           this.loadPagesBatch(afterIdx, 4);
-  
+      
+          // 7. Снять флаг после того, как onsсroll-очередь отработает
+          setTimeout(() => { this._restoring = false; }, 200);
+      
+          // 8. Через полсекунды после открытия проверить, не нужно ли догрузить пред-главу
+          setTimeout(() => { this.checkPrevLoad(); }, 500);
+      
         } catch(e) {
           console.error('[Reader open]', e);
+          this._restoring = false;
           wrap.style.visibility = 'visible';
           const ov = document.getElementById('readerLoadingOverlay');
           if (ov) ov.remove();
@@ -19572,24 +19585,38 @@ _syncStatusBar() {
 
     // .onscroll — заменяет, не дублирует
     wrap.onscroll = () => {
+      // Пока идёт восстановление скролла или вставка пред-главы — не пересчитываем
+      if (this._restoring) return;
+    
+      // Скролл = пользователь двигает контент → скрываем UI и статус-бар ОС
+      const wasVisible = !modal.classList.contains('ui-hidden');
       modal.classList.add('ui-hidden');
+      if (wasVisible) this._syncStatusBar();
+    
       if (!this._pagesList.length) return;
-
+    
       const st = wrap.scrollTop, sl = wrap.scrollLeft;
       const imgs = wrap.querySelectorAll('img');
       let idx = 0;
-
+      let found = false;
+    
       if (this._settings.mode === 'WEBTOON') {
         const threshold = st + (window.innerHeight / 3);
         for (let i = 0; i < imgs.length; i++) {
-          if (imgs[i].offsetTop <= threshold) idx = i;
+          // ⚠️ Пропускаем незагруженные: у пустых <img> offsetTop одинаковый,
+          // и раньше они затаскивали _currentIndex в конец главы.
+          if (!imgs[i].src) continue;
+          if (imgs[i].offsetTop <= threshold) { idx = i; found = true; }
         }
       } else {
         for (let i = 0; i < imgs.length; i++) {
-          if (imgs[i].offsetLeft <= sl + 100) idx = i;
+          if (!imgs[i].src) continue;
+          if (imgs[i].offsetLeft <= sl + 100) { idx = i; found = true; }
         }
       }
-
+    
+      if (!found) idx = this._currentIndex;
+    
       if (idx !== this._currentIndex) {
         this._currentIndex = idx;
         this.updateCounter();
@@ -19597,8 +19624,9 @@ _syncStatusBar() {
         this.loadPage(idx);
         if (idx + 1 < this._pagesList.length) this.loadPage(idx + 1);
         this.checkNextChapterUI();
-        this.checkAutoLoad();
       }
+      this.checkAutoLoad();
+      this.checkPrevLoad();
     };
 
     let startX = 0, startY = 0, dragging = false;
@@ -19632,12 +19660,25 @@ _syncStatusBar() {
         }
         return;
       }
-        if (!dragging) {
+      if (!dragging) {
         if (e.target.closest('button') ||
             e.target.closest('#readerNextBlock') ||
             e.target.closest('.reader-settings-panel')) return;
+    
+        // Статус-бар дёргаем ДО toggle, чтобы нативное скрытие
+        // стартовало параллельно с CSS-переходом UI (0.3s), а не после него.
+        const willHide = !modal.classList.contains('ui-hidden');
+        const SB = window.Capacitor?.Plugins?.StatusBar;
+        if (SB) {
+          try {
+            if (typeof SB.setAnimation === 'function') {
+              SB.setAnimation({ type: 'none', duration: 0 }).catch(() => {});
+            }
+            willHide ? SB.hide() : SB.show();
+          } catch(err){}
+        }
+    
         modal.classList.toggle('ui-hidden');
-        this._syncStatusBar();
       }
     };
   },
@@ -19714,6 +19755,112 @@ _syncStatusBar() {
     }
   },
 
+  async checkPrevLoad() {
+  if (!this._prevChapter) return;
+  if (this._prevLoading) return;
+  if (this._restoring) return;
+  if (!this._pagesList.length) return;
+
+  const bounds = this.getCurrentChapterBounds();
+  if (!bounds) return;
+  if (bounds.startIdx === 0) return;  // страницы пред-главы уже вставлены
+
+  // Триггер: за 2 страницы от начала главы (симметрично checkAutoLoad)
+  const remaining = this._currentIndex - bounds.startIdx;
+  if (remaining > 2) return;
+
+  this._prevLoading = true;
+  try {
+    const token = localStorage.getItem('slashlib_token');
+    const chapRes = await nativeFetch(
+      `https://api.cdnlibs.org/api/manga/${this._fullSlug}/chapter?volume=${this._prevChapter.volume}&number=${this._prevChapter.number}`,
+      {
+        'Authorization': 'Bearer ' + token, 'Site-Id': '2',
+        'Origin': 'https://v2.shlib.life', 'Referer': 'https://v2.shlib.life/'
+      }
+    );
+    const chapJson = await chapRes.json();
+    const chapData = chapJson.data;
+    if (!chapData || !chapData.pages || !chapData.pages.length) return;
+
+    const wrap = document.getElementById('readerPages');
+    if (!wrap) return;
+
+    // Запоминаем относительное положение текущей страницы
+    const imgsBefore = wrap.querySelectorAll('img');
+    const curImgBefore = imgsBefore[this._currentIndex];
+    const oldScroll = wrap.scrollTop;
+    const relOffset = curImgBefore ? (oldScroll - curImgBefore.offsetTop) : 0;
+
+    const addedCount = chapData.pages.length;
+    const firstChild = wrap.firstChild;
+
+    this._restoring = true;
+
+    // Вставляем пустые <img> В НАЧАЛО (перед текущей главой)
+    for (let i = 0; i < addedCount; i++) {
+      const img = document.createElement('img');
+      img.alt = 'Страница ' + (i + 1);
+      img.style.opacity = '0';
+      img.style.transition = 'opacity 0.3s ease';
+      img.style.aspectRatio = '2 / 3';
+      img.style.width = '100%';
+      if (firstChild) wrap.insertBefore(img, firstChild);
+      else wrap.appendChild(img);
+
+      this._pagesList.unshift({
+        image: chapData.pages[i].image,
+        chapterId: chapData.id,
+        volume: chapData.volume,
+        number: chapData.number
+      });
+    }
+
+    // Сдвигаем индексы
+    this._currentIndex += addedCount;
+
+    // Сдвигаем уже загруженные blobUrls
+    const shiftedBlobs = {};
+    for (const [key, url] of Object.entries(this._blobUrls)) {
+      shiftedBlobs[parseInt(key, 10) + addedCount] = url;
+    }
+    this._blobUrls = shiftedBlobs;
+
+    // Пересчитываем _prevChapter/_nextChapter относительно новой главы
+    const currIdx = this._chaptersList.findIndex(c => c.id === chapData.id);
+    this._prevChapter = (currIdx > 0) ? this._chaptersList[currIdx - 1] : null;
+    this.updateChapterNav();
+    this.updateCounter();
+
+    // Загружаем новые страницы пачками
+    const indices = Array.from({ length: addedCount }, (_, i) => i);
+    await this.loadPagesBatch(indices, 4);
+
+    // Снимаем placeholder aspect-ratio (у загруженных img теперь натуральные размеры)
+    const allImgs = wrap.querySelectorAll('img');
+    for (let i = 0; i < addedCount; i++) {
+      if (allImgs[i]) {
+        allImgs[i].style.aspectRatio = '';
+        allImgs[i].style.width = '';
+      }
+    }
+
+    // Восстанавливаем scrollTop по текущей странице + относительное смещение
+    const imgsAfter = wrap.querySelectorAll('img');
+    const curImgAfter = imgsAfter[this._currentIndex];
+    if (curImgAfter) {
+      wrap.scrollTop = curImgAfter.offsetTop + relOffset;
+    }
+
+    setTimeout(() => { this._restoring = false; }, 200);
+  } catch(e) {
+    console.warn('[PrevLoad chapter]', e);
+    this._restoring = false;
+  } finally {
+    this._prevLoading = false;
+  }
+},
+
   async loadChapter(volume, number, chapterId) {
     toast('Загружаю главу...', 'success');
     const token = localStorage.getItem('slashlib_token');
@@ -19758,6 +19905,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
   SlashLibReader.bindGestures();
 });
+  /* Прогрев StatusBar-плагина: первый вызов через Capacitor Bridge
+   самый долгий (плагин инициализируется лениво). Дёргаем заранее,
+   чтобы в момент первого тапа по экрану читалки всё шло по горячему пути. */
+setTimeout(async () => {
+  const SB = window.Capacitor?.Plugins?.StatusBar;
+  if (!SB) return;
+  try {
+    if (typeof SB.setAnimation === 'function') {
+      await SB.setAnimation({ type: 'none', duration: 0 }).catch(() => {});
+    }
+    await SB.show();
+    await SB.hide();
+    await SB.show();
+  } catch(e) {}
+}, 4000);
   
 </script>
 </body>
