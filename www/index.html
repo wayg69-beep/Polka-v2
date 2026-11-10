@@ -19897,12 +19897,7 @@ toggleSettings(show) {
   },
 
 updateReaderTitle() {
-  const bounds = this.getCurrentChapterBounds();
-  if (!bounds) return;
-  const base = (this._baseTitle || '').trim();
-  const prefix = base ? base + ' · ' : '';
-  const titleEl = document.getElementById('readerTitle');
-  if (titleEl) titleEl.textContent = prefix + 'Том ' + bounds.volume + ' · Глава ' + bounds.number;
+  this.updateCounter();
 },
   
   _syncStatusBar() {
