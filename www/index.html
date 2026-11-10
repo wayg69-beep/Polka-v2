@@ -19113,6 +19113,7 @@ const SlashLibReader = {
   _restoring: false,
   _opening: false,
   _inited: false,
+  _userScrolledAt: 0,
 
   init() {
     try {
@@ -19214,7 +19215,7 @@ const SlashLibReader = {
   const prefix = base ? base + ' - ' : '';
   titleEl.textContent = prefix + `Том ${bounds.volume} Глава ${bounds.number}`;
 },
-
+  
   _syncStatusBar() {
     const modal = document.getElementById('readerModal');
     const isUIHidden = modal && modal.classList.contains('ui-hidden');
@@ -19223,7 +19224,7 @@ const SlashLibReader = {
     try {
       if (isUIHidden) FB.hide();
       else FB.show();
-    } catch(e) { console.warn('[Fullscreen]', e); }
+    } catch(e) { console.warn('[FullscreenBridge]', e); }
   },  
   
   async open(fullSlug, chapterId, volume, number, pagesList, title, progress, chaptersList) {
@@ -19608,29 +19609,24 @@ const SlashLibReader = {
     const stage = document.getElementById('readerStage');
     const modal = document.getElementById('readerModal');
     if (!wrap || !stage || !modal) return;
-
-    // .onscroll — заменяет, не дублирует
+  
     wrap.onscroll = () => {
-      // Пока идёт восстановление скролла или вставка пред-главы — не пересчитываем
       if (this._restoring) return;
-    
-      // Скролл = пользователь двигает контент → скрываем UI и статус-бар ОС
+      if (!this._pagesList.length) return;
+      // Программный скролл (загрузка картинок, восстановление позиции) не трогает UI/бары.
+      if (Date.now() - this._userScrolledAt > 500) return;
+  
       const wasVisible = !modal.classList.contains('ui-hidden');
       modal.classList.add('ui-hidden');
       if (wasVisible) this._syncStatusBar();
-    
-      if (!this._pagesList.length) return;
-    
+  
       const st = wrap.scrollTop, sl = wrap.scrollLeft;
       const imgs = wrap.querySelectorAll('img');
-      let idx = 0;
-      let found = false;
-    
+      let idx = 0, found = false;
+  
       if (this._settings.mode === 'WEBTOON') {
         const threshold = st + (window.innerHeight / 3);
         for (let i = 0; i < imgs.length; i++) {
-          // ⚠️ Пропускаем незагруженные: у пустых <img> offsetTop одинаковый,
-          // и раньше они затаскивали _currentIndex в конец главы.
           if (!imgs[i].src) continue;
           if (imgs[i].offsetTop <= threshold) { idx = i; found = true; }
         }
@@ -19640,14 +19636,14 @@ const SlashLibReader = {
           if (imgs[i].offsetLeft <= sl + 100) { idx = i; found = true; }
         }
       }
-    
+  
       if (!found) idx = this._currentIndex;
-    
+  
       if (idx !== this._currentIndex) {
         this._currentIndex = idx;
         this.updateCounter();
         this.updateChapterNav();
-        this.updateReaderTitle();   // <-- обновляем заголовок при смене главы/страницы
+        this.updateReaderTitle();
         this.loadPage(idx);
         if (idx + 1 < this._pagesList.length) this.loadPage(idx + 1);
         this.checkNextChapterUI();
@@ -19655,9 +19651,9 @@ const SlashLibReader = {
       this.checkAutoLoad();
       this.checkPrevLoad();
     };
-
+  
     let startX = 0, startY = 0, dragging = false;
-
+  
     stage.ontouchstart = (e) => {
       if (e.touches.length === 1) {
         startX = e.touches[0].clientX;
@@ -19665,17 +19661,17 @@ const SlashLibReader = {
         dragging = false;
       }
     };
-
+  
     stage.ontouchmove = (e) => {
       if (e.touches.length !== 1) return;
       if (Math.abs(e.touches[0].clientX - startX) > 8 ||
           Math.abs(e.touches[0].clientY - startY) > 8) {
         dragging = true;
+        this._userScrolledAt = Date.now();
       }
     };
-
+  
     stage.ontouchend = (e) => {
-      // В горизонтальном режиме — свайп по страницам
       if (this._settings.mode !== 'WEBTOON' && dragging) {
         const dx = e.changedTouches[0].clientX - startX;
         if (Math.abs(dx) > 50) {
@@ -19691,25 +19687,12 @@ const SlashLibReader = {
         if (e.target.closest('button') ||
             e.target.closest('#readerNextBlock') ||
             e.target.closest('.reader-settings-panel')) return;
-    
-        // Статус-бар дёргаем ДО toggle, чтобы нативное скрытие
-        // стартовало параллельно с CSS-переходом UI (0.3s), а не после него.
-        const willHide = !modal.classList.contains('ui-hidden');
-        const SB = window.Capacitor?.Plugins?.AndroidSystemBars;
-        if (SB) {
-          try {
-            if (typeof SB.setAnimation === 'function') {
-              SB.setAnimation({ type: 'none', duration: 0 }).catch(() => {});
-            }
-            willHide ? SB.hide() : SB.show();
-          } catch(err){}
-        }
-    
         modal.classList.toggle('ui-hidden');
+        this._syncStatusBar();
       }
     };
   },
-
+  
   async checkAutoLoad() {
     if (this._settings.nextChapter !== 'auto') return;
     if (!this._nextChapter) return;
