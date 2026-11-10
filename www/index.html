@@ -19218,34 +19218,25 @@ const SlashLibReader = {
   /* Синхронизирует статус-бар ОС с текущим состоянием UI.
      UI скрыт тапом → статус-бар скрыт (без анимации).
      UI показан → статус-бар показан (без анимации). */
-  _syncStatusBar() {
-    const modal = document.getElementById('readerModal');
-    const isUIHidden = modal && modal.classList.contains('ui-hidden');
-  
-    const SB = window.Capacitor?.Plugins?.AndroidSystemBars;
-    if (SB) {
+/* Синхронизирует статус-бар ОС с текущим состоянием UI.
+   UI скрыт тапом → статус-бар скрыт (без анимации).
+   UI показан → статус-бар показан (без анимации). */
+/* Синхронизирует статус-бар ОС с текущим состоянием UI.
+   Плагин capacitor-plugin-status-bar сам делает слайд-анимацию на Android. */
+    _syncStatusBar() {
+      const modal = document.getElementById('readerModal');
+      const isUIHidden = modal && modal.classList.contains('ui-hidden');
+    
+      const SB = window.Capacitor?.Plugins?.StatusBar;
+      if (!SB) return;   // плагина нет — молча выходим (без fallback на fullscreen)
+    
       try {
-        // Отключаем нативную анимацию — она самая долгая (~500-1000ms).
-        // setAnimation применяется к текущей и следующим операциям плагина.
-        if (typeof SB.setAnimation === 'function') {
-          SB.setAnimation({ type: 'none', duration: 0 }).catch(() => {});
-        }
         if (isUIHidden) SB.hide();
         else SB.show();
-        return;
       } catch(e) {
         console.warn('[StatusBar plugin]', e);
       }
-    }
-  
-    try {
-      if (isUIHidden && document.documentElement.requestFullscreen) {
-        document.documentElement.requestFullscreen().catch(() => {});
-      } else if (!isUIHidden && document.exitFullscreen && document.fullscreenElement) {
-        document.exitFullscreen().catch(() => {});
-      }
-    } catch(e) { /* тихо */ }
-  },
+    },  
   
     async open(fullSlug, chapterId, volume, number, pagesList, title, progress, chaptersList) {
     if (this._opening) return;
@@ -19265,9 +19256,13 @@ const SlashLibReader = {
     document.documentElement.classList.add('reader-open-bg');
     document.body.classList.add('reader-open-bg');
     
-    // Статус-бар прячем на СЛЕДУЮЩЕМ кадре — чтобы нативный hide()
-    // не вызывал перерисовку Activity в момент, когда модалка ещё не отрисована.
-    requestAnimationFrame(() => this._syncStatusBar());
+    // Статус-бар прячем с задержкой — даём WebView отрисовать
+    // чёрный фон модалки, чтобы нативная перерисовка Activity
+    // не показала серый фон между кадрами.
+    setTimeout(() => {
+      const modal = document.getElementById('readerModal');
+      if (modal && modal.classList.contains('on')) this._syncStatusBar();
+    }, 180);
   
     try {
       this._fullSlug = fullSlug;
@@ -19978,15 +19973,10 @@ setTimeout(() => SlashLibReader.init(), 1500);
    самый долгий (плагин инициализируется лениво). Дёргаем заранее,
    чтобы в момент первого тапа по экрану читалки всё шло по горячему пути. */
 setTimeout(async () => {
-  const SB = window.Capacitor?.Plugins?.AndroidSystemBars;
+  const SB = window.Capacitor?.Plugins?.StatusBar;
   if (!SB) return;
   try {
-    if (typeof SB.setAnimation === 'function') {
-      await SB.setAnimation({ type: 'none', duration: 0 }).catch(() => {});
-    }
-    await SB.show();
-    await SB.hide();
-    await SB.show();
+    await SB.show();   // просто убеждаемся, что бар на месте (без пляски)
   } catch(e) {}
 }, 4000);
   
