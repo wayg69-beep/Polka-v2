@@ -19547,12 +19547,28 @@ const SlashLibReader = {
     const imgs = wrap.querySelectorAll('img');
     const img = imgs[idx];
     if (!img) return;
-
+  
     const pageInfo = this._pagesList[idx];
     if (!pageInfo) return;
-
-    const imgUrl = `https://img3.hentaicdn.org/manga/${this._shortSlug}/chapters/${pageInfo.chapterId}/${pageInfo.image}`;
-
+  
+    // Slashlib менял формат поля image. Поддерживаем три варианта:
+    // 1) полный URL (https://... или //...)
+    // 2) абсолютный путь от корня img3.hentaicdn.org (/manga/...)
+    // 3) просто имя файла (000.jpg) — старый формат
+    const raw = String(pageInfo.image || '');
+    let imgUrl;
+    if (/^https?:\/\//i.test(raw)) {
+      imgUrl = raw;
+    } else if (/^\/\//.test(raw)) {
+      imgUrl = 'https:' + raw;
+    } else if (raw.startsWith('/')) {
+      imgUrl = 'https://img3.hentaicdn.org' + raw;
+    } else if (raw.includes('/manga/')) {
+      imgUrl = 'https://img3.hentaicdn.org/' + raw.replace(/^\/+/, '');
+    } else {
+      imgUrl = `https://img3.hentaicdn.org/manga/${this._shortSlug}/chapters/${pageInfo.chapterId}/${raw}`;
+    }
+  
     const token = localStorage.getItem('slashlib_token');
     const headers = {
       'Authorization': 'Bearer ' + token,
@@ -19561,11 +19577,11 @@ const SlashLibReader = {
       'Site-Id': '2',
       'Accept': 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8'
     };
-
+  
     try {
       const CHttp = window.Capacitor?.Plugins?.CapacitorHttp;
       if (!CHttp) throw new Error('Нет CapacitorHttp');
-
+  
       const r = await CHttp.get({ url: imgUrl, headers, responseType: 'arraybuffer' });
       if (r.status === 200 && r.data) {
         let base64Data = r.data;
@@ -19573,10 +19589,10 @@ const SlashLibReader = {
         const binaryString = atob(base64Data);
         const bytes = new Uint8Array(binaryString.length);
         for (let i = 0; i < binaryString.length; i++) bytes[i] = binaryString.charCodeAt(i);
-
+  
         const blobUrl = URL.createObjectURL(new Blob([bytes], { type: 'image/png' }));
         this._blobUrls[idx] = blobUrl;
-
+  
         // img мог быть уже заменён при повторном open — берём актуальный
         const currentImgs = wrap.querySelectorAll('img');
         const currentImg = currentImgs[idx];
@@ -19584,15 +19600,18 @@ const SlashLibReader = {
           currentImg.src = blobUrl;
           currentImg.style.opacity = '1';
         }
+      } else {
+        console.warn('[loadPage] HTTP', r.status, 'for', imgUrl);
       }
     } catch(e) {
+      console.warn('[loadPage]', e, 'for', imgUrl);
       if (img) {
         img.alt = 'Ошибка загрузки';
         img.style.opacity = '0.3';
       }
     }
   },
-
+  
   bindGestures() {
     const wrap = document.getElementById('readerPages');
     const stage = document.getElementById('readerStage');
