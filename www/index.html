@@ -3829,6 +3829,79 @@ body.reader-open-bg {
 .rs-group .seg button {
   flex: 1; justify-content: center;
   }
+
+/* === Reader: кнопка лайка + пикер SVG === */
+#readerLikeBtn {
+  position: relative;
+  color: #5a5a6e;
+  transition: color .18s ease;
+}
+#readerLikeBtn svg {
+  display: block;
+  width: 20px;
+  height: 20px;
+  transition: filter .18s ease;
+}
+#readerLikeBtn.lit {
+  color: var(--ic, #ff5c8a);
+}
+#readerLikeBtn.lit svg {
+  filter: drop-shadow(0 0 3px var(--ic, #ff5c8a)) drop-shadow(0 0 8px var(--ic, #ff5c8a));
+}
+
+.reader-tag-picker-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.5);
+  z-index: 640;
+  display: none;
+}
+.reader-tag-picker-backdrop.on { display: block; }
+
+.reader-tag-picker {
+  position: fixed;
+  z-index: 641;
+  display: none;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+  background: var(--bg2);
+  border: 1px solid #2a2a38;
+  border-radius: 14px;
+  box-shadow: 0 12px 40px rgba(0,0,0,.7);
+  max-height: 60vh;
+  overflow-y: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.reader-tag-picker::-webkit-scrollbar { display: none; }
+.reader-tag-picker.on { display: flex; }
+
+.reader-tag-picker-item {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  background: var(--bg3);
+  border: 1px solid #26263a;
+  color: #5a5a6e;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  padding: 0;
+  font-family: inherit;
+  transition: border-color .15s, background .15s;
+  flex: 0 0 auto;
+}
+.reader-tag-picker-item svg { display: block; width: 24px; height: 24px; }
+.reader-tag-picker-item.lit { color: var(--ic); }
+.reader-tag-picker-item.lit svg {
+  filter: drop-shadow(0 0 3px var(--ic)) drop-shadow(0 0 8px var(--ic));
+}
+/* Текущая «стандартная» SVG — обведена фиолетовым */
+.reader-tag-picker-item.current {
+  border-color: var(--acc);
+  box-shadow: inset 0 0 0 1px var(--acc), 0 0 6px rgba(124,92,255,.4);
+                             }
   
 </style>
 </head>
@@ -5428,6 +5501,10 @@ body.player-modal-open .player-modal {
     </div>
   </div>
 </div>
+
+<!-- Выпадающий список иконок для метки (долгий тап на кнопке лайка) -->
+<div class="reader-tag-picker-backdrop" id="readerTagPickerBackdrop"></div>
+<div class="reader-tag-picker" id="readerTagPicker"></div>
   
 <div class="toast" id="toast"></div>
   
@@ -19220,7 +19297,11 @@ const SlashLibReader = {
     if (el('readerSettingsBtn')) el('readerSettingsBtn').onclick = () => this.toggleSettings(true);
     if (el('readerSettingsClose')) el('readerSettingsClose').onclick = () => this.toggleSettings(false);
     if (el('rsSaveBtn')) el('rsSaveBtn').onclick = () => this.toggleSettings(false);
-    if (el('readerLikeBtn')) el('readerLikeBtn').onclick = () => this._addMoment();
+    const likeBtn = el('readerLikeBtn');
+if (likeBtn) {
+  this._bindLikeButton(likeBtn);
+  this._applyDefaultTagToLikeButton();
+}
     if (el('readerPinBtn')) el('readerPinBtn').onclick = () => {
       this.saveProgress();
       toast('Позиция зафиксирована', 'success');
@@ -19471,8 +19552,9 @@ const SlashLibReader = {
   },
 
   close() {
-    this.saveProgress();
-    const rm = document.getElementById('readerModal');
+  this._closeTagPicker();
+  this.saveProgress();
+  const rm = document.getElementById('readerModal');
     if (rm) {
       rm.classList.remove('on');
       rm.classList.remove('ui-hidden');
@@ -19528,13 +19610,127 @@ const SlashLibReader = {
     } catch(e){}
   },
 
-  _addMoment() {
+_getDefaultMomentTag() {
+  try { return localStorage.getItem('polka_reader_default_moment_tag') || MOMENT_DEFAULT_TAG; }
+  catch(e) { return MOMENT_DEFAULT_TAG; }
+},
+
+_setDefaultMomentTag(tag) {
+  try { localStorage.setItem('polka_reader_default_moment_tag', tag); }
+  catch(e) {}
+},
+
+_getMomentsOnCurrentPage() {
+  const bounds = this.getCurrentChapterBounds();
+  if (!bounds) return [];
+  const it = items.find(x => x.id === this._itemId);
+  if (!it || !Array.isArray(it.moments)) return [];
+  return it.moments.filter(m =>
+    m.c === bounds.chapterId && m.p === bounds.pageInChapter
+  );
+},
+
+_getTagsOnCurrentPage() {
+  const list = this._getMomentsOnCurrentPage();
+  return new Set(list.map(m => m.tag || MOMENT_DEFAULT_TAG));
+},
+
+_applyDefaultTagToLikeButton() {
+  const btn = document.getElementById('readerLikeBtn');
+  if (!btn) return;
+  const tag = this._getDefaultMomentTag();
+  btn.innerHTML = momentIconSVG(tag);
+  btn.style.setProperty('--ic', momentColor(tag));
+  this._updateLikeButtonState();
+},
+
+_updateLikeButtonState() {
+  const btn = document.getElementById('readerLikeBtn');
+  if (!btn) return;
+  const tag = this._getDefaultMomentTag();
+  const tagsHere = this._getTagsOnCurrentPage();
+  const isLit = tagsHere.has(tag);
+  btn.classList.toggle('lit', isLit);
+  btn.style.setProperty('--ic', isLit ? momentColor(tag) : '#5a5a6e');
+},
+
+_bindLikeButton(btn) {
+  let longPressTimer = null;
+  let longPressed = false;
+  let startX = 0, startY = 0;
+  let activePointerId = null;
+
+  const cancelTimer = () => {
+    clearTimeout(longPressTimer);
+    longPressTimer = null;
+  };
+
+  btn.addEventListener('pointerdown', (e) => {
+    if (activePointerId !== null) return;
+    activePointerId = e.pointerId;
+    longPressed = false;
+    startX = e.clientX;
+    startY = e.clientY;
+    cancelTimer();
+    longPressTimer = setTimeout(() => {
+      longPressed = true;
+      try { if (navigator.vibrate) navigator.vibrate(20); } catch(err){}
+      this._openTagPicker(btn);
+    }, 450);
+  });
+
+  btn.addEventListener('pointermove', (e) => {
+    if (e.pointerId !== activePointerId) return;
+    if (Math.abs(e.clientX - startX) > 8 || Math.abs(e.clientY - startY) > 8) {
+      cancelTimer();
+    }
+  });
+
+  btn.addEventListener('pointerup', (e) => {
+    if (e.pointerId !== activePointerId) return;
+    activePointerId = null;
+    cancelTimer();
+    if (!longPressed) {
+      this._addMomentWithTag(this._getDefaultMomentTag(), true);
+    }
+  });
+
+  btn.addEventListener('pointercancel', (e) => {
+    if (e.pointerId !== activePointerId) return;
+    activePointerId = null;
+    cancelTimer();
+  });
+},
+
+_addMomentWithTag(tag, toggle) {
   if (!this._itemId) { toast('Не удалось определить карточку', 'warn'); return; }
   const it = items.find(x => x.id === this._itemId);
   if (!it) { toast('Карточка не найдена', 'warn'); return; }
 
   const bounds = this.getCurrentChapterBounds();
   if (!bounds) { toast('Позиция не определена', 'warn'); return; }
+
+  if (!Array.isArray(it.moments)) it.moments = [];
+
+  const tagSafe = (typeof tag === 'string' && tag) ? tag : MOMENT_DEFAULT_TAG;
+
+  const existingIdx = it.moments.findIndex(m =>
+    m.c === bounds.chapterId && m.p === bounds.pageInChapter && (m.tag || MOMENT_DEFAULT_TAG) === tagSafe
+  );
+
+  if (existingIdx >= 0) {
+    if (toggle) {
+      it.moments.splice(existingIdx, 1);
+      it.updatedAt = Date.now();
+      save();
+      this._updateLikeButtonState();
+      this._refreshMomentsBox();
+      toast('Метка убрана', 'warn');
+    } else {
+      toast('Такая метка уже стоит на этой странице', 'warn');
+    }
+    return;
+  }
 
   let frameOffset = 0;
   const wrap = document.getElementById('readerPages');
@@ -19552,41 +19748,100 @@ const SlashLibReader = {
 
   const newMoment = {
     p: bounds.pageInChapter,
-    f: 1,
-    tag: 'heart',
+    tag: tagSafe,
     c: bounds.chapterId,
     v: bounds.volume,
     n: bounds.number,
     o: frameOffset
   };
 
-  if (!Array.isArray(it.moments)) it.moments = [];
   it.moments.push(newMoment);
   it.moments = sortMoments(it.moments);
   it.updatedAt = Date.now();
   save();
 
-  const box = document.getElementById('momentsBox');
-  if (box) {
-    try {
-      renderMomentsBox(box, it);
-      requestAnimationFrame(() => layoutMomentsGradient(box));
-    } catch(e) { console.warn('moments box refresh', e); }
-  }
+  this._updateLikeButtonState();
+  this._refreshMomentsBox();
 
   const btn = document.getElementById('readerLikeBtn');
   if (btn) {
-    btn.style.transition = 'transform .15s ease, color .25s ease, filter .25s ease';
+    btn.style.transition = 'transform .15s ease';
     btn.style.transform = 'scale(1.18)';
-    btn.style.color = '#ff5c8a';
-    btn.style.filter = 'drop-shadow(0 0 4px rgba(255,92,138,.9)) drop-shadow(0 0 10px rgba(255,92,138,.6))';
     setTimeout(() => { btn.style.transform = ''; }, 150);
-    setTimeout(() => { btn.style.color = ''; btn.style.filter = ''; }, 700);
   }
 
-  toast('Метка: Гл. ' + bounds.number + ', Стр. ' + bounds.pageInChapter, 'success');
+  toast('Метка: ' + tagSafe + ' · Стр. ' + bounds.pageInChapter, 'success');
 },
 
+_refreshMomentsBox() {
+  const box = document.getElementById('momentsBox');
+  if (!box) return;
+  const it = items.find(x => x.id === this._itemId);
+  if (!it) return;
+  try {
+    renderMomentsBox(box, it);
+    requestAnimationFrame(() => layoutMomentsGradient(box));
+  } catch(e) { console.warn('moments box refresh', e); }
+},
+
+_openTagPicker(anchorBtn) {
+  const backdrop = document.getElementById('readerTagPickerBackdrop');
+  const picker = document.getElementById('readerTagPicker');
+  if (!backdrop || !picker) return;
+
+  const tagsHere = this._getTagsOnCurrentPage();
+  const currentTag = this._getDefaultMomentTag();
+
+  picker.innerHTML = Object.keys(MOMENT_ICONS).map(k => {
+    const isLit = tagsHere.has(k);
+    const isCurrent = k === currentTag;
+    const color = isLit ? MOMENT_ICONS[k].color : '#5a5a6e';
+    const cls = 'reader-tag-picker-item' +
+      (isLit ? ' lit' : '') +
+      (isCurrent ? ' current' : '');
+    return '<button type="button" class="' + cls + '" data-tag="' + k + '" style="--ic:' + color + '">' + momentIconSVG(k) + '</button>';
+  }).join('');
+
+  picker.querySelectorAll('.reader-tag-picker-item').forEach(el => {
+    el.onclick = (e) => {
+      e.stopPropagation();
+      const tag = el.dataset.tag;
+      if (!tag) return;
+      this._setDefaultMomentTag(tag);
+      this._addMomentWithTag(tag, false);
+      this._applyDefaultTagToLikeButton();
+      this._closeTagPicker();
+    };
+  });
+
+  picker.style.left = '0px';
+  picker.style.top = '0px';
+
+  backdrop.classList.add('on');
+  picker.classList.add('on');
+
+  requestAnimationFrame(() => {
+    const r = anchorBtn.getBoundingClientRect();
+    const pr = picker.getBoundingClientRect();
+    const px = Math.max(8, Math.min(window.innerWidth - pr.width - 8, r.left + r.width / 2 - pr.width / 2));
+    const py = Math.min(window.innerHeight - pr.height - 16, r.bottom + 8);
+    picker.style.left = px + 'px';
+    picker.style.top = Math.max(8, py) + 'px';
+  });
+
+  backdrop.onclick = () => this._closeTagPicker();
+},
+
+_closeTagPicker() {
+  const backdrop = document.getElementById('readerTagPickerBackdrop');
+  const picker = document.getElementById('readerTagPicker');
+  if (backdrop) {
+    backdrop.classList.remove('on');
+    backdrop.onclick = null;
+  }
+  if (picker) picker.classList.remove('on');
+},
+  
   applyMode(mode) {
     this._settings.mode = mode;
     const wrap = document.getElementById('readerPages');
@@ -19629,8 +19884,10 @@ const SlashLibReader = {
       p.style.width = ((bounds.pageInChapter - 1) / (bounds.totalInChapter - 1) * 100) + '%';
     }
 
-    clearTimeout(this._saveTimer);
-    this._saveTimer = setTimeout(() => this.saveProgress(), 1000);
+    this._updateLikeButtonState();
+
+clearTimeout(this._saveTimer);
+this._saveTimer = setTimeout(() => this.saveProgress(), 1000);
   },
 
   updateChapterNav() {
