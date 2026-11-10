@@ -1259,6 +1259,9 @@ input::placeholder, textarea::placeholder{ color:#5a5a6e; opacity:1; }
 }
 .notes-modal.on { display: flex; }
 
+/* Модалка метки должна быть поверх открытой карточки — иначе вылезает под ней */
+#momentModal { z-index: 550; }
+
 /* Выносим фон и блюр в псевдоэлемент, чтобы он не влиял на рендеринг панели */
 .notes-modal::before {
   content: '';
@@ -7960,8 +7963,10 @@ const hasCover = !!it.cover;
 
 } else if(group === 'book' || group === 'comic') {
   let btns = '';
-  if (it.link) {
-    const isFicbook = it.link.includes('ficbook.net');
+  // Для shlib.life-комиксов общую «Открыть/Читать» не рисуем —
+// её заменяет специализированная кнопка «Slashlib» ниже (тот же href).
+if (it.link && !it.link.includes('shlib.life')) {
+  const isFicbook = it.link.includes('ficbook.net');
     const lbl = isFicbook ? 'Читать' : 'Открыть';
     btns += `<button type="button" class="view-link-btn book" data-href="${esc(it.link)}">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 6.5v13"/><path d="M2 6.5c3.5-1.5 7-1.5 10 0 3-1.5 6.5-1.5 10 0v13c-3.5-1.5-7-1.5-10 0-3-1.5-6.5-1.5-10 0z"/></svg>${lbl}
@@ -8259,6 +8264,7 @@ if (btnReadSlashlib) {
     const fullSlug = (it.link.match(/\/manga\/([^\/?#]+)/) || [])[1];
     if (!fullSlug) { toast('Не удалось определить slug', 'error'); return; }
 
+    const btnReadSlashlibOriginalHTML = btnReadSlashlib.innerHTML;
     btnReadSlashlib.disabled = true;
     btnReadSlashlib.innerHTML = 'Загружаю...';
     
@@ -8306,8 +8312,8 @@ if (btnReadSlashlib) {
     } catch(err) {
       toast('Ошибка: ' + err.message, 'error');
     } finally {
-      btnReadSlashlib.disabled = false;
-      btnReadSlashlib.innerHTML = 'Читать на SlashLib';
+  btnReadSlashlib.disabled = false;
+  btnReadSlashlib.innerHTML = btnReadSlashlibOriginalHTML;
     }
   };
 }
