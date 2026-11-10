@@ -3581,6 +3581,11 @@ animation:none !important;
 }
 
 /* --- СТИЛИ ЧИТАЛКИ --- */
+
+html.reader-open-bg,
+body.reader-open-bg {
+  background: #000 !important;
+  }
 .reader-modal {
   position: fixed; top: 0; left: 0; right: 0; bottom: 0;
   z-index: 600;
@@ -19247,8 +19252,6 @@ const SlashLibReader = {
     this._opening = true;
   
     // Открываем модалку ПЕРВЫМ делом, до любой тяжёлой работы.
-    // Форсируем reflow (offsetWidth), чтобы браузер гарантированно
-    // отрисовал чёрный фон .reader-modal до построения <img>.
     const readerModalEl = document.getElementById('readerModal');
     if (readerModalEl) {
       readerModalEl.classList.add('on');
@@ -19256,7 +19259,15 @@ const SlashLibReader = {
       void readerModalEl.offsetWidth;
     }
     document.body.classList.add('modal-open');
-    this._syncStatusBar();
+    
+    // Красим html и body в чёрный — если между кадрами мелькнёт фон,
+    // он будет чёрным (сливаться с модалкой), а не серым.
+    document.documentElement.classList.add('reader-open-bg');
+    document.body.classList.add('reader-open-bg');
+    
+    // Статус-бар прячем на СЛЕДУЮЩЕМ кадре — чтобы нативный hide()
+    // не вызывал перерисовку Activity в момент, когда модалка ещё не отрисована.
+    requestAnimationFrame(() => this._syncStatusBar());
   
     try {
       this._fullSlug = fullSlug;
@@ -19432,12 +19443,16 @@ const SlashLibReader = {
     this._currentIndex = 0;
     this.toggleSettings(false);
   
-    const overlay = document.getElementById('readerLoadingOverlay');
-    if (overlay) overlay.remove();
-  
-    // Возвращаем статус-бар ОС (UI уже "виден", т.к. ui-hidden снят выше)
-    this._syncStatusBar();
-  },
+      const overlay = document.getElementById('readerLoadingOverlay');
+      if (overlay) overlay.remove();
+    
+      // Возвращаем нормальный фон html и body
+      document.documentElement.classList.remove('reader-open-bg');
+      document.body.classList.remove('reader-open-bg');
+    
+      // Возвращаем статус-бар ОС
+      this._syncStatusBar();
+    },
   
   saveProgress() {
     if (!this._fullSlug) return;
