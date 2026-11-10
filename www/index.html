@@ -19215,9 +19215,20 @@ const SlashLibReader = {
   titleEl.textContent = prefix + `Том ${bounds.volume} Глава ${bounds.number}`;
 },
 
-    _syncStatusBar() {
-      // Управление статус-баром вынесено в MainActivity.java (нативный фуллскрин)
-    },  
+  _syncStatusBar() {
+    const modal = document.getElementById('readerModal');
+    const isUIHidden = modal && modal.classList.contains('ui-hidden');
+  
+    const SB = window.Capacitor?.Plugins?.SystemBars;
+    if (!SB) return;
+  
+    try {
+      if (isUIHidden) SB.hide();
+      else SB.show();
+    } catch(e) {
+      console.warn('[SystemBars]', e);
+    }
+  },
   
     async open(fullSlug, chapterId, volume, number, pagesList, title, progress, chaptersList) {
     if (this._opening) return;
@@ -19237,13 +19248,7 @@ const SlashLibReader = {
     document.documentElement.classList.add('reader-open-bg');
     document.body.classList.add('reader-open-bg');
     
-    // Статус-бар прячем с задержкой — даём WebView отрисовать
-    // чёрный фон модалки, чтобы нативная перерисовка Activity
-    // не показала серый фон между кадрами.
-    setTimeout(() => {
-      const modal = document.getElementById('readerModal');
-      if (modal && modal.classList.contains('on')) this._syncStatusBar();
-    }, 180);
+    
   
     try {
       this._fullSlug = fullSlug;
@@ -19426,8 +19431,9 @@ const SlashLibReader = {
       document.documentElement.classList.remove('reader-open-bg');
       document.body.classList.remove('reader-open-bg');
     
-      // Возвращаем статус-бар ОС
-      this._syncStatusBar();
+      // Гарантированно возвращаем бары при закрытии читалки
+      const SB = window.Capacitor?.Plugins?.SystemBars;
+      if (SB) { try { SB.show(); } catch(e){} }
     },
   
   saveProgress() {
