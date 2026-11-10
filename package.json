@@ -11,6 +11,7 @@
     "@capawesome/capacitor-app-launcher": "^0.1.2",
     "@capgo/capacitor-media-session": "^8.0.0",
     "@capacitor/app": "^8.0.0",
-    "@capacitor/status-bar": "^8.0.4"
+    "@capacitor/status-bar": "^8.0.4",
+    "capacitor-plugin-status-bar": "^2.0.15"
   }
 }
