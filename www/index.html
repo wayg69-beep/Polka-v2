@@ -3655,10 +3655,10 @@ animation:none !important;
    В портрете и в горизонтальном режиме не трогаем — там свои правила. */
 @media (orientation: landscape) and (min-width: 720px) {
   .reader-pages:not(.horizontal) {
-    padding-left: clamp(16px, 9vw, 220px);
-    padding-right: clamp(16px, 9vw, 220px);
+    padding-left: clamp(24px, 15vw, 360px);
+    padding-right: clamp(24px, 15vw, 360px);
   }
-  }
+    }
 
 /* ГОРИЗОНТАЛЬНЫЙ РЕЖИМ */
 .reader-pages.horizontal {
@@ -3691,6 +3691,33 @@ animation:none !important;
   font-size: 12px; font-weight: 600; color: var(--fg);
   font-variant-numeric: tabular-nums; min-width: 60px; text-align: right;
   }
+
+  /* Оверлей загрузки читалки: закрывает содержимое, пока прогресс не восстановлен */
+.reader-loading-overlay {
+  position: absolute;
+  inset: 0;
+  background: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 14px;
+  z-index: 15;
+  color: var(--fg2);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: .3px;
+}
+.reader-loading-overlay .spinner {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 3px solid rgba(124, 92, 255, .25);
+  border-top-color: var(--acc);
+  animation: readerSpin .8s linear infinite;
+}
+@keyframes readerSpin { to { transform: rotate(360deg); } }
+
 
   .reader-nav-chapter {
   width: 36px; height: 36px;
@@ -19166,53 +19193,63 @@ const SlashLibReader = {
     };
   },
 
+  _hideStatusBar() {
+    const SB = window.Capacitor?.Plugins?.StatusBar;
+    if (SB) { try { SB.hide(); } catch(e){} }
+  },
+  
+  _showStatusBar() {
+    const SB = window.Capacitor?.Plugins?.StatusBar;
+    if (SB) { try { SB.show(); } catch(e){} }
+  },
+  
   async open(fullSlug, chapterId, volume, number, pagesList, title, progress, chaptersList) {
     if (this._opening) return;
     this._opening = true;
-
+  
     try {
       this._fullSlug = fullSlug;
       this._shortSlug = fullSlug.split('--').pop();
       this._chaptersList = chaptersList || [];
       this._blobUrls = {};
-
+  
       if (!pagesList || !pagesList.length) {
         toast('В главе нет страниц', 'warn');
         return;
       }
-
+  
       this._pagesList = pagesList.map(p => ({
         image: p.image,
         chapterId: chapterId,
         volume: volume,
         number: number
       }));
-
+  
       const currIdx = this._chaptersList.findIndex(c => c.id === chapterId);
       this._nextChapter = (currIdx !== -1 && currIdx < this._chaptersList.length - 1)
         ? this._chaptersList[currIdx + 1] : null;
       this._prevChapter = (currIdx > 0) ? this._chaptersList[currIdx - 1] : null;
-
+  
       // Восстановление прогресса: progress.page — 0-indexed в этой главе
       let startPage = 0;
       if (progress && typeof progress.page === 'number') {
         startPage = Math.max(0, Math.min(progress.page, this._pagesList.length - 1));
       }
       this._currentIndex = startPage;
-
+  
       const titleEl = document.getElementById('readerTitle');
       if (titleEl) titleEl.textContent = title;
-
+  
       const wrap = document.getElementById('readerPages');
       if (!wrap) return;
       wrap.innerHTML = '';
       wrap.scrollTop = 0;
       wrap.scrollLeft = 0;
-
+  
       // Режим ставим классами, БЕЗ вызова applyMode (который сбрасывает скролл)
       wrap.className = 'reader-pages';
       if (this._settings.mode === 'LEFT_TO_RIGHT') wrap.classList.add('horizontal');
-
+  
       // Создаём пустые img
       this._pagesList.forEach((page, i) => {
         const img = document.createElement('img');
@@ -19222,49 +19259,80 @@ const SlashLibReader = {
         img.style.transition = 'opacity 0.3s ease';
         wrap.appendChild(img);
       });
-
+  
       // Блок «Следующая глава»
       const nextDiv = document.createElement('div');
       nextDiv.className = 'reader-next-chapter';
       nextDiv.id = 'readerNextBlock';
       wrap.appendChild(nextDiv);
       this.updateNextBlock();
-
+  
+      // ===== FULLSCREEN =====
+      this._hideStatusBar();
+  
+      // Открываем модалку сразу — оверлей загрузки закроет пустоту
       document.getElementById('readerModal').classList.add('on');
       document.getElementById('readerModal').classList.remove('ui-hidden');
       document.body.classList.add('modal-open');
-
+  
+      // ===== Скрываем содержимое под лоадером =====
+      wrap.style.visibility = 'hidden';
+  
+      const stage = document.getElementById('readerStage');
+      let overlay = document.getElementById('readerLoadingOverlay');
+      if (!overlay && stage) {
+        overlay = document.createElement('div');
+        overlay.id = 'readerLoadingOverlay';
+        overlay.className = 'reader-loading-overlay';
+        overlay.innerHTML = '<div class="spinner"></div><div>Загрузка...</div>';
+        stage.appendChild(overlay);
+      }
+  
       this.updateSettingsUI();
       this.updateChapterNav();
       this.updateCounter();
-
-      // Асинхронная подгрузка страниц:
-      // 1) сначала ВСЕ предыдущие (нужны для правильного offsetTop/offsetLeft)
-      // 2) потом текущую
-      // 3) потом остальные в фоне
+  
+      // ===== Асинхронная загрузка: ждём prev + current, потом scroll, потом видимость =====
       const prevIdx = [];
       for (let i = 0; i < this._currentIndex; i++) prevIdx.push(i);
-
+  
       const afterIdx = [];
       for (let i = this._currentIndex + 1; i < this._pagesList.length; i++) afterIdx.push(i);
-
+  
       (async () => {
-        if (prevIdx.length) await this.loadPagesBatch(prevIdx, 4);
-        await this.loadPage(this._currentIndex);
-
-        // Восстанавливаем scroll с учётом offset
-        if (progress && typeof progress.offset === 'number') {
-          setTimeout(() => this.restoreScroll(progress.offset), 40);
+        try {
+          // 1. Все предыдущие (нужны реальные размеры для offsetTop/offsetLeft)
+          if (prevIdx.length) await this.loadPagesBatch(prevIdx, 6);
+          // 2. Текущая
+          await this.loadPage(this._currentIndex);
+  
+          // 3. Два rAF — гарантирует, что браузер уложил layout (offsetTop'ы посчитаны)
+          await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+  
+          // 4. Восстановить скролл до того, как пользователь увидит контент
+          this.restoreScroll(progress && typeof progress.offset === 'number' ? progress.offset : 0);
+  
+          // 5. Показать
+          wrap.style.visibility = 'visible';
+          const ov = document.getElementById('readerLoadingOverlay');
+          if (ov) ov.remove();
+  
+          // 6. Фоном — остальные
+          this.loadPagesBatch(afterIdx, 4);
+  
+        } catch(e) {
+          console.error('[Reader open]', e);
+          wrap.style.visibility = 'visible';
+          const ov = document.getElementById('readerLoadingOverlay');
+          if (ov) ov.remove();
         }
-
-        this.loadPagesBatch(afterIdx, 4);
       })();
-
+  
     } finally {
       this._opening = false;
     }
   },
-
+    
   restoreScroll(offset) {
     const wrap = document.getElementById('readerPages');
     if (!wrap) return;
@@ -19291,19 +19359,26 @@ const SlashLibReader = {
   },
 
   close() {
-    this.saveProgress();
-    const rm = document.getElementById('readerModal');
-    if (rm) rm.classList.remove('on');
-    document.body.classList.remove('modal-open');
-    Object.values(this._blobUrls).forEach(url => { try { URL.revokeObjectURL(url); } catch(e){} });
-    this._pagesList = [];
-    this._blobUrls = {};
-    this._nextChapter = null;
-    this._prevChapter = null;
-    this._chaptersList = [];
-    this._currentIndex = 0;
-    this.toggleSettings(false);
-  },
+  this.saveProgress();
+  const rm = document.getElementById('readerModal');
+  if (rm) rm.classList.remove('on');
+  document.body.classList.remove('modal-open');
+  Object.values(this._blobUrls).forEach(url => { try { URL.revokeObjectURL(url); } catch(e){} });
+  this._pagesList = [];
+  this._blobUrls = {};
+  this._nextChapter = null;
+  this._prevChapter = null;
+  this._chaptersList = [];
+  this._currentIndex = 0;
+  this.toggleSettings(false);
+
+  // Убираем лоадер, если он остался (закрыли во время загрузки)
+  const overlay = document.getElementById('readerLoadingOverlay');
+  if (overlay) overlay.remove();
+
+  // Возвращаем статус-бар ОС
+  this._showStatusBar();
+},
 
   saveProgress() {
     if (!this._fullSlug) return;
