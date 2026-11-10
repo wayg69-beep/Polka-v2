@@ -143,14 +143,53 @@ jobs:
           }
           EOF
       
+          cat << 'EOF' > "$PKG_DIR/SystemBarsPlugin.java"
+          package app.polka.tracker;
+          import androidx.core.view.WindowCompat;
+          import androidx.core.view.WindowInsetsCompat;
+          import androidx.core.view.WindowInsetsControllerCompat;
+          import com.getcapacitor.Plugin;
+          import com.getcapacitor.PluginCall;
+          import com.getcapacitor.PluginMethod;
+          import com.getcapacitor.annotation.CapacitorPlugin;
+      
+          @CapacitorPlugin(name = "SystemBars")
+          public class SystemBarsPlugin extends Plugin {
+              @PluginMethod
+              public void hide(PluginCall call) {
+                  WindowCompat.setDecorFitsSystemWindows(getActivity().getWindow(), false);
+                  WindowInsetsControllerCompat controller = WindowCompat.getInsetsController(
+                      getActivity().getWindow(),
+                      getActivity().getWindow().getDecorView()
+                  );
+                  if (controller != null) {
+                      controller.hide(WindowInsetsCompat.Type.statusBars() | WindowInsetsCompat.Type.navigationBars());
+                      controller.setSystemBarsBehavior(
+                          WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                      );
+                  }
+                  call.resolve();
+              }
+      
+              @PluginMethod
+              public void show(PluginCall call) {
+                  WindowInsetsControllerCompat controller = WindowCompat.getInsetsController(
+                      getActivity().getWindow(),
+                      getActivity().getWindow().getDecorView()
+                  );
+                  if (controller != null) {
+                      controller.show(WindowInsetsCompat.Type.statusBars() | WindowInsetsCompat.Type.navigationBars());
+                  }
+                  call.resolve();
+              }
+          }
+          EOF
+      
           cat << 'EOF' > "$PKG_DIR/MainActivity.java"
           package app.polka.tracker;
           import android.content.ClipData;
           import android.content.Intent;
           import android.os.Bundle;
-          import androidx.core.view.WindowCompat;
-          import androidx.core.view.WindowInsetsCompat;
-          import androidx.core.view.WindowInsetsControllerCompat;
           import com.getcapacitor.BridgeActivity;
           import org.json.JSONObject;
       
@@ -158,33 +197,15 @@ jobs:
               @Override
               public void onCreate(Bundle savedInstanceState) {
                   registerPlugin(AppSearchPlugin.class);
+                  registerPlugin(SystemBarsPlugin.class);
                   super.onCreate(savedInstanceState);
-                  hideSystemBars();
                   handleShareIntent(getIntent());
-              }
-      
-              @Override
-              public void onWindowFocusChanged(boolean hasFocus) {
-                  super.onWindowFocusChanged(hasFocus);
-                  if (hasFocus) hideSystemBars();
               }
       
               @Override
               protected void onNewIntent(Intent intent) {
                   super.onNewIntent(intent);
                   handleShareIntent(intent);
-              }
-      
-              private void hideSystemBars() {
-                  WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
-                  WindowInsetsControllerCompat controller =
-                      WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
-                  if (controller != null) {
-                      controller.hide(WindowInsetsCompat.Type.statusBars() | WindowInsetsCompat.Type.navigationBars());
-                      controller.setSystemBarsBehavior(
-                          WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-                      );
-                  }
               }
       
               private void handleShareIntent(Intent intent) {
