@@ -145,18 +145,13 @@ jobs:
       
           cat << 'EOF' > "$PKG_DIR/MainActivity.java"
           package app.polka.tracker;
-          import android.animation.ValueAnimator;
           import android.content.ClipData;
           import android.content.Intent;
-          import android.graphics.Insets;
           import android.os.Bundle;
-          import android.view.WindowInsets;
-          import android.view.WindowInsetsAnimationController;
-          import android.view.WindowInsetsAnimationControlListener;
-          import android.view.WindowInsetsController;
-          import android.view.animation.LinearInterpolator;
           import android.webkit.JavascriptInterface;
           import androidx.core.view.WindowCompat;
+          import androidx.core.view.WindowInsetsCompat;
+          import androidx.core.view.WindowInsetsControllerCompat;
           import com.getcapacitor.BridgeActivity;
           import org.json.JSONObject;
       
@@ -183,64 +178,28 @@ jobs:
               class FullscreenBridge {
                   @JavascriptInterface
                   public void hide() {
-                      runOnUiThread(() -> animateBars(true));
+                      runOnUiThread(() -> applyBars(true));
                   }
                   @JavascriptInterface
                   public void show() {
-                      runOnUiThread(() -> animateBars(false));
+                      runOnUiThread(() -> applyBars(false));
                   }
               }
       
-              private void animateBars(boolean hide) {
-                  if (barsHidden == hide) return;
+              private void applyBars(boolean hide) {
+                  barsHidden = hide;
       
-                  WindowInsetsController controller = getWindow().getInsetsController();
+                  WindowInsetsControllerCompat controller = WindowCompat.getInsetsController(
+                      getWindow(), getWindow().getDecorView()
+                  );
                   if (controller == null) return;
       
-                  int types = WindowInsets.Type.statusBars() | WindowInsets.Type.navigationBars();
-      
-                  controller.controlWindowInsetsAnimation(
-                      types,
-                      300,
-                      new LinearInterpolator(),
-                      null,
-                      new WindowInsetsAnimationControlListener() {
-                          @Override
-                          public void onReady(WindowInsetsAnimationController c, int remainingTypes) {
-                              Insets shown = c.getShownStateInsets();
-                              Insets hidden = c.getHiddenStateInsets();
-      
-                              ValueAnimator anim = ValueAnimator.ofFloat(0f, 1f);
-                              anim.setDuration(300);
-                              anim.setInterpolator(new LinearInterpolator());
-                              anim.addUpdateListener(a -> {
-                                  float f = (float) a.getAnimatedValue();
-                                  float frac = hide ? f : 1f - f;
-                                  Insets current = Insets.of(
-                                      (int)(shown.left + (hidden.left - shown.left) * frac),
-                                      (int)(shown.top + (hidden.top - shown.top) * frac),
-                                      (int)(shown.right + (hidden.right - shown.right) * frac),
-                                      (int)(shown.bottom + (hidden.bottom - shown.bottom) * frac)
-                                  );
-                                  c.setInsetsAndAlpha(current, 1f, frac);
-                              });
-                              anim.addListener(new android.animation.AnimatorListenerAdapter() {
-                                  @Override
-                                  public void onAnimationEnd(android.animation.Animator animation) {
-                                      c.finish(hide);
-                                      barsHidden = hide;
-                                  }
-                              });
-                              anim.start();
-                          }
-      
-                          @Override
-                          public void onFinished(WindowInsetsAnimationController c) {}
-      
-                          @Override
-                          public void onCancelled(WindowInsetsAnimationController c) {}
-                      }
-                  );
+                  if (hide) {
+                      controller.hide(WindowInsetsCompat.Type.statusBars() | WindowInsetsCompat.Type.navigationBars());
+                      controller.setSystemBarsBehavior(WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+                  } else {
+                      controller.show(WindowInsetsCompat.Type.statusBars() | WindowInsetsCompat.Type.navigationBars());
+                  }
               }
       
               private void handleShareIntent(Intent intent) {
@@ -276,7 +235,6 @@ jobs:
               }
           }
           EOF
-
       - name: Decode Keystore
         run: echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > android/app/release.keystore
 
