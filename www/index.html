@@ -18982,24 +18982,21 @@ if (MS_WEB) {
     if (!listEl) return;
     
     listEl.innerHTML = this.queue.map((id, idx) => {
-      const t = items.find(i => i.id === id);
-      if (!t) return '';
-      const isActive = idx === this.currentIndex;
-      return `
-        <div class="playlist-item ${isActive ? 'active' : ''}" data-id="${id}" data-idx="${idx}">
-          const coverSrc = t.cover || MUSIC_PLACEHOLDER;
-        return `
-          <div class="playlist-item ${isActive ? 'active' : ''}" data-id="${id}" data-idx="${idx}">
-            <img class="playlist-item-cover" src="${coverSrc}" alt="" onerror="this.onerror=null;this.src='${MUSIC_PLACEHOLDER}'">
-            <div class="playlist-item-text">
-          <div class="playlist-item-text">
-            <div class="playlist-item-title">${esc(t.title)}</div>
-            <div class="playlist-item-artist">${esc(t.country || 'Исполнитель')}</div>
-          </div>
-          <div class="playlist-item-drag-handle">≡</div>
-        </div>
-      `;
-    }).join('');
+  const t = items.find(i => i.id === id);
+  if (!t) return '';
+  const isActive = idx === this.currentIndex;
+  const coverSrc = t.cover || MUSIC_PLACEHOLDER;
+  return `
+    <div class="playlist-item ${isActive ? 'active' : ''}" data-id="${id}" data-idx="${idx}">
+      <img class="playlist-item-cover" src="${coverSrc}" alt="" onerror="this.onerror=null;this.src='${MUSIC_PLACEHOLDER}'">
+      <div class="playlist-item-text">
+        <div class="playlist-item-title">${esc(t.title)}</div>
+        <div class="playlist-item-artist">${esc(t.country || 'Исполнитель')}</div>
+      </div>
+      <div class="playlist-item-drag-handle">≡</div>
+    </div>
+  `;
+}).join('');
 
     this.bindPlaylistEvents();
   },
