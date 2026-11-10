@@ -3580,6 +3580,90 @@ animation:none !important;
   font-size: 12.5px;
 }
 
+  /* --- СТИЛИ ЧИТАЛКИ --- */
+.reader-modal {
+  position: fixed; inset: 0; z-index: 600;
+  background: #0a0a0e;
+  display: none; flex-direction: column; overflow: hidden;
+}
+.reader-modal.on { display: flex; }
+.reader-head {
+  flex: 0 0 auto; display: flex; align-items: center; gap: 10px;
+  padding: calc(env(safe-area-inset-top, 0px) + 10px) 14px 10px;
+  background: rgba(14,14,18,.94);
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  border-bottom: 1px solid #22222e; z-index: 10;
+}
+.reader-title {
+  flex: 1; min-width: 0; font-size: 14px; font-weight: 600;
+  color: var(--fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.reader-modes { display: flex; gap: 4px; }
+.reader-icon-btn {
+  width: 36px; height: 36px; border-radius: 10px;
+  background: var(--bg3); border: 1px solid #26263a; color: var(--fg2);
+  display: grid; place-items: center; cursor: pointer; padding: 0;
+  transition: background .15s, color .15s, border-color .15s;
+}
+.reader-icon-btn svg { width: 18px; height: 18px; display: block; }
+.reader-icon-btn:active { background: #242436; }
+.reader-icon-btn.on {
+  background: var(--acc); border-color: var(--acc); color: #fff;
+  box-shadow: 0 0 4px rgba(124,92,255,.55), 0 0 10px rgba(124,92,255,.3);
+}
+.reader-stage {
+  flex: 1 1 auto; min-height: 0; position: relative; overflow: hidden;
+}
+.reader-pages {
+  width: 100%; height: 100%;
+  overflow-y: auto; overflow-x: hidden;
+  display: flex; flex-direction: column; align-items: center;
+  gap: 0; padding: 12px 0; scrollbar-width: none;
+}
+.reader-pages::-webkit-scrollbar { display: none; }
+.reader-pages img {
+  display: block; max-width: 100%; height: auto;
+  user-select: none; -webkit-user-drag: none; pointer-events: none;
+  background: #111; border-radius: 4px; margin-bottom: 8px;
+  min-height: 200px;
+}
+.reader-pages.horizontal {
+  flex-direction: row; overflow-x: auto; overflow-y: hidden;
+  align-items: center; scroll-snap-type: x mandatory; padding: 0;
+}
+.reader-pages.horizontal img {
+  flex: 0 0 100%; height: 100%; max-width: 100%;
+  object-fit: contain; margin: 0; border-radius: 0; scroll-snap-align: start;
+  min-height: 0;
+}
+.reader-loading {
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  color: var(--fg2); font-size: 14px; text-align: center;
+  padding: 20px 30px; border-radius: 12px;
+  background: rgba(22,22,29,.9); border: 1px solid #22222e;
+  display: none;
+}
+.reader-loading.on { display: block; }
+.reader-foot {
+  flex: 0 0 auto; display: flex; align-items: center; gap: 12px;
+  padding: 8px 14px calc(env(safe-area-inset-bottom, 0px) + 8px);
+  background: rgba(14,14,18,.94);
+  border-top: 1px solid #22222e; z-index: 10;
+}
+.reader-progress-wrap {
+  flex: 1; height: 4px; background: rgba(255,255,255,.08);
+  border-radius: 2px; overflow: hidden;
+}
+.reader-progress {
+  height: 100%; width: 0%; background: var(--acc);
+  box-shadow: 0 0 6px rgba(124,92,255,.7);
+  transition: width .3s ease;
+}
+.reader-counter {
+  font-size: 12px; font-weight: 600; color: var(--fg2);
+  font-variant-numeric: tabular-nums; min-width: 60px; text-align: right;
+}
+
 </style>
 </head>
 <body>
@@ -3777,6 +3861,33 @@ animation:none !important;
       </div>
     </div>
     <!-- КОНЕЦ БЛОКА ТОКЕНА VK -->
+
+    <!-- ЧИТАЛКА SLASHLIB -->
+<div class="reader-modal" id="readerModal">
+  <div class="reader-head">
+    <button class="reader-icon-btn" id="readerCloseBtn" title="Закрыть">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+    <div class="reader-title" id="readerTitle">Читалка</div>
+    <div class="reader-modes">
+      <button class="reader-icon-btn" data-reader-mode="WEBTOON" title="Вебтун (вертикально)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="5 12 12 19 19 12"/></svg>
+      </button>
+      <button class="reader-icon-btn" data-reader-mode="LEFT_TO_RIGHT" title="Слева направо">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+      </button>
+    </div>
+  </div>
+  <div class="reader-stage" id="readerStage">
+    <div class="reader-pages" id="readerPages"></div>
+    <div class="reader-loading" id="readerLoading">Загружаю главу…</div>
+  </div>
+  <div class="reader-foot">
+    <div class="reader-progress-wrap"><div class="reader-progress" id="readerProgress"></div></div>
+    <div class="reader-counter" id="readerCounter">0 / 0</div>
+  </div>
+</div>
+    
 
     <div class="filter-section cat-filters-mobile">
       <label>Фильтры</label>
@@ -7660,6 +7771,12 @@ const hasCover = !!it.cover;
       btns += `<button type="button" class="view-link-btn btn-ficbook-dl" id="btnDlFicbook" style="margin-left:8px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Скачать FB2</button>`;
     }
   }
+     // Внутри openView, в блоке if(group === 'comic') или else if (group === 'book' || group === 'comic')
+  if (it.link && it.link.includes('shlib.life')) {
+    btns += `<button type="button" class="view-link-btn book" id="btnReadSlashlib" style="margin-left:8px;">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>Читать на SlashLib
+    </button>`;
+  }
   if (it.link_comizy) {
   btns += `<button type="button" class="view-link-btn extras" data-href="${esc(it.link_comizy)}" style="margin-left:8px;">
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>Читать на Comizy
@@ -7926,6 +8043,61 @@ if (btnDlFicbook) {
   btnDlFicbook.onclick = (e) => {
     e.stopPropagation();
     downloadFicbookFic(it.link, it.title, it.country, btnDlFicbook);
+  };
+}
+  const btnReadSlashlib = panel.querySelector('#btnReadSlashlib');
+if (btnReadSlashlib) {
+  btnReadSlashlib.onclick = async (e) => {
+    e.stopPropagation();
+    const token = localStorage.getItem('slashlib_token');
+    if (!token) { toast('Нужно войти в SlashLib', 'error'); return; }
+    
+    const fullSlug = (it.link.match(/\/manga\/([^\/?#]+)/) || [])[1];
+    if (!fullSlug) { toast('Не удалось определить slug', 'error'); return; }
+
+    btnReadSlashlib.disabled = true;
+    btnReadSlashlib.innerHTML = 'Загружаю...';
+    
+    try {
+      // Берем последнюю доступную главу (или первую, по желанию)
+      const res = await nativeFetch(`https://api.cdnlibs.org/api/manga/${fullSlug}/chapters?limit=1`, {
+        'Authorization': 'Bearer ' + token,
+        'Site-Id': '2',
+        'Origin': 'https://v2.shlib.life',
+        'Referer': 'https://v2.shlib.life/'
+      });
+      const json = await res.json();
+      const chapter = json.data && json.data[0];
+      
+      if (!chapter) { toast('Глав не найдено', 'warn'); return; }
+
+      // Запрашиваем полную инфу о главе (чтобы получить массив pages)
+      const chapRes = await nativeFetch(`https://api.cdnlibs.org/api/manga/${fullSlug}/chapter?volume=${chapter.volume}&number=${chapter.number}`, {
+        'Authorization': 'Bearer ' + token,
+        'Site-Id': '2',
+        'Origin': 'https://v2.shlib.life',
+        'Referer': 'https://v2.shlib.life/'
+      });
+      const chapJson = await chapRes.json();
+      const chapData = chapJson.data;
+
+      if (!chapData || !chapData.pages || !chapData.pages.length) {
+        toast('Не удалось загрузить страницы', 'error');
+        return;
+      }
+
+      // Закрываем карточку и открываем читалку
+      document.getElementById('viewModal').classList.remove('on');
+      
+      const title = `${it.title} - Том ${chapData.volume} Глава ${chapData.number}`;
+      SlashLibReader.open(fullSlug, chapData.id, chapData.volume, chapData.number, chapData.pages, title);
+
+    } catch(err) {
+      toast('Ошибка: ' + err.message, 'error');
+    } finally {
+      btnReadSlashlib.disabled = false;
+      btnReadSlashlib.innerHTML = 'Читать на SlashLib';
+    }
   };
 }
 // Обработчик для кнопок ссылок (озвучка, оригинал, экстры)
@@ -18743,6 +18915,238 @@ Player.init();
     console.error('[Back] Ошибка:', e);
   }
 })();
+
+  /* =========================================
+   ЧИТАЛКА SLASHLIB (Ленивая загрузка)
+   ========================================= */
+const SlashLibReader = {
+  _fullSlug: '',
+  _shortSlug: '',
+  _chapterId: 0,
+  _pagesList: [], // Массив имён файлов из API
+  _blobUrls: {},  // Кэш скачанных картинок { index: 'blob:...' }
+  _currentIndex: 0,
+  _mode: 'WEBTOON', // 'WEBTOON' | 'LEFT_TO_RIGHT'
+
+  async open(fullSlug, chapterId, volume, number, pagesList, title) {
+    this._fullSlug = fullSlug;
+    this._shortSlug = fullSlug.split('--').pop();
+    this._chapterId = chapterId;
+    this._pagesList = pagesList || [];
+    this._blobUrls = {};
+    this._currentIndex = 0;
+
+    if (!this._pagesList.length) {
+      toast('В главе нет страниц', 'warn');
+      return;
+    }
+
+    document.getElementById('readerTitle').textContent = title;
+    document.querySelectorAll('[data-reader-mode]').forEach(btn => {
+      btn.classList.toggle('on', btn.dataset.readerMode === this._mode);
+    });
+
+    const wrap = document.getElementById('readerPages');
+    wrap.innerHTML = '';
+    
+    // Создаем скелетоны для страниц
+    this._pagesList.forEach((page, i) => {
+      const img = document.createElement('img');
+      img.alt = 'Страница ' + (i + 1);
+      img.dataset.index = i;
+      img.style.opacity = '0'; // Прячем до загрузки
+      img.style.transition = 'opacity 0.3s ease';
+      wrap.appendChild(img);
+    });
+
+    document.getElementById('readerModal').classList.add('on');
+    document.body.classList.add('modal-open');
+    this.applyMode(this._mode);
+    
+    // Начинаем грузить первую страницу
+    this.updateCounter();
+    this.loadVisiblePages();
+  },
+
+  close() {
+    document.getElementById('readerModal').classList.remove('on');
+    document.body.classList.remove('modal-open');
+    // Чистим память
+    Object.values(this._blobUrls).forEach(url => URL.revokeObjectURL(url));
+    this._pagesList = [];
+    this._blobUrls = {};
+  },
+
+  applyMode(mode) {
+    this._mode = mode;
+    const wrap = document.getElementById('readerPages');
+    wrap.className = 'reader-pages';
+    if (mode === 'WEBTOON') {
+      wrap.style.gap = '8px';
+    } else {
+      wrap.classList.add('horizontal');
+      wrap.style.gap = '0';
+    }
+    try { localStorage.setItem('polka_reader_mode', mode); } catch(e){}
+    document.querySelectorAll('[data-reader-mode]').forEach(btn => {
+      btn.classList.toggle('on', btn.dataset.readerMode === mode);
+    });
+    this.scrollToIndex(this._currentIndex, false);
+  },
+
+  scrollToIndex(idx, smooth = true) {
+    const wrap = document.getElementById('readerPages');
+    if (!wrap || !wrap.children[idx]) return;
+    const img = wrap.children[idx];
+    if (this._mode === 'WEBTOON') {
+      wrap.scrollTo({ top: img.offsetTop - 10, behavior: smooth ? 'smooth' : 'auto' });
+    } else {
+      wrap.scrollTo({ left: img.offsetLeft, behavior: smooth ? 'smooth' : 'auto' });
+    }
+    this._currentIndex = idx;
+    this.updateCounter();
+  },
+
+  updateCounter() {
+    const c = document.getElementById('readerCounter');
+    if (c) c.textContent = (this._currentIndex + 1) + ' / ' + this._pagesList.length;
+    const p = document.getElementById('readerProgress');
+    if (p && this._pagesList.length > 1) {
+      p.style.width = ((this._currentIndex / (this._pagesList.length - 1)) * 100) + '%';
+    }
+  },
+
+  async loadVisiblePages() {
+    // Для начала загружаем первые 3 страницы
+    for (let i = 0; i < Math.min(3, this._pagesList.length); i++) {
+      await this.loadPage(i);
+    }
+  },
+
+  async loadPage(idx) {
+    if (this._blobUrls[idx]) return; // Уже загружено
+    const img = document.querySelector(`.reader-pages img[data-index="${idx}"]`);
+    if (!img) return;
+
+    const pageInfo = this._pagesList[idx];
+    const imgUrl = `https://img3.hentaicdn.org/manga/${this._shortSlug}/chapters/${this._chapterId}/${pageInfo.image}`;
+    
+    const token = localStorage.getItem('slashlib_token');
+    const headers = {
+      'Authorization': 'Bearer ' + token,
+      'Origin': 'https://v2.shlib.life',
+      'Referer': 'https://v2.shlib.life/',
+      'Site-Id': '2',
+      'Accept': 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8'
+    };
+
+    try {
+      const CHttp = window.Capacitor?.Plugins?.CapacitorHttp;
+      if (!CHttp) throw new Error('Нет CapacitorHttp');
+
+      const r = await CHttp.get({ url: imgUrl, headers, responseType: 'arraybuffer' });
+      if (r.status === 200 && r.data) {
+        let base64Data = r.data;
+        if (base64Data.startsWith('data:image')) base64Data = base64Data.split(',')[1];
+        
+        const binaryString = atob(base64Data);
+        const len = binaryString.length;
+        const bytes = new Uint8Array(len);
+        for (let i = 0; i < len; i++) bytes[i] = binaryString.charCodeAt(i);
+        
+        const blob = new Blob([bytes], { type: 'image/png' });
+        const blobUrl = URL.createObjectURL(blob);
+        
+        this._blobUrls[idx] = blobUrl;
+        img.src = blobUrl;
+        img.style.opacity = '1';
+      }
+    } catch(e) {
+      console.warn('Ошибка загрузки страницы ' + (idx + 1), e);
+      img.alt = 'Ошибка загрузки';
+      img.style.opacity = '0.3';
+    }
+  },
+
+  bindGestures() {
+    const wrap = document.getElementById('readerPages');
+    if (!wrap) return;
+    
+    wrap.onscroll = () => {
+      const st = wrap.scrollTop;
+      const sl = wrap.scrollLeft;
+      const imgs = wrap.children;
+      if (!imgs.length) return;
+      
+      let idx = 0;
+      if (this._mode === 'WEBTOON') {
+        for (let i = 0; i < imgs.length; i++) {
+          if (imgs[i].offsetTop <= st + (window.innerHeight / 2)) idx = i;
+        }
+      } else {
+        for (let i = 0; i < imgs.length; i++) {
+          if (imgs[i].offsetLeft <= sl + 100) idx = i;
+        }
+      }
+      
+      if (idx !== this._currentIndex) {
+        this._currentIndex = idx;
+        this.updateCounter();
+        
+        // Подгружаем текущую, следующую и предыдущую
+        this.loadPage(idx);
+        if (idx + 1 < this._pagesList.length) this.loadPage(idx + 1);
+        if (idx - 1 >= 0) this.loadPage(idx - 1);
+      }
+    };
+
+    // Свайпы для горизонтального режима
+    let startX = 0, startY = 0, dragging = false;
+    wrap.addEventListener('touchstart', e => {
+      if (e.touches.length === 1) {
+        startX = e.touches[0].clientX;
+        startY = e.touches[0].clientY;
+        dragging = false;
+      }
+    }, { passive: true });
+    
+    wrap.addEventListener('touchmove', e => {
+      if (e.touches.length !== 1) return;
+      const dx = Math.abs(e.touches[0].clientX - startX);
+      const dy = Math.abs(e.touches[0].clientY - startY);
+      if (dx > 8 || dy > 8) dragging = true;
+    }, { passive: true });
+
+    wrap.addEventListener('touchend', e => {
+      if (this._mode === 'WEBTOON' || !dragging) return;
+      const dx = e.changedTouches[0].clientX - startX;
+      if (Math.abs(dx) > 50) {
+        if (dx < 0 && this._currentIndex < this._pagesList.length - 1) {
+          this.scrollToIndex(this._currentIndex + 1);
+        } else if (dx > 0 && this._currentIndex > 0) {
+          this.scrollToIndex(this._currentIndex - 1);
+        }
+      }
+    }, { passive: true });
+  }
+};
+
+// Инициализация кнопок читалки
+document.addEventListener('DOMContentLoaded', () => {
+  try {
+    const savedMode = localStorage.getItem('polka_reader_mode');
+    if (savedMode) SlashLibReader._mode = savedMode;
+  } catch(e){}
+
+  const closeBtn = document.getElementById('readerCloseBtn');
+  if (closeBtn) closeBtn.onclick = () => SlashLibReader.close();
+  
+  document.querySelectorAll('[data-reader-mode]').forEach(btn => {
+    btn.onclick = () => SlashLibReader.applyMode(btn.dataset.readerMode);
+  });
+
+  SlashLibReader.bindGestures();
+});
   
 </script>
 </body>
