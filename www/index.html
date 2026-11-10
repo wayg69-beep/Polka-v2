@@ -8245,12 +8245,14 @@ if (btnReadSlashlib) {
         return;
       }
 
-      document.getElementById('viewModal').classList.remove('on');
       const title = `${it.title} - Том ${chapData.volume} Глава ${chapData.number}`;
       
-      // Передаем всё в читалку (включая список глав и прогресс)
+      // Сначала открываем читалку (она z-index 600, перекроет viewModal с 500),
+      // затем закрываем viewModal — между ними не будет кадра с серым body.
       SlashLibReader.open(fullSlug, chapData.id, chapData.volume, chapData.number, chapData.pages, title, progress, chaptersList);
+      document.getElementById('viewModal').classList.remove('on');
 
+      
     } catch(err) {
       toast('Ошибка: ' + err.message, 'error');
     } finally {
@@ -19240,9 +19242,21 @@ const SlashLibReader = {
     } catch(e) { /* тихо */ }
   },
   
-  async open(fullSlug, chapterId, volume, number, pagesList, title, progress, chaptersList) {
+    async open(fullSlug, chapterId, volume, number, pagesList, title, progress, chaptersList) {
     if (this._opening) return;
     this._opening = true;
+  
+    // Открываем модалку ПЕРВЫМ делом, до любой тяжёлой работы.
+    // Форсируем reflow (offsetWidth), чтобы браузер гарантированно
+    // отрисовал чёрный фон .reader-modal до построения <img>.
+    const readerModalEl = document.getElementById('readerModal');
+    if (readerModalEl) {
+      readerModalEl.classList.add('on');
+      readerModalEl.classList.remove('ui-hidden');
+      void readerModalEl.offsetWidth;
+    }
+    document.body.classList.add('modal-open');
+    this._syncStatusBar();
   
     try {
       this._fullSlug = fullSlug;
@@ -19307,12 +19321,7 @@ const SlashLibReader = {
       wrap.appendChild(nextDiv);
       this.updateNextBlock();
   
-      // ===== Открываем модалку, UI виден по умолчанию → статус-бар тоже =====
-      const readerModalEl = document.getElementById('readerModal');
-      readerModalEl.classList.add('on');
-      readerModalEl.classList.remove('ui-hidden');
-      document.body.classList.add('modal-open');
-      this._syncStatusBar();
+      
   
       // ===== Скрываем содержимое под лоадером =====
       wrap.style.visibility = 'hidden';
