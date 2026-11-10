@@ -143,62 +143,33 @@ jobs:
           }
           EOF
       
-          cat << 'EOF' > "$PKG_DIR/SystemBarsPlugin.java"
-          package app.polka.tracker;
-          import androidx.core.view.WindowCompat;
-          import androidx.core.view.WindowInsetsCompat;
-          import androidx.core.view.WindowInsetsControllerCompat;
-          import com.getcapacitor.Plugin;
-          import com.getcapacitor.PluginCall;
-          import com.getcapacitor.PluginMethod;
-          import com.getcapacitor.annotation.CapacitorPlugin;
-      
-          @CapacitorPlugin(name = "SystemBars")
-          public class SystemBarsPlugin extends Plugin {
-              @PluginMethod
-              public void hide(PluginCall call) {
-                  WindowCompat.setDecorFitsSystemWindows(getActivity().getWindow(), false);
-                  WindowInsetsControllerCompat controller = WindowCompat.getInsetsController(
-                      getActivity().getWindow(),
-                      getActivity().getWindow().getDecorView()
-                  );
-                  if (controller != null) {
-                      controller.hide(WindowInsetsCompat.Type.statusBars() | WindowInsetsCompat.Type.navigationBars());
-                      controller.setSystemBarsBehavior(
-                          WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-                      );
-                  }
-                  call.resolve();
-              }
-      
-              @PluginMethod
-              public void show(PluginCall call) {
-                  WindowInsetsControllerCompat controller = WindowCompat.getInsetsController(
-                      getActivity().getWindow(),
-                      getActivity().getWindow().getDecorView()
-                  );
-                  if (controller != null) {
-                      controller.show(WindowInsetsCompat.Type.statusBars() | WindowInsetsCompat.Type.navigationBars());
-                  }
-                  call.resolve();
-              }
-          }
-          EOF
-      
           cat << 'EOF' > "$PKG_DIR/MainActivity.java"
           package app.polka.tracker;
+          import android.animation.ValueAnimator;
           import android.content.ClipData;
           import android.content.Intent;
+          import android.graphics.Insets;
           import android.os.Bundle;
+          import android.view.WindowInsets;
+          import android.view.WindowInsetsAnimationController;
+          import android.view.WindowInsetsController;
+          import android.view.animation.LinearInterpolator;
+          import android.webkit.JavascriptInterface;
+          import androidx.core.view.WindowCompat;
           import com.getcapacitor.BridgeActivity;
           import org.json.JSONObject;
       
           public class MainActivity extends BridgeActivity {
+              private boolean barsHidden = false;
+      
               @Override
               public void onCreate(Bundle savedInstanceState) {
                   registerPlugin(AppSearchPlugin.class);
-                  registerPlugin(SystemBarsPlugin.class);
                   super.onCreate(savedInstanceState);
+                  WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
+                  if (this.bridge != null && this.bridge.getWebView() != null) {
+                      this.bridge.getWebView().addJavascriptInterface(new FullscreenBridge(), "FullscreenBridge");
+                  }
                   handleShareIntent(getIntent());
               }
       
@@ -206,6 +177,70 @@ jobs:
               protected void onNewIntent(Intent intent) {
                   super.onNewIntent(intent);
                   handleShareIntent(intent);
+              }
+      
+              class FullscreenBridge {
+                  @JavascriptInterface
+                  public void hide() {
+                      runOnUiThread(() -> animateBars(true));
+                  }
+                  @JavascriptInterface
+                  public void show() {
+                      runOnUiThread(() -> animateBars(false));
+                  }
+              }
+      
+              private void animateBars(boolean hide) {
+                  if (barsHidden == hide) return;
+      
+                  WindowInsetsController controller = getWindow().getInsetsController();
+                  if (controller == null) return;
+      
+                  WindowInsetsAnimationController[] ctrl = new WindowInsetsAnimationController[1];
+                  int types = WindowInsets.Type.statusBars() | WindowInsets.Type.navigationBars();
+      
+                  controller.controlWindowInsetsAnimation(
+                      types,
+                      300,
+                      new LinearInterpolator(),
+                      null,
+                      new WindowInsetsAnimationController.Callback() {
+                          @Override
+                          public void onReady(WindowInsetsAnimationController c) {
+                              ctrl[0] = c;
+                              Insets shown = c.getShownStateInsets();
+                              Insets hidden = c.getHiddenStateInsets();
+      
+                              ValueAnimator anim = ValueAnimator.ofFloat(0f, 1f);
+                              anim.setDuration(300);
+                              anim.setInterpolator(new LinearInterpolator());
+                              anim.addUpdateListener(a -> {
+                                  float f = (float) a.getAnimatedValue();
+                                  float frac = hide ? f : 1f - f;
+                                  Insets current = Insets.of(
+                                      (int)(shown.left + (hidden.left - shown.left) * frac),
+                                      (int)(shown.top + (hidden.top - shown.top) * frac),
+                                      (int)(shown.right + (hidden.right - shown.right) * frac),
+                                      (int)(shown.bottom + (hidden.bottom - shown.bottom) * frac)
+                                  );
+                                  c.setInsetsAndAlpha(current, 1f, frac);
+                              });
+                              anim.addListener(new android.animation.AnimatorListenerAdapter() {
+                                  @Override
+                                  public void onAnimationEnd(android.animation.Animator animation) {
+                                      c.finish(hide);
+                                      barsHidden = hide;
+                                  }
+                              });
+                              anim.start();
+                          }
+      
+                          @Override
+                          public void onFinished(WindowInsetsAnimationController c) {}
+                          @Override
+                          public void onCancelled(WindowInsetsAnimationController c) {}
+                      }
+                  );
               }
       
               private void handleShareIntent(Intent intent) {
