@@ -19195,6 +19195,16 @@ const SlashLibReader = {
     };
   },
 
+  updateReaderTitle() {
+  const bounds = this.getCurrentChapterBounds();
+  if (!bounds) return;
+  const titleEl = document.getElementById('readerTitle');
+  if (!titleEl) return;
+  const base = (this._baseTitle || '').trim();
+  const prefix = base ? base + ' - ' : '';
+  titleEl.textContent = prefix + `Том ${bounds.volume} Глава ${bounds.number}`;
+},
+
   /* Синхронизирует статус-бар ОС с текущим состоянием UI.
      UI скрыт тапом → статус-бар скрыт (без анимации).
      UI показан → статус-бар показан (без анимации). */
@@ -19263,6 +19273,8 @@ const SlashLibReader = {
   
       const titleEl = document.getElementById('readerTitle');
       if (titleEl) titleEl.textContent = title;
+      // Запоминаем базовое название (без " - Том X Глава Y") для последующих обновлений
+      this._baseTitle = (title || '').split(' - ')[0].trim();
   
       const wrap = document.getElementById('readerPages');
       if (!wrap) return;
@@ -19621,6 +19633,7 @@ const SlashLibReader = {
         this._currentIndex = idx;
         this.updateCounter();
         this.updateChapterNav();
+        this.updateReaderTitle();   // <-- обновляем заголовок при смене главы/страницы
         this.loadPage(idx);
         if (idx + 1 < this._pagesList.length) this.loadPage(idx + 1);
         this.checkNextChapterUI();
@@ -19743,6 +19756,7 @@ const SlashLibReader = {
 
       this.updateChapterNav();
       this.updateNextBlock();
+      this.updateReaderTitle();
 
       // Подгружаем первые 3 страницы новой главы сразу
       for (let i = 0; i < Math.min(3, chapData.pages.length); i++) {
@@ -19818,6 +19832,7 @@ const SlashLibReader = {
 
     // Сдвигаем индексы
     this._currentIndex += addedCount;
+    this.updateReaderTitle();
 
     // Сдвигаем уже загруженные blobUrls
     const shiftedBlobs = {};
