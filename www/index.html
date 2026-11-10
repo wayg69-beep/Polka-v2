@@ -4086,58 +4086,6 @@ body.reader-open-bg {
   }
 
 
-/* Пикер метки — внутри reader-modal, absolute/z-index/40 срабатывают */
-.reader-tag-picker-backdrop {
-  position: absolute;
-  inset: 0;
-  background: rgba(0,0,0,.35);
-  z-index: 40;
-  display: none;
-}
-.reader-tag-picker-backdrop.on { display: block; }
-
-.reader-tag-picker {
-  position: absolute;
-  z-index: 41;
-  display: none;
-  flex-direction: column;
-  gap: 6px;
-  padding: 10px;
-  background: var(--bg2);
-  border: 1px solid #2a2a38;
-  border-radius: 14px;
-  box-shadow: 0 12px 40px rgba(0,0,0,.7);
-  max-height: 55vh;
-  overflow-y: auto;
-  scrollbar-width: none;
-}
-.reader-tag-picker::-webkit-scrollbar { display: none; }
-.reader-tag-picker.on { display: flex; }
-
-.reader-tag-picker-item {
-  width: 44px;
-  height: 44px;
-  border-radius: 10px;
-  background: var(--bg3);
-  border: 1px solid #26263a;
-  color: rgba(232, 232, 239, 0.75);
-  display: grid;
-  place-items: center;
-  cursor: pointer;
-  padding: 0;
-  font-family: inherit;
-  flex: 0 0 auto;
-  transition: border-color .15s, color .15s;
-}
-.reader-tag-picker-item svg { display: block; width: 24px; height: 24px; }
-.reader-tag-picker-item.lit { color: var(--ic); }
-.reader-tag-picker-item.lit svg {
-  filter: drop-shadow(0 0 3px var(--ic)) drop-shadow(0 0 8px var(--ic));
-}
-.reader-tag-picker-item.current {
-  border-color: var(--acc);
-  box-shadow: inset 0 0 0 1px var(--acc), 0 0 6px rgba(124,92,255,.4);
-}
 
   .reader-chapters-panel {
   position: absolute;
@@ -4204,9 +4152,9 @@ body.reader-open-bg {
 
 .reader-tag-picker-item {
   flex: 0 0 auto;
-  width: 40px;
-  height: 34px;
-  border-radius: 10px;
+  width: 38px;
+  height: 32px;
+  border-radius: 9px;
   background: transparent;
   border: 0;
   color: rgba(232, 232, 239, 0.75);
@@ -4217,7 +4165,7 @@ body.reader-open-bg {
   font-family: inherit;
   transition: background .15s, color .15s;
 }
-.reader-tag-picker-item svg { display: block; width: 22px; height: 22px; }
+.reader-tag-picker-item svg { display: block; width: 20px; height: 20px; }
 .reader-tag-picker-item:active { background: rgba(255,255,255,0.08); }
 .reader-tag-picker-item.lit { color: var(--ic); }
 .reader-tag-picker-item.lit svg {
@@ -20415,34 +20363,34 @@ _openTagPicker(anchorBtn) {
       e.stopPropagation();
       const tag = el.dataset.tag;
       if (!tag) return;
+      // toggle: если метка с этим тегом уже стоит — удалится, иначе создастся
       this._setDefaultMomentTag(tag);
-      this._addMomentWithTag(tag, false);
+      this._addMomentWithTag(tag, true);
       this._applyDefaultTagToLikeButton();
       this._closeTagPicker();
     };
   });
 
-  // Показываем невидимо, чтобы измерить реальные размеры
   picker.style.visibility = 'hidden';
   picker.classList.add('on');
   backdrop.classList.add('on');
 
   requestAnimationFrame(() => {
     const island = document.getElementById('readerIsland');
-    const pr = picker.getBoundingClientRect();
+    // offsetWidth/Height — не зависят от transform/scale, дают реальные размеры
+    const pw = picker.offsetWidth;
+    const ph = picker.offsetHeight;
     const ir = island ? island.getBoundingClientRect() : null;
 
     let left, top;
     if (ir) {
-      // Центр пикера = центр островка
-      left = ir.left + ir.width / 2 - pr.width / 2;
-      left = Math.max(8, Math.min(window.innerWidth - pr.width - 8, left));
-      // Низ пикера — чуть выше верха островка
-      top = ir.top - pr.height - 8;
+      left = ir.left + ir.width / 2 - pw / 2;
+      left = Math.max(8, Math.min(window.innerWidth - pw - 8, left));
+      top = ir.top - ph - 8;
       if (top < 8) top = ir.bottom + 8;
     } else {
-      left = (window.innerWidth - pr.width) / 2;
-      top = (window.innerHeight - pr.height) / 2;
+      left = (window.innerWidth - pw) / 2;
+      top = (window.innerHeight - ph) / 2;
     }
 
     picker.style.left = left + 'px';
