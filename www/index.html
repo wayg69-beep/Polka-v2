@@ -3901,19 +3901,6 @@ body.reader-open-bg {
 }
 .reader-chapters-modal.on { display: block; }
 
-.reader-chapters-panel {
-  position: absolute;
-  background: var(--bg2);
-  border: 1px solid #2a2a38;
-  border-radius: 16px;
-  box-shadow: 0 20px 60px rgba(0,0,0,.7);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  max-width: 400px;
-  max-height: 360px;
-  pointer-events: auto;
-  }
 
 .reader-settings-panel {
   width: 100%;
@@ -3928,19 +3915,6 @@ body.reader-open-bg {
   overflow: hidden;
 }
 
-.reader-chapters-panel {
-  background: var(--bg2);
-  border: 1px solid #2a2a38;
-  border-radius: 14px;
-  box-shadow: 0 20px 60px rgba(0,0,0,.7);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  pointer-events: auto;
-  max-width: 280px;
-  max-height: 320px;
-  position: absolute;
-  }
 .rs-head, .rc-head {
   display: flex; justify-content: space-between; align-items: center;
   padding: 14px 18px;
@@ -4141,23 +4115,29 @@ body.reader-open-bg {
                       }
 
   /* Настройки: группы симметрично между девайдерами */
+.reader-settings-modal .rs-body {
+  padding: 20px;
+}
 .reader-settings-modal .rs-group {
   padding: 20px 0;
   border-bottom: 1px solid #22222e;
   margin: 0;
 }
-.reader-settings-modal .rs-group:first-child { padding-top: 4px; }
+.reader-settings-modal .rs-group:first-child {
+  padding-top: 0;
+}
 .reader-settings-modal .rs-group:last-child {
   border-bottom: 0;
-  padding-bottom: 4px;
+  padding-bottom: 0;
 }
+.reader-settings-modal .rs-group > label {
+  margin-top: 0;
+  margin-bottom: 10px;
+}
+.reader-settings-modal .rs-group-toggle > label {
+  margin-bottom: 0;
+  }
 
-/* Главы: чуть меньше настроек, скруглённее */
-.reader-chapters-panel {
-  max-width: 400px;
-  max-height: 360px;
-  border-radius: 16px;
-}
 
 /* Пикер метки — внутри reader-modal, absolute/z-index/40 срабатывают */
 .reader-tag-picker-backdrop {
@@ -4211,6 +4191,21 @@ body.reader-open-bg {
   border-color: var(--acc);
   box-shadow: inset 0 0 0 1px var(--acc), 0 0 6px rgba(124,92,255,.4);
 }
+
+  .reader-chapters-panel {
+  position: absolute;
+  width: 400px;
+  max-width: calc(100vw - 20px);
+  max-height: 360px;
+  background: var(--bg2);
+  border: 1px solid #2a2a38;
+  border-radius: 16px;
+  box-shadow: 0 20px 60px rgba(0,0,0,.7);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  pointer-events: auto;
+  }
 
 </style>
 </head>
