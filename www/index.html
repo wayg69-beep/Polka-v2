@@ -3655,11 +3655,11 @@ animation:none !important;
    В портрете и в горизонтальном режиме не трогаем — там свои правила. */
 @media (orientation: landscape) and (min-width: 720px) {
   .reader-pages:not(.horizontal) {
-    padding-left: clamp(24px, 15vw, 360px);
-    padding-right: clamp(24px, 15vw, 360px);
+    padding-left: clamp(24px, 18vw, 400px);
+    padding-right: clamp(24px, 18vw, 400px);
   }
-    }
-
+  }
+  
 /* ГОРИЗОНТАЛЬНЫЙ РЕЖИМ */
 .reader-pages.horizontal {
   flex-direction: row; 
@@ -19193,15 +19193,35 @@ const SlashLibReader = {
     };
   },
 
-  _hideStatusBar() {
-    const SB = window.Capacitor?.Plugins?.StatusBar;
-    if (SB) { try { SB.hide(); } catch(e){} }
-  },
-  
-  _showStatusBar() {
-    const SB = window.Capacitor?.Plugins?.StatusBar;
-    if (SB) { try { SB.show(); } catch(e){} }
-  },
+/* Синхронизирует статус-бар ОС с текущим состоянием UI.
+   UI скрыт тапом → статус-бар скрыт (fullscreen).
+   UI показан → статус-бар показан (видно время). */
+_syncStatusBar() {
+  const modal = document.getElementById('readerModal');
+  const isUIHidden = modal && modal.classList.contains('ui-hidden');
+
+  // 1) Нативный плагин Capacitor (основной путь)
+  const SB = window.Capacitor?.Plugins?.StatusBar;
+  if (SB && typeof SB.hide === 'function') {
+    try {
+      if (isUIHidden) SB.hide();
+      else SB.show();
+      return;
+    } catch(e) {
+      console.warn('[StatusBar plugin]', e);
+    }
+  }
+
+  // 2) Fallback: браузерный Fullscreen API (в WebView обычно не работает,
+  //    но если плагин не установлен — пусть хоть что-то попробуется)
+  try {
+    if (isUIHidden && document.documentElement.requestFullscreen) {
+      document.documentElement.requestFullscreen().catch(() => {});
+    } else if (!isUIHidden && document.exitFullscreen && document.fullscreenElement) {
+      document.exitFullscreen().catch(() => {});
+    }
+  } catch(e) { /* тихо */ }
+},
   
   async open(fullSlug, chapterId, volume, number, pagesList, title, progress, chaptersList) {
     if (this._opening) return;
@@ -19267,13 +19287,12 @@ const SlashLibReader = {
       wrap.appendChild(nextDiv);
       this.updateNextBlock();
   
-      // ===== FULLSCREEN =====
-      this._hideStatusBar();
-  
-      // Открываем модалку сразу — оверлей загрузки закроет пустоту
-      document.getElementById('readerModal').classList.add('on');
-      document.getElementById('readerModal').classList.remove('ui-hidden');
+      // ===== Открываем модалку, UI виден по умолчанию → статус-бар тоже =====
+      const readerModalEl = document.getElementById('readerModal');
+      readerModalEl.classList.add('on');
+      readerModalEl.classList.remove('ui-hidden');
       document.body.classList.add('modal-open');
+      this._syncStatusBar();
   
       // ===== Скрываем содержимое под лоадером =====
       wrap.style.visibility = 'hidden';
@@ -19359,27 +19378,29 @@ const SlashLibReader = {
   },
 
   close() {
-  this.saveProgress();
-  const rm = document.getElementById('readerModal');
-  if (rm) rm.classList.remove('on');
-  document.body.classList.remove('modal-open');
-  Object.values(this._blobUrls).forEach(url => { try { URL.revokeObjectURL(url); } catch(e){} });
-  this._pagesList = [];
-  this._blobUrls = {};
-  this._nextChapter = null;
-  this._prevChapter = null;
-  this._chaptersList = [];
-  this._currentIndex = 0;
-  this.toggleSettings(false);
-
-  // Убираем лоадер, если он остался (закрыли во время загрузки)
-  const overlay = document.getElementById('readerLoadingOverlay');
-  if (overlay) overlay.remove();
-
-  // Возвращаем статус-бар ОС
-  this._showStatusBar();
-},
-
+    this.saveProgress();
+    const rm = document.getElementById('readerModal');
+    if (rm) {
+      rm.classList.remove('on');
+      rm.classList.remove('ui-hidden');
+    }
+    document.body.classList.remove('modal-open');
+    Object.values(this._blobUrls).forEach(url => { try { URL.revokeObjectURL(url); } catch(e){} });
+    this._pagesList = [];
+    this._blobUrls = {};
+    this._nextChapter = null;
+    this._prevChapter = null;
+    this._chaptersList = [];
+    this._currentIndex = 0;
+    this.toggleSettings(false);
+  
+    const overlay = document.getElementById('readerLoadingOverlay');
+    if (overlay) overlay.remove();
+  
+    // Возвращаем статус-бар ОС (UI уже "виден", т.к. ui-hidden снят выше)
+    this._syncStatusBar();
+  },
+  
   saveProgress() {
     if (!this._fullSlug) return;
     const bounds = this.getCurrentChapterBounds();
@@ -19611,11 +19632,12 @@ const SlashLibReader = {
         }
         return;
       }
-      if (!dragging) {
+        if (!dragging) {
         if (e.target.closest('button') ||
             e.target.closest('#readerNextBlock') ||
             e.target.closest('.reader-settings-panel')) return;
         modal.classList.toggle('ui-hidden');
+        this._syncStatusBar();
       }
     };
   },
