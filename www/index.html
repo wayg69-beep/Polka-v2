@@ -19105,11 +19105,14 @@ const SlashLibReader = {
   _prevLoading: false,
   _restoring: false,
   _opening: false,
+  _inited: false,
 
   init() {
     try {
       this._settings = JSON.parse(localStorage.getItem('polka_reader_settings') || '{}');
     } catch(e){ this._settings = {}; }
+    if (this._inited) return;
+    this._inited = true;
     if (!this._settings.mode) this._settings.mode = 'WEBTOON';
     if (!this._settings.nextChapter) this._settings.nextChapter = 'button';
 
@@ -19212,7 +19215,7 @@ const SlashLibReader = {
     const modal = document.getElementById('readerModal');
     const isUIHidden = modal && modal.classList.contains('ui-hidden');
   
-    const SB = window.Capacitor?.Plugins?.StatusBar;
+    const SB = window.Capacitor?.Plugins?.AndroidSystemBars;
     if (SB) {
       try {
         // Отключаем нативную анимацию — она самая долгая (~500-1000ms).
@@ -19240,6 +19243,7 @@ const SlashLibReader = {
   async open(fullSlug, chapterId, volume, number, pagesList, title, progress, chaptersList) {
     if (this._opening) return;
     this._opening = true;
+    if (!this._inited) this.init();
   
     try {
       this._fullSlug = fullSlug;
@@ -19681,7 +19685,7 @@ const SlashLibReader = {
         // Статус-бар дёргаем ДО toggle, чтобы нативное скрытие
         // стартовало параллельно с CSS-переходом UI (0.3s), а не после него.
         const willHide = !modal.classList.contains('ui-hidden');
-        const SB = window.Capacitor?.Plugins?.StatusBar;
+        const SB = window.Capacitor?.Plugins?.AndroidSystemBars;
         if (SB) {
           try {
             if (typeof SB.setAnimation === 'function') {
@@ -19904,27 +19908,11 @@ const SlashLibReader = {
     }
   }
 };          
-// Инициализация кнопок читалки
-document.addEventListener('DOMContentLoaded', () => {
-  try {
-    const savedMode = localStorage.getItem('polka_reader_mode');
-    if (savedMode) SlashLibReader._mode = savedMode;
-  } catch(e){}
-
-  const closeBtn = document.getElementById('readerCloseBtn');
-  if (closeBtn) closeBtn.onclick = () => SlashLibReader.close();
-  
-  document.querySelectorAll('[data-reader-mode]').forEach(btn => {
-    btn.onclick = () => SlashLibReader.applyMode(btn.dataset.readerMode);
-  });
-
-  SlashLibReader.bindGestures();
-});
   /* Прогрев StatusBar-плагина: первый вызов через Capacitor Bridge
    самый долгий (плагин инициализируется лениво). Дёргаем заранее,
    чтобы в момент первого тапа по экрану читалки всё шло по горячему пути. */
 setTimeout(async () => {
-  const SB = window.Capacitor?.Plugins?.StatusBar;
+  const SB = window.Capacitor?.Plugins?.AndroidSystemBars;
   if (!SB) return;
   try {
     if (typeof SB.setAnimation === 'function') {
