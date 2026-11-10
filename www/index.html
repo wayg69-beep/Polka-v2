@@ -20506,6 +20506,10 @@ _openTagPicker(anchorBtn) {
   const picker = document.getElementById('readerTagPicker');
   if (!backdrop || !picker) return;
 
+  // Метки не открываются поверх других модалок — сначала закрываем их
+  this._closeChaptersList();
+  this.toggleSettings(false);
+
   const tagsHere = this._getTagsOnCurrentPage();
   const currentTag = this._getDefaultMomentTag();
 
