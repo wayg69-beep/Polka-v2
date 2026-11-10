@@ -8989,19 +8989,6 @@ function renderMomentsBox(box, it){
   layoutMomentsGradient(box);
 }
   
-if(grp === 'book' || grp === 'comic'){
-  const chapterPart = (grp === 'comic' && m.n != null)
-    ? '<span class="m-se">Гл. ' + m.n + '</span><span class="m-bar">|</span>' : '';
-  const fr = (grp === 'comic' && m.f != null)
-    ? '<span class="m-bar">|</span><span class="m-time m-frame">Фрейм: ' + m.f + '</span>' : '';
-  return '<button type="button" class="moment-pill" data-i="' + i + '" style="--i:' + i + '">'
-    + chapterPart
-    + '<span class="m-time m-page">Стр. ' + (m.p != null ? m.p : 1) + '</span>'
-    + fr
-    + '<span class="m-dash">–</span>'
-    + '<span class="m-icon" style="--ic:' + momentColor(m.tag) + '">' + momentIconSVG(m.tag) + '</span>'
-    + '</button>';
-}
   
   // Один радужный градиент на весь набор плашек: у каждой — свой сдвиг внутри общей ширины
 function layoutMomentsGradient(box){
