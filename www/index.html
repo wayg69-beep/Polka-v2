@@ -3650,15 +3650,17 @@ animation:none !important;
   border-radius: 0;
 }
 
+/* Читалка: на широких экранах в ландшафте даём большие боковые поля,
+   чтобы вертикальная (вебтун) лента не растягивалась в упор.
+   В портрете и в горизонтальном режиме не трогаем — там свои правила. */
+@media (orientation: landscape) and (min-width: 720px) {
+  .reader-pages:not(.horizontal) {
+    padding-left: clamp(16px, 9vw, 220px);
+    padding-right: clamp(16px, 9vw, 220px);
+  }
+  }
+
 /* ГОРИЗОНТАЛЬНЫЙ РЕЖИМ */
-.reader-pages.horizontal {
-  flex-direction: row; 
-  overflow-x: auto; overflow-y: hidden;
-  align-items: center; 
-  scroll-snap-type: x mandatory;
-  padding: 0; /* Убираем общий padding, отступы зададим картинкам */
-  gap: 0;
-}
 .reader-pages.horizontal {
   flex-direction: row; 
   overflow-x: auto; overflow-y: hidden;
