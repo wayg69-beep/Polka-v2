@@ -19809,9 +19809,10 @@ if (cModal) cModal.onclick = (e) => {
 };
 
   this._bindProgressBar();
-  this.bindGestures();
-  this.updateSettingsUI();
-  this._updateIslandNavVisibility();
+this._bindBackSwipe();
+this.bindGestures();
+this.updateSettingsUI();
+this._updateIslandNavVisibility();
 },
   
   saveSettings() {
@@ -19943,6 +19944,88 @@ updateReaderTitle() {
     try { track.releasePointerCapture(e.pointerId); } catch(err){}
   });
   track.addEventListener('pointercancel', () => { dragging = false; });
+},
+
+  _bindBackSwipe() {
+  const modal = document.getElementById('readerModal');
+  if (!modal || modal._backSwipeBound) return;
+  modal._backSwipeBound = true;
+
+  let startX = 0, startY = 0;
+  let tracking = false;
+  let active = false;
+  const EDGE = 32;
+  const THRESHOLD = 60;
+
+  const hasOpenModal = () => {
+    const chapters = document.getElementById('readerChaptersModal');
+    const settings = document.getElementById('readerSettingsModal');
+    const picker = document.getElementById('readerTagPicker');
+    return (
+      (chapters && chapters.classList.contains('on')) ||
+      (settings && settings.classList.contains('on')) ||
+      (picker && picker.classList.contains('on'))
+    );
+  };
+
+  modal.addEventListener('touchstart', (e) => {
+    if (e.touches.length !== 1) return;
+    const t = e.touches[0];
+    startX = t.clientX;
+    startY = t.clientY;
+    active = false;
+    tracking = false;
+    if (startX > EDGE) return;
+    if (!hasOpenModal()) return;
+    tracking = true;
+  }, { capture: true, passive: true });
+
+  modal.addEventListener('touchmove', (e) => {
+    if (!tracking || e.touches.length !== 1) return;
+    const t = e.touches[0];
+    const dx = t.clientX - startX;
+    const dy = t.clientY - startY;
+
+    if (Math.abs(dy) > Math.abs(dx) * 1.5) {
+      tracking = false;
+      return;
+    }
+    if (dx > THRESHOLD) {
+      active = true;
+      if (e.cancelable) e.preventDefault();
+    }
+  }, { capture: true, passive: false });
+
+  modal.addEventListener('touchend', (e) => {
+    if (!active) {
+      tracking = false;
+      return;
+    }
+    tracking = false;
+    active = false;
+
+    const picker = document.getElementById('readerTagPicker');
+    const settings = document.getElementById('readerSettingsModal');
+    const chapters = document.getElementById('readerChaptersModal');
+
+    if (picker && picker.classList.contains('on')) {
+      this._closeTagPicker();
+      return;
+    }
+    if (settings && settings.classList.contains('on')) {
+      this.toggleSettings(false);
+      return;
+    }
+    if (chapters && chapters.classList.contains('on')) {
+      this._closeChaptersList();
+      return;
+    }
+  }, { capture: true, passive: true });
+
+  modal.addEventListener('touchcancel', () => {
+    tracking = false;
+    active = false;
+  }, { capture: true, passive: true });
 },
 
 _updateIslandNavVisibility() {
