@@ -19243,7 +19243,6 @@ const SlashLibReader = {
   async open(fullSlug, chapterId, volume, number, pagesList, title, progress, chaptersList) {
     if (this._opening) return;
     this._opening = true;
-    if (!this._inited) this.init();
   
     try {
       this._fullSlug = fullSlug;
@@ -19946,6 +19945,11 @@ const SlashLibReader = {
     }
   }
 };          
+  /* Читалка: инициализация на старте приложения, но отложенно —
+   чтобы не мешать первому рендеру Полки и не дёргать интерфейс.
+   К моменту первого тапа «Читать» обработчики уже висят,
+   и open() не делает синхронной работы между кадрами. */
+setTimeout(() => SlashLibReader.init(), 1500);
   /* Прогрев StatusBar-плагина: первый вызов через Capacitor Bridge
    самый долгий (плагин инициализируется лениво). Дёргаем заранее,
    чтобы в момент первого тапа по экрану читалки всё шло по горячему пути. */
