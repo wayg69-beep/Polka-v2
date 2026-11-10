@@ -20160,7 +20160,7 @@ _bindLikeButton(btn) {
   let longPressTimer = null;
   let longPressed = false;
   let startX = 0, startY = 0;
-  let touchActive = false;
+  let lastTouchAt = 0;
 
   const cancelTimer = () => {
     clearTimeout(longPressTimer);
@@ -20178,7 +20178,7 @@ _bindLikeButton(btn) {
 
   btn.addEventListener('touchstart', (e) => {
     if (e.touches.length !== 1) return;
-    touchActive = true;
+    lastTouchAt = Date.now();
     longPressed = false;
     startX = e.touches[0].clientX;
     startY = e.touches[0].clientY;
@@ -20186,7 +20186,7 @@ _bindLikeButton(btn) {
   }, { passive: true });
 
   btn.addEventListener('touchmove', (e) => {
-    if (!touchActive || e.touches.length !== 1) return;
+    if (e.touches.length !== 1) return;
     if (Math.abs(e.touches[0].clientX - startX) > 12 || Math.abs(e.touches[0].clientY - startY) > 12) {
       cancelTimer();
     }
@@ -20194,7 +20194,7 @@ _bindLikeButton(btn) {
 
   btn.addEventListener('touchend', (e) => {
     cancelTimer();
-    touchActive = false;
+    lastTouchAt = Date.now();
     if (longPressed) {
       if (e.cancelable) e.preventDefault();
       return;
@@ -20204,24 +20204,30 @@ _bindLikeButton(btn) {
 
   btn.addEventListener('touchcancel', () => {
     cancelTimer();
-    touchActive = false;
   });
 
+  // Mouse-события — только если НЕ было touch за последние 600мс
+  // (защита от эмуляции mouse на Android WebView после тапа)
   btn.addEventListener('mousedown', (e) => {
     if (e.button !== 0) return;
+    if (Date.now() - lastTouchAt < 600) return;
     longPressed = false;
     startLongPress();
   });
   btn.addEventListener('mouseup', () => {
+    if (Date.now() - lastTouchAt < 600) return;
     cancelTimer();
     if (longPressed) return;
     this._addMomentWithTag(this._getDefaultMomentTag(), true);
   });
-  btn.addEventListener('mouseleave', cancelTimer);
+  btn.addEventListener('mouseleave', () => {
+    if (Date.now() - lastTouchAt < 600) return;
+    cancelTimer();
+  });
 
   btn.addEventListener('contextmenu', (e) => e.preventDefault());
 },
-
+  
 _updateMusicBtnState() {
   const btn = document.getElementById('readerMusicBtn');
   if (!btn) return;
