@@ -4087,20 +4087,6 @@ body.reader-open-bg {
 
 
 
-  .reader-chapters-panel {
-  position: absolute;
-  width: 360px;
-  max-width: calc(100vw - 20px);
-  max-height: 360px;
-  background: var(--bg2);
-  border: 1px solid #2a2a38;
-  border-radius: 16px;
-  box-shadow: 0 20px 60px rgba(0,0,0,.7);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  pointer-events: auto;
-  }
   /* Пикер меток — горизонтальный, в стиле островка, чуть ниже по высоте */
 .reader-tag-picker-backdrop {
   position: absolute;
@@ -4175,6 +4161,123 @@ body.reader-open-bg {
   background: rgba(124,92,255,.14);
   box-shadow: inset 0 0 0 1px rgba(124,92,255,.5), 0 0 6px rgba(124,92,255,.3);
   }
+
+/* ===== Модалка глав — стиль островка ===== */
+.reader-chapters-panel {
+  position: absolute;
+  width: 360px;
+  max-width: calc(100vw - 24px);
+  max-height: 360px;
+  background: rgba(22, 22, 29, 0.72);
+  backdrop-filter: blur(20px) saturate(1.4);
+  -webkit-backdrop-filter: blur(20px) saturate(1.4);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 22px;
+  box-shadow:
+    0 8px 32px rgba(0,0,0,.5),
+    inset 0 1px 0 rgba(255,255,255,0.06);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  pointer-events: auto;
+  transform-origin: center bottom;
+  opacity: 0;
+  visibility: hidden;
+}
+.reader-chapters-panel.on {
+  visibility: visible;
+  animation: chaptersPanelIn 320ms cubic-bezier(.2,.9,.3,1) forwards;
+}
+@keyframes chaptersPanelIn {
+  from {
+    transform: translateY(20px) scale(.15);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+
+.rc-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 14px 10px 18px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  flex: 0 0 auto;
+}
+.rc-head h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--fg);
+  letter-spacing: .2px;
+}
+.rc-head .reader-icon-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  background: transparent;
+  border: 0;
+  color: var(--fg2);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  padding: 0;
+}
+.rc-head .reader-icon-btn svg { width: 16px; height: 16px; display: block; }
+.rc-head .reader-icon-btn:active { background: rgba(255,255,255,0.08); }
+
+.rc-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 6px 0;
+  scrollbar-width: none;
+}
+.rc-list::-webkit-scrollbar { display: none; }
+
+.rc-item {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 11px 18px;
+  font-size: 13.5px;
+  color: var(--fg);
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  width: 100%;
+  text-align: left;
+  font-family: inherit;
+  transition: background .12s;
+  line-height: 1.25;
+  box-sizing: border-box;
+}
+.rc-item:active { background: rgba(255,255,255,0.06); }
+.rc-item.current {
+  background: rgba(124,92,255,.16);
+  color: #d6caff;
+}
+.rc-item-vol {
+  flex: 0 0 auto;
+  font-size: 11px;
+  color: var(--fg2);
+  font-weight: 600;
+  min-width: 56px;
+  letter-spacing: .2px;
+}
+.rc-item-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+}
+.rc-item.current .rc-item-title { font-weight: 600; }
+.rc-item.current .rc-item-vol { color: var(--acc2); }
 
 </style>
 </head>
@@ -19822,7 +19925,7 @@ _openChaptersList() {
   const list = document.getElementById('readerChaptersList');
   if (!modal || !panel || !list) return;
 
-  // Если уже открыта — закрываем (toggle по кнопке)
+  // Toggle по повторному нажатию
   if (modal.classList.contains('on')) {
     this._closeChaptersList();
     return;
@@ -19855,33 +19958,49 @@ _openChaptersList() {
     });
   }
 
+  // Показываем невидимо, чтобы измерить реальные размеры через offsetWidth/offsetHeight
+  panel.style.visibility = 'hidden';
   modal.classList.add('on');
 
-// Позиционируем панель по левому краю островка (не кнопки)
-requestAnimationFrame(() => {
-  const pr = panel.getBoundingClientRect();
-  const island = document.getElementById('readerIsland');
-  let left, top;
-  if (island) {
-    const ir = island.getBoundingClientRect();
-    left = ir.left;
-    top = ir.top - pr.height - 10;
-    if (top < 8) top = ir.bottom + 10;
-    left = Math.max(8, Math.min(window.innerWidth - pr.width - 8, left));
-  } else {
-    left = (window.innerWidth - pr.width) / 2;
-    top = (window.innerHeight - pr.height) / 2;
-  }
-  panel.style.left = left + 'px';
-  panel.style.top = top + 'px';
-  panel.style.right = 'auto';
-  panel.style.bottom = 'auto';
+  requestAnimationFrame(() => {
+    // offsetWidth/Height не зависят от transform — берём до старта анимации
+    const pw = panel.offsetWidth;
+    const ph = panel.offsetHeight;
+    const island = document.getElementById('readerIsland');
+    const ir = island ? island.getBoundingClientRect() : null;
 
-  const cur = list.querySelector('.rc-item.current');
-  if (cur) cur.scrollIntoView({ block: 'center', behavior: 'auto' });
-});  
+    let left, top;
+    if (ir) {
+      // Центр панели = центр островка
+      left = ir.left + ir.width / 2 - pw / 2;
+      left = Math.max(8, Math.min(window.innerWidth - pw - 8, left));
+      // Низ панели — 8px над верхом островка
+      top = ir.top - ph - 8;
+      if (top < 8) top = ir.bottom + 8;
+    } else {
+      left = (window.innerWidth - pw) / 2;
+      top = (window.innerHeight - ph) / 2;
+    }
+
+    panel.style.left = left + 'px';
+    panel.style.top = top + 'px';
+    panel.style.right = 'auto';
+    panel.style.bottom = 'auto';
+    panel.style.visibility = '';
+    panel.classList.add('on');
+
+    const cur = list.querySelector('.rc-item.current');
+    if (cur) cur.scrollIntoView({ block: 'center', behavior: 'auto' });
+  });
 },
 
+_closeChaptersList() {
+  const modal = document.getElementById('readerChaptersModal');
+  const panel = document.getElementById('readerChaptersPanel');
+  if (modal) modal.classList.remove('on');
+  if (panel) panel.classList.remove('on');
+},
+  
 _closeChaptersList() {
   const modal = document.getElementById('readerChaptersModal');
   if (modal) modal.classList.remove('on');
