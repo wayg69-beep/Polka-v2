@@ -4018,7 +4018,7 @@ body.reader-open-bg {
 .rc-item {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 16px;
   padding: 10px 14px;
   font-size: 14px;
   color: var(--fg);
@@ -4041,7 +4041,7 @@ body.reader-open-bg {
   font-size: 11.5px;
   color: var(--fg2);
   font-weight: 600;
-  min-width: 44px;
+  min-width: 56px;
 }
 .rc-item-title {
   flex: 1;
@@ -4052,59 +4052,6 @@ body.reader-open-bg {
 }
 .rc-item.current .rc-item-vol { color: var(--acc2); }
 
-/* === Reader: пикер SVG === */
-.reader-tag-picker-backdrop {
-  position: absolute;
-  inset: 0;
-  background: rgba(0,0,0,.35);
-  z-index: 40;
-  display: none;
-}
-.reader-tag-picker-backdrop.on { display: block; }
-
-.reader-tag-picker {
-  position: absolute;
-  z-index: 41;
-  display: none;
-  flex-direction: column;
-  gap: 6px;
-  padding: 10px;
-  background: var(--bg2);
-  border: 1px solid #2a2a38;
-  border-radius: 14px;
-  box-shadow: 0 12px 40px rgba(0,0,0,.7);
-  max-height: 55vh;
-  overflow-y: auto;
-  scrollbar-width: none;
-  -webkit-overflow-scrolling: touch;
-}
-.reader-tag-picker::-webkit-scrollbar { display: none; }
-.reader-tag-picker.on { display: flex; }
-
-.reader-tag-picker-item {
-  width: 44px;
-  height: 44px;
-  border-radius: 10px;
-  background: var(--bg3);
-  border: 1px solid #26263a;
-  color: rgba(232, 232, 239, 0.75);
-  display: grid;
-  place-items: center;
-  cursor: pointer;
-  padding: 0;
-  font-family: inherit;
-  transition: border-color .15s, background .15s, color .15s;
-  flex: 0 0 auto;
-}
-.reader-tag-picker-item svg { display: block; width: 24px; height: 24px; }
-.reader-tag-picker-item.lit { color: var(--ic); }
-.reader-tag-picker-item.lit svg {
-  filter: drop-shadow(0 0 3px var(--ic)) drop-shadow(0 0 8px var(--ic));
-}
-.reader-tag-picker-item.current {
-  border-color: var(--acc);
-  box-shadow: inset 0 0 0 1px var(--acc), 0 0 6px rgba(124,92,255,.4);
-  }
 
   /* Кнопка "нотка" — подсветка при активном плеере */
 #readerMusicBtn.lit-music {
@@ -4194,7 +4141,7 @@ body.reader-open-bg {
 
   .reader-chapters-panel {
   position: absolute;
-  width: 400px;
+  width: 360px;
   max-width: calc(100vw - 20px);
   max-height: 360px;
   background: var(--bg2);
@@ -4205,6 +4152,80 @@ body.reader-open-bg {
   flex-direction: column;
   overflow: hidden;
   pointer-events: auto;
+  }
+  /* Пикер меток — горизонтальный, в стиле островка, чуть ниже по высоте */
+.reader-tag-picker-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,.35);
+  z-index: 40;
+  display: none;
+}
+.reader-tag-picker-backdrop.on { display: block; }
+
+.reader-tag-picker {
+  position: absolute;
+  z-index: 41;
+  display: none;
+  flex-direction: row;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 6px;
+  background: rgba(22, 22, 29, 0.72);
+  backdrop-filter: blur(20px) saturate(1.4);
+  -webkit-backdrop-filter: blur(20px) saturate(1.4);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 18px;
+  box-shadow:
+    0 8px 32px rgba(0,0,0,.5),
+    inset 0 1px 0 rgba(255,255,255,0.06);
+  max-width: calc(100vw - 24px);
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  transform-origin: center bottom;
+  opacity: 0;
+}
+.reader-tag-picker::-webkit-scrollbar { display: none; }
+.reader-tag-picker.on {
+  display: flex;
+  animation: tagPickerIn 320ms cubic-bezier(.2,.9,.3,1) forwards;
+}
+@keyframes tagPickerIn {
+  from {
+    transform: translateY(20px) scale(.15);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+
+.reader-tag-picker-item {
+  flex: 0 0 auto;
+  width: 40px;
+  height: 34px;
+  border-radius: 10px;
+  background: transparent;
+  border: 0;
+  color: rgba(232, 232, 239, 0.75);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  padding: 0;
+  font-family: inherit;
+  transition: background .15s, color .15s;
+}
+.reader-tag-picker-item svg { display: block; width: 22px; height: 22px; }
+.reader-tag-picker-item:active { background: rgba(255,255,255,0.08); }
+.reader-tag-picker-item.lit { color: var(--ic); }
+.reader-tag-picker-item.lit svg {
+  filter: drop-shadow(0 0 3px var(--ic)) drop-shadow(0 0 8px var(--ic));
+}
+.reader-tag-picker-item.current {
+  background: rgba(124,92,255,.14);
+  box-shadow: inset 0 0 0 1px rgba(124,92,255,.5), 0 0 6px rgba(124,92,255,.3);
   }
 
 </style>
@@ -5762,47 +5783,47 @@ body.player-modal-open .player-modal {
     <div class="reader-pages" id="readerPages"></div>
   </div>
   
-  <div class="reader-island" id="readerIsland">
-    <button class="reader-island-btn" id="readerChaptersBtn" title="Главы" aria-label="Главы">
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-    <text x="3" y="8.5" font-size="5.5" font-weight="700" fill="currentColor" stroke="none" font-family="-apple-system, system-ui, sans-serif">1</text>
-    <text x="3" y="15" font-size="5.5" font-weight="700" fill="currentColor" stroke="none" font-family="-apple-system, system-ui, sans-serif">2</text>
-    <text x="3" y="21.5" font-size="5.5" font-weight="700" fill="currentColor" stroke="none" font-family="-apple-system, system-ui, sans-serif">3</text>
-    <line x1="10" y1="7" x2="20" y2="7"/>
-    <line x1="10" y1="13.5" x2="20" y2="13.5"/>
-    <line x1="10" y1="20" x2="20" y2="20"/>
-  </svg>
+<div class="reader-island" id="readerIsland">
+  <button class="reader-island-btn" id="readerChaptersBtn" title="Главы" aria-label="Главы">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <text x="3" y="8.5" font-size="5.5" font-weight="700" fill="currentColor" stroke="none" font-family="-apple-system, system-ui, sans-serif">1</text>
+      <text x="3" y="15" font-size="5.5" font-weight="700" fill="currentColor" stroke="none" font-family="-apple-system, system-ui, sans-serif">2</text>
+      <text x="3" y="21.5" font-size="5.5" font-weight="700" fill="currentColor" stroke="none" font-family="-apple-system, system-ui, sans-serif">3</text>
+      <line x1="10" y1="7" x2="20" y2="7"/>
+      <line x1="10" y1="13.5" x2="20" y2="13.5"/>
+      <line x1="10" y1="20" x2="20" y2="20"/>
+    </svg>
+  </button>
+  <button class="reader-island-btn" id="readerPinBtn" title="Сохранить положение" aria-label="Сохранить положение">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
+    </svg>
+  </button>
+  <button class="reader-island-btn" id="readerLikeBtn" title="Метка" aria-label="Метка">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+  </button>
+  <button class="reader-island-btn" id="readerMusicBtn" title="Музыка" aria-label="Музыка">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M9 18V5l12-2v13"/>
+      <circle cx="6" cy="18" r="3"/>
+      <circle cx="18" cy="16" r="3"/>
+    </svg>
+  </button>
+  <div class="reader-island-nav" id="readerIslandNav">
+    <button class="reader-island-btn" id="readerPrevChapter" title="Предыдущая глава" aria-label="Предыдущая глава">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
     </button>
-    <button class="reader-island-btn" id="readerPinBtn" title="Сохранить положение" aria-label="Сохранить положение">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
-      </svg>
+    <button class="reader-island-btn" id="readerNextChapterBtn" title="Следующая глава" aria-label="Следующая глава">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
     </button>
-    <button class="reader-island-btn" id="readerLikeBtn" title="Метка" aria-label="Метка">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
-    </button>
-    <button class="reader-island-btn" id="readerSettingsBtn" title="Настройки" aria-label="Настройки">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-        <circle cx="12" cy="12" r="3"/>
-        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-      </svg>
-    </button>
-    <button class="reader-island-btn" id="readerMusicBtn" title="Музыка" aria-label="Музыка">
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M9 18V5l12-2v13"/>
-    <circle cx="6" cy="18" r="3"/>
-    <circle cx="18" cy="16" r="3"/>
-  </svg>
-    </button>
-    <div class="reader-island-nav" id="readerIslandNav">
-      <button class="reader-island-btn" id="readerPrevChapter" title="Предыдущая глава" aria-label="Предыдущая глава">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
-      </button>
-      <button class="reader-island-btn" id="readerNextChapterBtn" title="Следующая глава" aria-label="Следующая глава">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
-      </button>
-    </div>
   </div>
+  <button class="reader-island-btn" id="readerSettingsBtn" title="Настройки" aria-label="Настройки">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="3"/>
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+    </svg>
+  </button>
+</div>
   
   <div class="reader-settings-modal" id="readerSettingsModal">
     <div class="reader-settings-panel" id="readerSettingsPanel">
@@ -19888,30 +19909,29 @@ _openChaptersList() {
 
   modal.classList.add('on');
 
-  // Позиционируем панель: левым нижним углом к кнопке "главы"
-  const anchor = document.getElementById('readerChaptersBtn');
-  requestAnimationFrame(() => {
-    const pr = panel.getBoundingClientRect();
-    let left, top;
-    if (anchor) {
-  const ar = anchor.getBoundingClientRect();
-  // Панель над островком, левый край по левому краю островка, зазор 10px
-  left = ar.left;
-  top = ar.top - pr.height - 10;
-  if (top < 8) top = ar.bottom + 10;
-  left = Math.max(8, Math.min(window.innerWidth - pr.width - 8, left));
-} else {
-      left = (window.innerWidth - pr.width) / 2;
-      top = (window.innerHeight - pr.height) / 2;
-    }
-    panel.style.left = left + 'px';
-    panel.style.top = top + 'px';
-    panel.style.right = 'auto';
-    panel.style.bottom = 'auto';
+// Позиционируем панель по левому краю островка (не кнопки)
+requestAnimationFrame(() => {
+  const pr = panel.getBoundingClientRect();
+  const island = document.getElementById('readerIsland');
+  let left, top;
+  if (island) {
+    const ir = island.getBoundingClientRect();
+    left = ir.left;
+    top = ir.top - pr.height - 10;
+    if (top < 8) top = ir.bottom + 10;
+    left = Math.max(8, Math.min(window.innerWidth - pr.width - 8, left));
+  } else {
+    left = (window.innerWidth - pr.width) / 2;
+    top = (window.innerHeight - pr.height) / 2;
+  }
+  panel.style.left = left + 'px';
+  panel.style.top = top + 'px';
+  panel.style.right = 'auto';
+  panel.style.bottom = 'auto';
 
-    const cur = list.querySelector('.rc-item.current');
-    if (cur) cur.scrollIntoView({ block: 'center', behavior: 'auto' });
-  });
+  const cur = list.querySelector('.rc-item.current');
+  if (cur) cur.scrollIntoView({ block: 'center', behavior: 'auto' });
+});  
 },
 
 _closeChaptersList() {
@@ -20402,24 +20422,37 @@ _openTagPicker(anchorBtn) {
     };
   });
 
-  picker.style.left = '0px';
-  picker.style.top = '0px';
-
-  backdrop.classList.add('on');
+  // Показываем невидимо, чтобы измерить реальные размеры
+  picker.style.visibility = 'hidden';
   picker.classList.add('on');
+  backdrop.classList.add('on');
 
   requestAnimationFrame(() => {
-    const r = anchorBtn.getBoundingClientRect();
+    const island = document.getElementById('readerIsland');
     const pr = picker.getBoundingClientRect();
-    const px = Math.max(8, Math.min(window.innerWidth - pr.width - 8, r.left + r.width / 2 - pr.width / 2));
-    const py = Math.min(window.innerHeight - pr.height - 16, r.bottom + 8);
-    picker.style.left = px + 'px';
-    picker.style.top = Math.max(8, py) + 'px';
+    const ir = island ? island.getBoundingClientRect() : null;
+
+    let left, top;
+    if (ir) {
+      // Центр пикера = центр островка
+      left = ir.left + ir.width / 2 - pr.width / 2;
+      left = Math.max(8, Math.min(window.innerWidth - pr.width - 8, left));
+      // Низ пикера — чуть выше верха островка
+      top = ir.top - pr.height - 8;
+      if (top < 8) top = ir.bottom + 8;
+    } else {
+      left = (window.innerWidth - pr.width) / 2;
+      top = (window.innerHeight - pr.height) / 2;
+    }
+
+    picker.style.left = left + 'px';
+    picker.style.top = top + 'px';
+    picker.style.visibility = '';
   });
 
   backdrop.onclick = () => this._closeTagPicker();
 },
-
+  
 _closeTagPicker() {
   const backdrop = document.getElementById('readerTagPickerBackdrop');
   const picker = document.getElementById('readerTagPicker');
