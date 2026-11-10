@@ -8945,6 +8945,50 @@ function momentVlcUrl(uri, t){
   return 'vlc://play?uri=' + encodeURIComponent(uri) + '&time=' + (Math.floor(Number(t)) || 0);
 }
 
+function renderMomentsBox(box, it){
+  if(!box) return;
+  const list = Array.isArray(it.moments) ? it.moments : [];
+  const isSeries = it.type !== 'movie';
+  const grp = groupOf(it.type);
+  if(!list.length){
+    box.classList.add('empty');
+    box._laySig = null;
+    box.style.removeProperty('--rbw');
+    box.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg><span>' + (grp === 'screen' ? 'Добавить метку времени' : 'Добавить метку') + '</span>';
+    return;
+  }
+  box.classList.remove('empty');
+  box.classList.remove('ready');
+  // innerHTML заменяет все плашки, а вместе с ними и их --rbx: сбрасываем кэш раскладки,
+  // иначе при совпавшей «подписи» градиент не запишется и каждая плашка окрасится как первая
+  box._laySig = null;
+  box.innerHTML = list.map((m, i) => {
+    if(grp === 'book' || grp === 'comic'){
+      const chapterPart = (grp === 'comic' && m.n != null)
+        ? '<span class="m-se">Гл. ' + m.n + '</span><span class="m-bar">|</span>' : '';
+      const fr = (grp === 'comic' && m.f != null)
+        ? '<span class="m-bar">|</span><span class="m-time m-frame">Фрейм: ' + m.f + '</span>' : '';
+      return '<button type="button" class="moment-pill" data-i="' + i + '" style="--i:' + i + '">'
+        + chapterPart
+        + '<span class="m-time m-page">Стр. ' + (m.p != null ? m.p : 1) + '</span>'
+        + fr
+        + '<span class="m-dash">–</span>'
+        + '<span class="m-icon" style="--ic:' + momentColor(m.tag) + '">' + momentIconSVG(m.tag) + '</span>'
+        + '</button>';
+    }
+    const se = (isSeries && m.s != null && m.e != null)
+      ? '<span class="m-se">S' + m.s + 'E' + m.e + '</span><span class="m-bar">|</span>'
+      : '';
+    return '<button type="button" class="moment-pill" data-i="' + i + '" style="--i:' + i + '">'
+      + se
+      + '<span class="m-time">' + fmtMomentTime(m.t) + '</span>'
+      + '<span class="m-dash">–</span>'
+      + '<span class="m-icon" style="--ic:' + momentColor(m.tag) + '">' + momentIconSVG(m.tag) + '</span>'
+      + '</button>';
+  }).join('') + '<span class="moment-add"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></span>';
+  layoutMomentsGradient(box);
+}
+  
 if(grp === 'book' || grp === 'comic'){
   const chapterPart = (grp === 'comic' && m.n != null)
     ? '<span class="m-se">Гл. ' + m.n + '</span><span class="m-bar">|</span>' : '';
@@ -9310,9 +9354,17 @@ panel.querySelector('#momentCancel').onclick = () => {
         }
       }
     } else {
-      
-      // Умная маршрутизация: если мы на главной карточке сериала
-      if (isSeries && !isSeason(it)) {
+  const t = W.hour.get() * 3600 + W.min.get() * 60 + W.sec.get();
+  const sNum = isSeries ? W.season.get() : null;
+  m = {
+    s: sNum,
+    e: isSeries ? W.episode.get() : null,
+    t: t,
+    tag: momentCtx.tag
+  };
+  
+  // Умная маршрутизация: если мы на главной карточке сериала
+  if (isSeries && !isSeason(it)) {
         const seasons = getSeasons(it.id);
         const targetSeason = seasons.find(s => s.seasonNumber === sNum);
         if (targetSeason) {
@@ -19176,11 +19228,6 @@ const SlashLibReader = {
     if (el('readerSettingsClose')) el('readerSettingsClose').onclick = () => this.toggleSettings(false);
     if (el('rsSaveBtn')) el('rsSaveBtn').onclick = () => this.toggleSettings(false);
     if (el('readerLikeBtn')) el('readerLikeBtn').onclick = () => this._addMoment();
-    if (el('readerPinBtn')) el('readerPinBtn').onclick = () => {
-      this.saveProgress();
-      toast('Позиция зафиксирована', 'success');
-    };
-
     if (el('readerPinBtn')) el('readerPinBtn').onclick = () => {
       this.saveProgress();
       toast('Позиция зафиксирована', 'success');
