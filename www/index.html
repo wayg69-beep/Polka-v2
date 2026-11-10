@@ -3722,8 +3722,8 @@ body.reader-open-bg {
   display: flex;
   align-items: center;
   gap: 4px;
-  padding: 8px 14px;
-  border-radius: 24px;
+  padding: 5px 18px;
+  border-radius: 22px;
   background: rgba(22, 22, 29, 0.72);
   backdrop-filter: blur(20px) saturate(1.4);
   -webkit-backdrop-filter: blur(20px) saturate(1.4);
@@ -3741,7 +3741,7 @@ body.reader-open-bg {
   pointer-events: none;
 }
 .reader-island-btn {
-  width: 44px; height: 44px;
+  width: 42px; height: 36px;
   border: 0;
   background: transparent;
   color: rgba(232, 232, 239, 0.85);
@@ -3905,13 +3905,13 @@ body.reader-open-bg {
   position: absolute;
   background: var(--bg2);
   border: 1px solid #2a2a38;
-  border-radius: 14px;
+  border-radius: 16px;
   box-shadow: 0 20px 60px rgba(0,0,0,.7);
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  max-width: 280px;
-  max-height: 320px;
+  max-width: 400px;
+  max-height: 360px;
   pointer-events: auto;
   }
 
@@ -3966,15 +3966,16 @@ body.reader-open-bg {
   
 .rs-body::-webkit-scrollbar { display: none; }
 .rs-group {
-  margin-bottom: 26px;
-  padding-bottom: 20px;
+  padding: 20px 0;
   border-bottom: 1px solid #22222e;
+  margin: 0;
 }
+.rs-group:first-child { padding-top: 4px; }
 .rs-group:last-child {
-  margin-bottom: 0;
-  padding-bottom: 0;
   border-bottom: 0;
-}
+  padding-bottom: 4px;
+  }
+  
 .rs-group > label {
   display: block;
   font-size: 12px; color: var(--fg2);
@@ -4130,6 +4131,14 @@ body.reader-open-bg {
   border-color: var(--acc);
   box-shadow: inset 0 0 0 1px var(--acc), 0 0 6px rgba(124,92,255,.4);
   }
+
+  /* Кнопка "нотка" — подсветка при активном плеере */
+#readerMusicBtn.lit-music {
+  color: #a48bff;
+}
+#readerMusicBtn.lit-music svg {
+  filter: drop-shadow(0 0 3px #a48bff) drop-shadow(0 0 8px #a48bff);
+                      }
 
 </style>
 </head>
@@ -4877,7 +4886,7 @@ body.player-modal-open .mini-player { transform: translateY(100%); }
 /* --- 2. МОДАЛКА ПЛЕЕРА --- */
 .player-modal {
   position: fixed; inset: 0;
-  z-index: 300;
+  z-index: 650;
   display: flex; flex-direction: column;
   background: rgba(10, 10, 14, 0.85);
   backdrop-filter: blur(32px); -webkit-backdrop-filter: blur(32px);
@@ -4965,7 +4974,7 @@ body.player-modal-open .mini-player { transform: translateY(100%); }
 
 /* --- Новая модалка плейлиста --- */
 .playlist-modal {
-  position: fixed; inset: 0; z-index: 350;
+  position: fixed; inset: 0; z-index: 660;
   background: rgba(10, 10, 14, 0.85);
   backdrop-filter: blur(32px); -webkit-backdrop-filter: blur(32px);
   display: flex; flex-direction: column;
@@ -5710,6 +5719,13 @@ body.player-modal-open .player-modal {
         <circle cx="12" cy="12" r="3"/>
         <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
       </svg>
+    </button>
+    <button class="reader-island-btn" id="readerMusicBtn" title="Музыка" aria-label="Музыка">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M9 18V5l12-2v13"/>
+    <circle cx="6" cy="18" r="3"/>
+    <circle cx="18" cy="16" r="3"/>
+  </svg>
     </button>
     <div class="reader-island-nav" id="readerIslandNav">
       <button class="reader-island-btn" id="readerPrevChapter" title="Предыдущая глава" aria-label="Предыдущая глава">
@@ -19494,26 +19510,24 @@ Player.init();
   if (ocrPopup && ocrPopup.classList.contains('on')) { closeOcrPopup(); return; }
   const screenshotView = document.getElementById('screenshotView');
   if (screenshotView && screenshotView.classList.contains('on')) { closeScreenshotView(); return; }
-  // ═══ Читалка — закрываем её первой ═══
-  const readerModal = document.getElementById('readerModal');
-  if (readerModal && readerModal.classList.contains('on')) {
-    try { SlashLibReader.close(); } catch(e){ console.warn(e); }
-    return;
-  }
-  // ═══ /NEW ═══
-  
-      // 1. Плейлист открыт — закрываем его (даже если плеер за ним открыт)
-      const playlistModal = document.getElementById('playlistModal');
-      if (playlistModal && playlistModal.classList.contains('on')) {
-        Player.closePlaylist();
-        return;
-      }
-      // 2. Большой плеер открыт — сворачиваем
-      const playerModal = document.getElementById('playerModal');
-      if (playerModal && playerModal.classList.contains('on')) {
-        Player.minimize();
-        return;
-      }
+  // 1. Плейлист открыт — закрываем его
+const playlistModal = document.getElementById('playlistModal');
+if (playlistModal && playlistModal.classList.contains('on')) {
+  Player.closePlaylist();
+  return;
+}
+// 2. Большой плеер открыт — сворачиваем (даже если за ним читалка)
+const playerModal = document.getElementById('playerModal');
+if (playerModal && playerModal.classList.contains('on')) {
+  Player.minimize();
+  return;
+}
+// 3. Читалка открыта — закрываем её
+const readerModal = document.getElementById('readerModal');
+if (readerModal && readerModal.classList.contains('on')) {
+  try { SlashLibReader.close(); } catch(e){ console.warn(e); }
+  return;
+}
       // 3. Сайдбар открыт
       if (document.body.classList.contains('sidebar-open')) {
         document.body.classList.remove('sidebar-open');
@@ -19579,6 +19593,12 @@ if (el('readerSettingsBtn')) el('readerSettingsBtn').onclick = () => {
   if (el('readerChaptersBtn')) el('readerChaptersBtn').onclick = () => this._openChaptersList();
   if (el('readerChaptersClose')) el('readerChaptersClose').onclick = () => this._closeChaptersList();
 
+  if (el('readerMusicBtn')) el('readerMusicBtn').onclick = () => {
+  this._closeChaptersList();
+  this.toggleSettings(false);
+  this._openMusicPlayer();
+};
+  
   if (el('readerPinBtn')) el('readerPinBtn').onclick = () => {
   this._closeChaptersList();
   this.saveProgress();
@@ -19807,15 +19827,13 @@ _openChaptersList() {
     const pr = panel.getBoundingClientRect();
     let left, top;
     if (anchor) {
-      const ar = anchor.getBoundingClientRect();
-      // Левый нижний угол панели — к кнопке
-      left = ar.left;
-      top = ar.top - pr.height - 8;
-      // Если панель вылезает за верх — переворачиваем
-      if (top < 8) top = ar.bottom + 8;
-      // Не даём уехать за правый край
-      left = Math.max(8, Math.min(window.innerWidth - pr.width - 8, left));
-    } else {
+  const ar = anchor.getBoundingClientRect();
+  // Панель над островком, левый край по левому краю островка, зазор 10px
+  left = ar.left;
+  top = ar.top - pr.height - 10;
+  if (top < 8) top = ar.bottom + 10;
+  left = Math.max(8, Math.min(window.innerWidth - pr.width - 8, left));
+} else {
       left = (window.innerWidth - pr.width) / 2;
       top = (window.innerHeight - pr.height) / 2;
     }
@@ -19909,6 +19927,8 @@ _closeChaptersList() {
           void readerModalEl.offsetWidth;
         }
         document.body.classList.add('modal-open');
+        this._startMusicBtnWatcher();
+this._updateMusicBtnState();
     
         this.updateSettingsUI();
         this._updateIslandNavVisibility();
@@ -19995,9 +20015,10 @@ _closeChaptersList() {
 
 
   close() {
+  this._closeTagPicker();
   this._closeChaptersList();
   this.toggleSettings(false);
-  this._closeTagPicker();
+  this._stopMusicBtnWatcher();
   this.saveProgress();
   const rm = document.getElementById('readerModal');
     if (rm) {
@@ -20104,50 +20125,104 @@ _bindLikeButton(btn) {
   let longPressTimer = null;
   let longPressed = false;
   let startX = 0, startY = 0;
-  let activePointerId = null;
+  let touchActive = false;
 
   const cancelTimer = () => {
     clearTimeout(longPressTimer);
     longPressTimer = null;
   };
 
-  btn.addEventListener('pointerdown', (e) => {
-    if (activePointerId !== null) return;
-    activePointerId = e.pointerId;
-    longPressed = false;
-    startX = e.clientX;
-    startY = e.clientY;
+  const startLongPress = () => {
     cancelTimer();
     longPressTimer = setTimeout(() => {
       longPressed = true;
       try { if (navigator.vibrate) navigator.vibrate(20); } catch(err){}
       this._openTagPicker(btn);
-    }, 450);
-  });
+    }, 400);
+  };
 
-  btn.addEventListener('pointermove', (e) => {
-    if (e.pointerId !== activePointerId) return;
-    if (Math.abs(e.clientX - startX) > 8 || Math.abs(e.clientY - startY) > 8) {
+  btn.addEventListener('touchstart', (e) => {
+    if (e.touches.length !== 1) return;
+    touchActive = true;
+    longPressed = false;
+    startX = e.touches[0].clientX;
+    startY = e.touches[0].clientY;
+    startLongPress();
+  }, { passive: true });
+
+  btn.addEventListener('touchmove', (e) => {
+    if (!touchActive || e.touches.length !== 1) return;
+    if (Math.abs(e.touches[0].clientX - startX) > 12 || Math.abs(e.touches[0].clientY - startY) > 12) {
       cancelTimer();
     }
-  });
+  }, { passive: true });
 
-  btn.addEventListener('pointerup', (e) => {
-    if (e.pointerId !== activePointerId) return;
-    activePointerId = null;
+  btn.addEventListener('touchend', (e) => {
     cancelTimer();
-    if (!longPressed) {
-      this._addMomentWithTag(this._getDefaultMomentTag(), true);
+    touchActive = false;
+    if (longPressed) {
+      if (e.cancelable) e.preventDefault();
+      return;
     }
+    this._addMomentWithTag(this._getDefaultMomentTag(), true);
   });
 
-  btn.addEventListener('pointercancel', (e) => {
-    if (e.pointerId !== activePointerId) return;
-    activePointerId = null;
+  btn.addEventListener('touchcancel', () => {
     cancelTimer();
+    touchActive = false;
   });
+
+  btn.addEventListener('mousedown', (e) => {
+    if (e.button !== 0) return;
+    longPressed = false;
+    startLongPress();
+  });
+  btn.addEventListener('mouseup', () => {
+    cancelTimer();
+    if (longPressed) return;
+    this._addMomentWithTag(this._getDefaultMomentTag(), true);
+  });
+  btn.addEventListener('mouseleave', cancelTimer);
+
+  btn.addEventListener('contextmenu', (e) => e.preventDefault());
 },
 
+_updateMusicBtnState() {
+  const btn = document.getElementById('readerMusicBtn');
+  if (!btn) return;
+  const hasTrack = document.body.classList.contains('player-active');
+  btn.classList.toggle('lit-music', hasTrack);
+},
+
+_startMusicBtnWatcher() {
+  if (this._musicBtnObserver) return;
+  this._musicBtnObserver = new MutationObserver(() => this._updateMusicBtnState());
+  this._musicBtnObserver.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+},
+
+_stopMusicBtnWatcher() {
+  if (this._musicBtnObserver) {
+    this._musicBtnObserver.disconnect();
+    this._musicBtnObserver = null;
+  }
+},
+
+_openMusicPlayer() {
+  const musicTracks = items.filter(i => i.type === 'music');
+  if (!musicTracks.length) {
+    toast('На полке нет музыки', 'warn');
+    return;
+  }
+  if (Player.currentTrackId !== null || document.body.classList.contains('player-active')) {
+    Player.openModal();
+  } else {
+    Player.queue = musicTracks.map(t => t.id);
+    Player.currentIndex = -1;
+    Player.openPlaylist();
+  }
+  this._updateMusicBtnState();
+},
+  
 _addMomentWithTag(tag, toggle) {
   if (!this._itemId) { toast('Не удалось определить карточку', 'warn'); return; }
   const it = items.find(x => x.id === this._itemId);
