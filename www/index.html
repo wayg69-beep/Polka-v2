@@ -19215,27 +19215,8 @@ const SlashLibReader = {
   titleEl.textContent = prefix + `Том ${bounds.volume} Глава ${bounds.number}`;
 },
 
-  /* Синхронизирует статус-бар ОС с текущим состоянием UI.
-     UI скрыт тапом → статус-бар скрыт (без анимации).
-     UI показан → статус-бар показан (без анимации). */
-/* Синхронизирует статус-бар ОС с текущим состоянием UI.
-   UI скрыт тапом → статус-бар скрыт (без анимации).
-   UI показан → статус-бар показан (без анимации). */
-/* Синхронизирует статус-бар ОС с текущим состоянием UI.
-   Плагин capacitor-plugin-status-bar сам делает слайд-анимацию на Android. */
     _syncStatusBar() {
-      const modal = document.getElementById('readerModal');
-      const isUIHidden = modal && modal.classList.contains('ui-hidden');
-    
-      const SB = window.Capacitor?.Plugins?.StatusBar;
-      if (!SB) return;   // плагина нет — молча выходим (без fallback на fullscreen)
-    
-      try {
-        if (isUIHidden) SB.hide();
-        else SB.show();
-      } catch(e) {
-        console.warn('[StatusBar plugin]', e);
-      }
+      // Управление статус-баром вынесено в MainActivity.java (нативный фуллскрин)
     },  
   
     async open(fullSlug, chapterId, volume, number, pagesList, title, progress, chaptersList) {
