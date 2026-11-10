@@ -3688,7 +3688,7 @@ body.reader-open-bg {
   z-index: 1;
 }
 .reader-head-info {
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 600;
   color: var(--fg);
   overflow: hidden;
@@ -4042,10 +4042,10 @@ body.reader-open-bg {
 }
 .reader-settings-modal .rs-group {
   padding: 20px 0;
-  border-bottom: 1px solid #22222e;
+  border-bottom: 1px solid rgba(255,255,255,0.15);
   margin: 0;
-}
-.reader-settings-modal .rs-group:first-child {
+                                 }
+  .reader-settings-modal .rs-group:first-child {
   padding-top: 0;
 }
 .reader-settings-modal .rs-group:last-child {
@@ -4219,7 +4219,7 @@ body.reader-open-bg {
   justify-content: center;
   gap: 12px;
   padding: 11px 18px;
-  font-size: 13.5px;
+  font-size: 15px;
   color: var(--fg);
   cursor: pointer;
   background: transparent;
@@ -4239,7 +4239,7 @@ body.reader-open-bg {
 
 .rc-item-vol {
   flex: 0 0 auto;
-  font-size: 11px;
+  font-size: 12.5px;
   color: var(--fg2);
   font-weight: 600;
   letter-spacing: .2px;
@@ -19722,6 +19722,11 @@ init() {
   const el = (id) => document.getElementById(id);
 
 if (el('readerSettingsBtn')) el('readerSettingsBtn').onclick = () => {
+  const sModal = document.getElementById('readerSettingsModal');
+  if (sModal && sModal.classList.contains('on')) {
+    this.toggleSettings(false);
+    return;
+  }
   this._closeChaptersList();
   this.toggleSettings(true);
 };
@@ -19832,8 +19837,10 @@ toggleSettings(show) {
     return;
   }
 
-  // Показываем невидимо, чтобы измерить реальные размеры (offsetWidth/Height)
-  // без сжатия анимацией
+  // Настройки и главы взаимоисключающие — сначала закрываем главы
+  this._closeChaptersList();
+
+  // Показываем невидимо, чтобы измерить реальные размеры
   panel.style.visibility = 'hidden';
   modal.classList.add('on');
 
@@ -19961,6 +19968,9 @@ _openChaptersList() {
     this._closeChaptersList();
     return;
   }
+
+  // Главы и настройки взаимоисключающие — сначала закрываем настройки
+  this.toggleSettings(false);
 
   const chapters = this._chaptersList || [];
   if (!chapters.length) {
@@ -20608,8 +20618,8 @@ updateCounter() {
   const base = (this._baseTitle || '').trim();
   const prefix = base ? base + ' · ' : '';
   if (titleEl) {
-    titleEl.textContent = prefix + 'Том ' + bounds.volume + ' · Глава ' + bounds.number +
-      ' · ' + bounds.pageInChapter + ' / ' + bounds.totalInChapter;
+  titleEl.textContent = prefix + 'Том ' + bounds.volume + ' · Глава ' + bounds.number +
+    ' · Фрейм ' + bounds.pageInChapter + ' / ' + bounds.totalInChapter;
   }
   if (fill) {
     if (bounds.totalInChapter > 1) {
