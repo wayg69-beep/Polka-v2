@@ -4140,6 +4140,78 @@ body.reader-open-bg {
   filter: drop-shadow(0 0 3px #a48bff) drop-shadow(0 0 8px #a48bff);
                       }
 
+  /* Настройки: группы симметрично между девайдерами */
+.reader-settings-modal .rs-group {
+  padding: 20px 0;
+  border-bottom: 1px solid #22222e;
+  margin: 0;
+}
+.reader-settings-modal .rs-group:first-child { padding-top: 4px; }
+.reader-settings-modal .rs-group:last-child {
+  border-bottom: 0;
+  padding-bottom: 4px;
+}
+
+/* Главы: чуть меньше настроек, скруглённее */
+.reader-chapters-panel {
+  max-width: 400px;
+  max-height: 360px;
+  border-radius: 16px;
+}
+
+/* Пикер метки — внутри reader-modal, absolute/z-index/40 срабатывают */
+.reader-tag-picker-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,.35);
+  z-index: 40;
+  display: none;
+}
+.reader-tag-picker-backdrop.on { display: block; }
+
+.reader-tag-picker {
+  position: absolute;
+  z-index: 41;
+  display: none;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+  background: var(--bg2);
+  border: 1px solid #2a2a38;
+  border-radius: 14px;
+  box-shadow: 0 12px 40px rgba(0,0,0,.7);
+  max-height: 55vh;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+.reader-tag-picker::-webkit-scrollbar { display: none; }
+.reader-tag-picker.on { display: flex; }
+
+.reader-tag-picker-item {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  background: var(--bg3);
+  border: 1px solid #26263a;
+  color: rgba(232, 232, 239, 0.75);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  padding: 0;
+  font-family: inherit;
+  flex: 0 0 auto;
+  transition: border-color .15s, color .15s;
+}
+.reader-tag-picker-item svg { display: block; width: 24px; height: 24px; }
+.reader-tag-picker-item.lit { color: var(--ic); }
+.reader-tag-picker-item.lit svg {
+  filter: drop-shadow(0 0 3px var(--ic)) drop-shadow(0 0 8px var(--ic));
+}
+.reader-tag-picker-item.current {
+  border-color: var(--acc);
+  box-shadow: inset 0 0 0 1px var(--acc), 0 0 6px rgba(124,92,255,.4);
+}
+
 </style>
 </head>
 <body>
@@ -5790,12 +5862,12 @@ body.player-modal-open .player-modal {
       <div class="rc-list" id="readerChaptersList"></div>
     </div>
   </div>
-</div>
-
-  
-<!-- Выпадающий список иконок для метки (долгий тап на кнопке лайка) -->
+  <!-- Выпадающий список иконок для метки (долгий тап на кнопке лайка) -->
 <div class="reader-tag-picker-backdrop" id="readerTagPickerBackdrop"></div>
 <div class="reader-tag-picker" id="readerTagPicker"></div>
+</div>
+
+
   
 <div class="toast" id="toast"></div>
   
