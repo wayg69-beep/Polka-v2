@@ -2806,6 +2806,43 @@ input::placeholder, textarea::placeholder{ color:#5a5a6e; opacity:1; }
   background: rgba(255,255,255,.15);
     }
 
+/* Кнопка "Читать" в футере карточки (розовая, для манги со ссылкой Slashlib) */
+.view-footer .actions .btn-read-manga {
+  flex: 0 0 auto;
+  margin-right: auto;
+  padding: 0 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: #d65fbf !important;
+  color: #fff;
+  box-shadow:
+    0 0 4px rgba(214,95,191,.55),
+    0 0 10px rgba(214,95,191,.35),
+    0 0 20px rgba(199,124,210,.25);
+}
+.view-footer .actions .btn-read-manga:active { background: #e67ad1 !important; }
+.view-footer .actions .btn-read-manga svg { display: block; flex: 0 0 auto; }
+
+/* Comizy — голубая, как «Обновить» */
+.view-link-btn.comizy-btn {
+  background: #7496ff !important;
+  box-shadow:
+    0 0 4px rgba(116,150,255,.55),
+    0 0 10px rgba(116,150,255,.3) !important;
+}
+.view-link-btn.comizy-btn:active { background: #8faaff !important; }
+
+@media (max-width: 700px) {
+  .view-footer .actions .btn-read-manga {
+    flex: 0 0 auto;
+    padding: 0 14px;
+    font-size: 14px;
+  }
+  }
+
+  
   @media (max-width:720px){
   body.sidebar-open .main{ margin-left:var(--sb-closed); }
   body.sidebar-open .sidebar{ box-shadow:4px 0 24px rgba(0,0,0,.5); }
@@ -5341,6 +5378,9 @@ body.player-modal-open .player-modal {
       </button>
       <button class="reader-icon-btn" id="readerSettingsBtn" title="Настройки">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      </button>
+      <button class="reader-icon-btn" id="readerLikeBtn" title="Добавить метку">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
       </button>
     </div>
   </div>
@@ -7932,15 +7972,15 @@ const hasCover = !!it.cover;
   }
      // Внутри openView, в блоке if(group === 'comic') или else if (group === 'book' || group === 'comic')
   if (it.link && it.link.includes('shlib.life')) {
-    btns += `<button type="button" class="view-link-btn book" id="btnReadSlashlib" style="margin-left:8px;">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>Читать на SlashLib
-    </button>`;
-  }
-  if (it.link_comizy) {
-  btns += `<button type="button" class="view-link-btn extras" data-href="${esc(it.link_comizy)}" style="margin-left:8px;">
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>Читать на Comizy
+  btns += `<button type="button" class="view-link-btn book" data-href="${esc(it.link)}" style="margin-left:8px;">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>Slashlib
   </button>`;
-  }
+}
+  if (it.link_comizy) {
+  btns += `<button type="button" class="view-link-btn comizy-btn" data-href="${esc(it.link_comizy)}" style="margin-left:8px;">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>Comizy
+  </button>`;
+}
   if (btns) {
     linksRowHTML = `<div class="view-links"><span class="view-links-label">Читать:</span><div class="view-links-btns">${btns}</div></div>`;
   }
@@ -8044,6 +8084,7 @@ const notesBlock = (it.notes && String(it.notes).trim())
   const isSquare = (group === 'music');
   const viewLeftClass = 'view-left' + (isSquare ? ' square' : '');
   const coverHClass = 'view-cover-h' + (isSquare ? ' square' : '') + (hasCover ? ' tappable' : '');
+  const showReadBtn = group === 'comic' && it.link && it.link.includes('shlib.life');
 
     panel.innerHTML = `
     <div class="view-body">
@@ -8080,8 +8121,12 @@ ${isMobile
       ${momentsBlock}
       ${notesBlock}
     </div>
-    <div class="view-footer">
+        <div class="view-footer">
   <div class="actions">
+    ${showReadBtn ? `<button class="btn btn-read-manga" id="btnReadSlashlib" title="Читать в приложении">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+      Читать
+    </button>` : ''}
     <button class="btn primary refresh-btn" id="viewRefresh" title="Обновить данные">
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7"/><polyline points="21 4 21 10 15 10"/></svg>
 </button>
@@ -8254,7 +8299,7 @@ if (btnReadSlashlib) {
       
       // Сначала открываем читалку (она z-index 600, перекроет viewModal с 500),
       // затем закрываем viewModal — между ними не будет кадра с серым body.
-      SlashLibReader.open(fullSlug, chapData.id, chapData.volume, chapData.number, chapData.pages, title, progress, chaptersList);
+      SlashLibReader.open(fullSlug, chapData.id, chapData.volume, chapData.number, chapData.pages, title, progress, chaptersList, it.id);
       document.getElementById('viewModal').classList.remove('on');
 
       
@@ -8873,7 +8918,12 @@ function normMoments(arr){
     const p = num(m.p);
     if(p !== null){
       const f = num(m.f);
-      out.push(f !== null ? { p: p, f: f, tag: tag } : { p: p, tag: tag });
+      const base = f !== null ? { p: p, f: f, tag: tag } : { p: p, tag: tag };
+      if(m.c !== undefined && m.c !== null) base.c = m.c;
+      if(m.v !== undefined && m.v !== null) base.v = num(m.v);
+      if(m.n !== undefined && m.n !== null) base.n = num(m.n);
+      if(m.o !== undefined && m.o !== null) base.o = num(m.o);
+      out.push(base);
       return;
     }
     const t = num(m.t);
@@ -8882,58 +8932,34 @@ function normMoments(arr){
   });
   return out;
 }
+  
 function sortMoments(arr){
   return arr.slice().sort((a, b) =>
+    ((a.n || 0) - (b.n || 0)) ||
     ((a.p || 0) - (b.p || 0)) || ((a.f || 0) - (b.f || 0)) ||
     ((a.s || 0) - (b.s || 0)) || ((a.e || 0) - (b.e || 0)) || ((a.t || 0) - (b.t || 0)));
 }
-
+  
 // Задел под APK: ссылка для VLC, открывающая плеер ровно на метке
 function momentVlcUrl(uri, t){
   return 'vlc://play?uri=' + encodeURIComponent(uri) + '&time=' + (Math.floor(Number(t)) || 0);
 }
 
-function renderMomentsBox(box, it){
-  if(!box) return;
-  const list = Array.isArray(it.moments) ? it.moments : [];
-  const isSeries = it.type !== 'movie';
-  const grp = groupOf(it.type);
-  if(!list.length){
-    box.classList.add('empty');
-    box._laySig = null;
-    box.style.removeProperty('--rbw');
-    box.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg><span>' + (grp === 'screen' ? 'Добавить метку времени' : 'Добавить метку') + '</span>';
-    return;
-  }
-  box.classList.remove('empty');
-  box.classList.remove('ready');
-  // innerHTML заменяет все плашки, а вместе с ними и их --rbx: сбрасываем кэш раскладки,
-  // иначе при совпавшей «подписи» градиент не запишется и каждая плашка окрасится как первая
-  box._laySig = null;
-  box.innerHTML = list.map((m, i) => {
-    if(grp === 'book' || grp === 'comic'){
-      const fr = (grp === 'comic' && m.f != null)
-        ? '<span class="m-bar">|</span><span class="m-time m-frame">Фрейм: ' + m.f + '</span>' : '';
-      return '<button type="button" class="moment-pill" data-i="' + i + '" style="--i:' + i + '">'
-        + '<span class="m-time m-page">Стр. ' + (m.p != null ? m.p : 1) + '</span>'
-        + fr
-        + '<span class="m-dash">–</span>'
-        + '<span class="m-icon" style="--ic:' + momentColor(m.tag) + '">' + momentIconSVG(m.tag) + '</span>'
-        + '</button>';
-    }
-    const se = (isSeries && m.s != null && m.e != null)
-      ? '<span class="m-se">S' + m.s + 'E' + m.e + '</span><span class="m-bar">|</span>'
-      : '';
-    return '<button type="button" class="moment-pill" data-i="' + i + '" style="--i:' + i + '">'
-      + se
-      + '<span class="m-time">' + fmtMomentTime(m.t) + '</span>'
-      + '<span class="m-dash">–</span>'
-      + '<span class="m-icon" style="--ic:' + momentColor(m.tag) + '">' + momentIconSVG(m.tag) + '</span>'
-      + '</button>';
-  }).join('') + '<span class="moment-add"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></span>';
-  layoutMomentsGradient(box);
+if(grp === 'book' || grp === 'comic'){
+  const chapterPart = (grp === 'comic' && m.n != null)
+    ? '<span class="m-se">Гл. ' + m.n + '</span><span class="m-bar">|</span>' : '';
+  const fr = (grp === 'comic' && m.f != null)
+    ? '<span class="m-bar">|</span><span class="m-time m-frame">Фрейм: ' + m.f + '</span>' : '';
+  return '<button type="button" class="moment-pill" data-i="' + i + '" style="--i:' + i + '">'
+    + chapterPart
+    + '<span class="m-time m-page">Стр. ' + (m.p != null ? m.p : 1) + '</span>'
+    + fr
+    + '<span class="m-dash">–</span>'
+    + '<span class="m-icon" style="--ic:' + momentColor(m.tag) + '">' + momentIconSVG(m.tag) + '</span>'
+    + '</button>';
 }
-// Один радужный градиент на весь набор плашек: у каждой — свой сдвиг внутри общей ширины
+  
+  // Один радужный градиент на весь набор плашек: у каждой — свой сдвиг внутри общей ширины
 function layoutMomentsGradient(box){
   if(!box) return;
   const pills = Array.from(box.querySelectorAll('.moment-pill'));
@@ -9278,15 +9304,12 @@ panel.querySelector('#momentCancel').onclick = () => {
       m = { p: W.page.get(), tag: momentCtx.tag };
     } else if(isComic){
       m = { p: W.page.get(), f: W.frame.get(), tag: momentCtx.tag };
+      if(editing && cur){
+        for(const key of Object.keys(cur)){
+          if(!(key in m)) m[key] = cur[key];
+        }
+      }
     } else {
-      const t = W.hour.get() * 3600 + W.min.get() * 60 + W.sec.get();
-      const sNum = isSeries ? W.season.get() : null;
-      m = {
-        s: sNum,
-        e: isSeries ? W.episode.get() : null,
-        t: t,
-        tag: momentCtx.tag
-      };
       
       // Умная маршрутизация: если мы на главной карточке сериала
       if (isSeries && !isSeason(it)) {
@@ -18186,7 +18209,18 @@ window.addEventListener('vkShareLink', async (e) => {
   /* =========================================
    ДВИЖОК ПЛЕЕРА "ПОЛКА" (v2 - С автообновлением ссылок)
    ========================================= */
-
+// Заглушка для треков без обложки (data-URI SVG с нотой)
+const MUSIC_PLACEHOLDER = 'data:image/svg+xml;utf8,' + encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">' +
+    '<rect width="100" height="100" fill="#1e1e28"/>' +
+    '<g transform="translate(20,20) scale(2.5)" fill="none" stroke="#55556a" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">' +
+      '<path d="M9 18V5l12-2v13"/>' +
+      '<circle cx="6" cy="18" r="3"/>' +
+      '<circle cx="18" cy="16" r="3"/>' +
+    '</g>' +
+  '</svg>'
+);
+  
 const Player = {
   audio: new Audio(),
   queue: [],
@@ -18820,11 +18854,22 @@ async _msSetPositionState() {
     if (miniPlay) miniPlay.innerHTML = this.isPlaying ? pauseSvg : playSvg;
     if (bigPlay) bigPlay.innerHTML = this.isPlaying ? pauseSvg : playSvg;
 
-    document.getElementById('miniCover').src = track.cover || '';
+    
+    const miniCoverEl = document.getElementById('miniCover');
+    if (miniCoverEl) {
+      miniCoverEl.onerror = () => { miniCoverEl.onerror = null; miniCoverEl.src = MUSIC_PLACEHOLDER; };
+      miniCoverEl.src = track.cover || MUSIC_PLACEHOLDER;
+    }
     document.getElementById('miniTitle').textContent = track.title;
     document.getElementById('miniArtist').textContent = track.country || 'Исполнитель';
     
-    document.getElementById('playerBigCover').src = track.cover || '';
+    const bigCoverEl = document.getElementById('playerBigCover');
+    if (bigCoverEl) {
+      bigCoverEl.onerror = () => { bigCoverEl.onerror = null; bigCoverEl.src = MUSIC_PLACEHOLDER; };
+      bigCoverEl.src = track.cover || MUSIC_PLACEHOLDER;
+    }
+    document.getElementById('playerBigTitle').textContent = track.title;
+    document.getElementById('playerBigArtist').textContent = track.country || 'Исполнитель';
     document.getElementById('playerBigTitle').textContent = track.title;
     document.getElementById('playerBigArtist').textContent = track.country || 'Исполнитель';
 
@@ -18942,7 +18987,11 @@ if (MS_WEB) {
       const isActive = idx === this.currentIndex;
       return `
         <div class="playlist-item ${isActive ? 'active' : ''}" data-id="${id}" data-idx="${idx}">
-          <img class="playlist-item-cover" src="${t.cover || ''}" alt="">
+          const coverSrc = t.cover || MUSIC_PLACEHOLDER;
+        return `
+          <div class="playlist-item ${isActive ? 'active' : ''}" data-id="${id}" data-idx="${idx}">
+            <img class="playlist-item-cover" src="${coverSrc}" alt="" onerror="this.onerror=null;this.src='${MUSIC_PLACEHOLDER}'">
+            <div class="playlist-item-text">
           <div class="playlist-item-text">
             <div class="playlist-item-title">${esc(t.title)}</div>
             <div class="playlist-item-artist">${esc(t.country || 'Исполнитель')}</div>
@@ -19129,6 +19178,12 @@ const SlashLibReader = {
     if (el('readerSettingsBtn')) el('readerSettingsBtn').onclick = () => this.toggleSettings(true);
     if (el('readerSettingsClose')) el('readerSettingsClose').onclick = () => this.toggleSettings(false);
     if (el('rsSaveBtn')) el('rsSaveBtn').onclick = () => this.toggleSettings(false);
+    if (el('readerLikeBtn')) el('readerLikeBtn').onclick = () => this._addMoment();
+    if (el('readerPinBtn')) el('readerPinBtn').onclick = () => {
+      this.saveProgress();
+      toast('Позиция зафиксирована', 'success');
+    };
+
     if (el('readerPinBtn')) el('readerPinBtn').onclick = () => {
       this.saveProgress();
       toast('Позиция зафиксирована', 'success');
@@ -19227,7 +19282,7 @@ const SlashLibReader = {
     } catch(e) { console.warn('[FullscreenBridge]', e); }
   },  
   
-  async open(fullSlug, chapterId, volume, number, pagesList, title, progress, chaptersList) {
+  async open(fullSlug, chapterId, volume, number, pagesList, title, progress, chaptersList, itemId) {
       if (this._opening) return;
       this._opening = true;
     
@@ -19235,6 +19290,7 @@ const SlashLibReader = {
         this._fullSlug = fullSlug;
         this._shortSlug = fullSlug.split('--').pop();
         this._chaptersList = chaptersList || [];
+        this._itemId = itemId || this._itemId || null;
         this._blobUrls = {};
     
         if (!pagesList || !pagesList.length) {
@@ -19434,6 +19490,65 @@ const SlashLibReader = {
       localStorage.setItem('polka_reader_progress', JSON.stringify(progress));
     } catch(e){}
   },
+
+  _addMoment() {
+  if (!this._itemId) { toast('Не удалось определить карточку', 'warn'); return; }
+  const it = items.find(x => x.id === this._itemId);
+  if (!it) { toast('Карточка не найдена', 'warn'); return; }
+
+  const bounds = this.getCurrentChapterBounds();
+  if (!bounds) { toast('Позиция не определена', 'warn'); return; }
+
+  let frameOffset = 0;
+  const wrap = document.getElementById('readerPages');
+  if (wrap) {
+    const imgs = wrap.querySelectorAll('img');
+    const curImg = imgs[this._currentIndex];
+    if (curImg) {
+      if (this._settings.mode === 'WEBTOON') {
+        frameOffset = Math.max(0, Math.round(wrap.scrollTop - curImg.offsetTop));
+      } else {
+        frameOffset = Math.max(0, Math.round(wrap.scrollLeft - curImg.offsetLeft));
+      }
+    }
+  }
+
+  const newMoment = {
+    p: bounds.pageInChapter,
+    f: 1,
+    tag: 'heart',
+    c: bounds.chapterId,
+    v: bounds.volume,
+    n: bounds.number,
+    o: frameOffset
+  };
+
+  if (!Array.isArray(it.moments)) it.moments = [];
+  it.moments.push(newMoment);
+  it.moments = sortMoments(it.moments);
+  it.updatedAt = Date.now();
+  save();
+
+  const box = document.getElementById('momentsBox');
+  if (box) {
+    try {
+      renderMomentsBox(box, it);
+      requestAnimationFrame(() => layoutMomentsGradient(box));
+    } catch(e) { console.warn('moments box refresh', e); }
+  }
+
+  const btn = document.getElementById('readerLikeBtn');
+  if (btn) {
+    btn.style.transition = 'transform .15s ease, color .25s ease, filter .25s ease';
+    btn.style.transform = 'scale(1.18)';
+    btn.style.color = '#ff5c8a';
+    btn.style.filter = 'drop-shadow(0 0 4px rgba(255,92,138,.9)) drop-shadow(0 0 10px rgba(255,92,138,.6))';
+    setTimeout(() => { btn.style.transform = ''; }, 150);
+    setTimeout(() => { btn.style.color = ''; btn.style.filter = ''; }, 700);
+  }
+
+  toast('Метка: Гл. ' + bounds.number + ', Стр. ' + bounds.pageInChapter, 'success');
+},
 
   applyMode(mode) {
     this._settings.mode = mode;
@@ -19894,7 +20009,7 @@ const SlashLibReader = {
         const title = baseTitle + ` - Том ${chapData.volume} Глава ${chapData.number}`;
         // Открываем заново с нуля — progress = null
         this.open(this._fullSlug, chapData.id, chapData.volume, chapData.number,
-                  chapData.pages, title, null, this._chaptersList);
+          chapData.pages, title, null, this._chaptersList, this._itemId);
       } else {
         toast('Не удалось загрузить главу', 'warn');
       }
