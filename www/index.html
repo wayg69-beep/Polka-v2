@@ -3878,16 +3878,12 @@ body.reader-open-bg {
 .reader-settings-modal {
   position: absolute;
   inset: 0;
-  z-index: 30;
+  z-index: 9;
   display: none;
-  align-items: center;
-  justify-content: center;
-  background: rgba(0,0,0,.6);
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
-  padding: 20px;
+  background: transparent;
+  padding: 0;
 }
-.reader-settings-modal.on { display: flex; }
+.reader-settings-modal.on { display: block; }
 
 /* Главы — прозрачный фон, панель позиционируется JS-ом,
    z-index ниже островка (11), чтобы кнопки островка были кликабельны */
@@ -3901,19 +3897,41 @@ body.reader-open-bg {
 }
 .reader-chapters-modal.on { display: block; }
 
-
 .reader-settings-panel {
-  width: 100%;
-  max-width: 420px;
-  max-height: calc(100% - 40px);
-  background: var(--bg2);
-  border: 1px solid #2a2a38;
-  border-radius: 18px;
-  box-shadow: 0 20px 60px rgba(0,0,0,.7);
+  position: absolute;
+  width: 400px;
+  max-width: calc(100vw - 24px);
+  max-height: calc(100vh - 120px);
+  background: rgba(22, 22, 29, 0.72);
+  backdrop-filter: blur(20px) saturate(1.4);
+  -webkit-backdrop-filter: blur(20px) saturate(1.4);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 22px;
+  box-shadow:
+    0 8px 32px rgba(0,0,0,.5),
+    inset 0 1px 0 rgba(255,255,255,0.06);
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  pointer-events: auto;
+  transform-origin: center bottom;
+  opacity: 0;
+  visibility: hidden;
 }
+.reader-settings-panel.on {
+  visibility: visible;
+  animation: settingsPanelIn 320ms cubic-bezier(.2,.9,.3,1) forwards;
+}
+@keyframes settingsPanelIn {
+  from {
+    transform: translateY(20px) scale(.15);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+                                         }
 
 .rs-head, .rc-head {
   display: flex; justify-content: space-between; align-items: center;
@@ -4008,49 +4026,6 @@ body.reader-open-bg {
   box-shadow: 0 0 6px rgba(124,92,255,.6);
 }
 
-.rc-list {
-  flex: 1 1 auto; min-height: 0;
-  overflow-y: auto;
-  padding: 8px 0;
-  scrollbar-width: none;
-}
-.rc-list::-webkit-scrollbar { display: none; }
-.rc-item {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 10px 14px;
-  font-size: 14px;
-  color: var(--fg);
-  cursor: pointer;
-  background: transparent;
-  border: 0;
-  width: 100%;
-  text-align: left;
-  font-family: inherit;
-  transition: background .12s;
-  line-height: 1.3;
-}
-.rc-item:active { background: rgba(255,255,255,.05); }
-.rc-item.current {
-  background: rgba(124,92,255,.12);
-  color: #d6caff;
-}
-.rc-item-vol {
-  flex: 0 0 auto;
-  font-size: 11.5px;
-  color: var(--fg2);
-  font-weight: 600;
-  min-width: 56px;
-}
-.rc-item-title {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.rc-item.current .rc-item-vol { color: var(--acc2); }
 
 
   /* Кнопка "нотка" — подсветка при активном плеере */
@@ -4241,7 +4216,8 @@ body.reader-open-bg {
 .rc-item {
   display: flex;
   align-items: center;
-  gap: 18px;
+  justify-content: center;
+  gap: 12px;
   padding: 11px 18px;
   font-size: 13.5px;
   color: var(--fg);
@@ -4249,7 +4225,7 @@ body.reader-open-bg {
   background: transparent;
   border: 0;
   width: 100%;
-  text-align: left;
+  text-align: center;
   font-family: inherit;
   transition: background .12s;
   line-height: 1.25;
@@ -4260,24 +4236,45 @@ body.reader-open-bg {
   background: rgba(124,92,255,.16);
   color: #d6caff;
 }
+
 .rc-item-vol {
   flex: 0 0 auto;
   font-size: 11px;
   color: var(--fg2);
   font-weight: 600;
-  min-width: 56px;
   letter-spacing: .2px;
 }
+
 .rc-item-title {
-  flex: 1;
-  min-width: 0;
+  flex: 0 0 auto;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   font-weight: 500;
+  padding-left: 12px;
+  border-left: 1px solid rgba(255,255,255,0.08);
 }
+
 .rc-item.current .rc-item-title { font-weight: 600; }
 .rc-item.current .rc-item-vol { color: var(--acc2); }
+.rc-item.current .rc-item-title {
+  border-left-color: rgba(164, 139, 255, 0.2);
+  }
+
+  .reader-settings-panel .rs-head {
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+.reader-settings-panel .rs-head h3 {
+  font-size: 14px;
+  letter-spacing: .2px;
+}
+.reader-settings-panel .rs-head .reader-icon-btn {
+  width: 30px; height: 30px; border-radius: 9px;
+  background: transparent; border: 0;
+  color: var(--fg2);
+}
+.reader-settings-panel .rs-head .reader-icon-btn svg { width: 16px; height: 16px; display: block; }
+.reader-settings-panel .rs-head .reader-icon-btn:active { background: rgba(255,255,255,0.08); }
 
 </style>
 </head>
@@ -19798,13 +19795,9 @@ if (el('readerNextChapterBtn')) el('readerNextChapterBtn').onclick = () => {
 
   // Клик по фону модалки = закрыть модалку + спрятать весь UI
   const sModal = el('readerSettingsModal');
-  if (sModal) sModal.onclick = (e) => {
-    if (e.target === sModal) {
-      this.toggleSettings(false);
-      const rm = document.getElementById('readerModal');
-      if (rm) rm.classList.add('ui-hidden');
-    }
-  };
+if (sModal) sModal.onclick = (e) => {
+  if (e.target === sModal) this.toggleSettings(false);
+};
   const cModal = el('readerChaptersModal');
 if (cModal) cModal.onclick = (e) => {
   if (e.target === cModal) this._closeChaptersList();
@@ -19830,8 +19823,46 @@ updateSettingsUI() {
   
 toggleSettings(show) {
   const modal = document.getElementById('readerSettingsModal');
-  if (!modal) return;
-  modal.classList.toggle('on', !!show);
+  const panel = document.getElementById('readerSettingsPanel');
+  if (!modal || !panel) return;
+
+  if (!show) {
+    modal.classList.remove('on');
+    panel.classList.remove('on');
+    return;
+  }
+
+  // Показываем невидимо, чтобы измерить реальные размеры (offsetWidth/Height)
+  // без сжатия анимацией
+  panel.style.visibility = 'hidden';
+  modal.classList.add('on');
+
+  requestAnimationFrame(() => {
+    const pw = panel.offsetWidth;
+    const ph = panel.offsetHeight;
+    const island = document.getElementById('readerIsland');
+    const ir = island ? island.getBoundingClientRect() : null;
+
+    let left, top;
+    if (ir) {
+      // Центр панели = центр островка
+      left = ir.left + ir.width / 2 - pw / 2;
+      left = Math.max(8, Math.min(window.innerWidth - pw - 8, left));
+      // Низ панели — 8px над верхом островка
+      top = ir.top - ph - 8;
+      if (top < 8) top = ir.bottom + 8;
+    } else {
+      left = (window.innerWidth - pw) / 2;
+      top = (window.innerHeight - ph) / 2;
+    }
+
+    panel.style.left = left + 'px';
+    panel.style.top = top + 'px';
+    panel.style.right = 'auto';
+    panel.style.bottom = 'auto';
+    panel.style.visibility = '';
+    panel.classList.add('on');
+  });
 },
   
   /* Текущая глава: startIdx/endIdx в общем пуле _pagesList, pageInChapter 1-based */
