@@ -152,6 +152,7 @@ jobs:
           import android.os.Bundle;
           import android.view.WindowInsets;
           import android.view.WindowInsetsAnimationController;
+          import android.view.WindowInsetsAnimationControlListener;
           import android.view.WindowInsetsController;
           import android.view.animation.LinearInterpolator;
           import android.webkit.JavascriptInterface;
@@ -196,7 +197,6 @@ jobs:
                   WindowInsetsController controller = getWindow().getInsetsController();
                   if (controller == null) return;
       
-                  WindowInsetsAnimationController[] ctrl = new WindowInsetsAnimationController[1];
                   int types = WindowInsets.Type.statusBars() | WindowInsets.Type.navigationBars();
       
                   controller.controlWindowInsetsAnimation(
@@ -204,10 +204,9 @@ jobs:
                       300,
                       new LinearInterpolator(),
                       null,
-                      new WindowInsetsAnimationController.Callback() {
+                      new WindowInsetsAnimationControlListener() {
                           @Override
-                          public void onReady(WindowInsetsAnimationController c) {
-                              ctrl[0] = c;
+                          public void onReady(WindowInsetsAnimationController c, int remainingTypes) {
                               Insets shown = c.getShownStateInsets();
                               Insets hidden = c.getHiddenStateInsets();
       
@@ -237,6 +236,7 @@ jobs:
       
                           @Override
                           public void onFinished(WindowInsetsAnimationController c) {}
+      
                           @Override
                           public void onCancelled(WindowInsetsAnimationController c) {}
                       }
