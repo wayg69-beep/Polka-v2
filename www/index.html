@@ -3659,17 +3659,24 @@ animation:none !important;
   padding: 0; /* Убираем общий padding, отступы зададим картинкам */
   gap: 0;
 }
+.reader-pages.horizontal {
+  flex-direction: row; 
+  overflow-x: auto; overflow-y: hidden;
+  align-items: center; 
+  scroll-snap-type: x mandatory;
+  padding: 0;
+  gap: 0;
+}
 .reader-pages.horizontal img {
-  flex: 0 0 100%; 
-  width: 100%; 
+  flex: 0 0 100vw; 
+  width: 100vw;
   height: 100%;
   object-fit: contain; 
   scroll-snap-align: center;
-  /* Вот наши боковые отступы (по ~10% с каждой стороны) */
-  padding: 60px 10vw 50px; 
+  padding: 60px 15vw 50px; /* Вот наши отступы по бокам */
   box-sizing: border-box;
-}
-
+  }
+  
 .reader-progress-wrap {
   flex: 1; height: 4px; background: rgba(255,255,255,.15);
   border-radius: 2px; overflow: hidden;
@@ -19042,7 +19049,6 @@ const SlashLibReader = {
     if (!this._settings.mode) this._settings.mode = 'WEBTOON';
     if (!this._settings.nextChapter) this._settings.nextChapter = 'button';
 
-    // Обработчики кнопок настроек
     document.getElementById('readerSettingsBtn').onclick = () => this.toggleSettings(true);
     document.getElementById('readerSettingsClose').onclick = () => this.toggleSettings(false);
     document.getElementById('rsSaveBtn').onclick = () => this.toggleSettings(false);
@@ -19051,7 +19057,6 @@ const SlashLibReader = {
       toast('Позиция зафиксирована', 'success');
     };
 
-    // Селекты настроек
     document.getElementById('rsViewMode').onclick = (e) => {
       const b = e.target.closest('button[data-v]'); if(!b) return;
       this._settings.mode = b.dataset.v;
@@ -19096,12 +19101,11 @@ const SlashLibReader = {
     this._pagesList = pagesList || [];
     this._chaptersList = chaptersList || [];
     
-    // Ищем следующую главу в той же ветке
     const currIdx = this._chaptersList.findIndex(c => c.id === chapterId);
     this._nextChapter = (currIdx !== -1 && currIdx < this._chaptersList.length - 1) ? this._chaptersList[currIdx + 1] : null;
 
     this._blobUrls = {};
-    this._currentIndex = progress ? progress.page : 0;
+    this._currentIndex = progress ? Math.min(progress.page, this._pagesList.length - 1) : 0;
 
     if (!this._pagesList.length) return toast('В главе нет страниц', 'warn');
 
@@ -19120,7 +19124,6 @@ const SlashLibReader = {
       wrap.appendChild(img);
     });
 
-    // Блок перехода на следующую главу
     const nextDiv = document.createElement('div');
     nextDiv.className = 'reader-next-chapter';
     nextDiv.id = 'readerNextBlock';
@@ -19137,24 +19140,29 @@ const SlashLibReader = {
     
     this.applyMode(this._settings.mode);
     this.updateCounter();
-    
-    // УМНАЯ ЛЕНИВАЯ ЗАГРУЗКА
-    this.loadPage(this._currentIndex);
-    if (this._currentIndex + 1 < this._pagesList.length) this.loadPage(this._currentIndex + 1);
 
-    // Восстановление позиции с точностью до пикселя
-    if (progress && progress.offset) {
-      let attempts = 0;
-      const restore = () => {
-        const img = wrap.children[this._currentIndex];
-        if (img && img.offsetHeight > 0) {
-          if (this._settings.mode === 'WEBTOON') wrap.scrollTop = img.offsetTop + progress.offset;
-          else wrap.scrollLeft = img.offsetLeft + progress.offset;
-        } else if (attempts++ < 10) {
-          setTimeout(restore, 100);
-        }
-      };
-      setTimeout(restore, 100);
+    // УМНАЯ ЛОГИКА ВОССТАНОВЛЕНИЯ ПРОГРЕССА
+    if (this._currentIndex > 0) {
+      const promises = [];
+      for (let i = 0; i <= this._currentIndex; i++) {
+        promises.push(this.loadPage(i));
+      }
+      Promise.all(promises).then(() => {
+        setTimeout(() => {
+          const imgs = wrap.querySelectorAll('img');
+          const img = imgs[this._currentIndex];
+          if (img) {
+            if (this._settings.mode === 'WEBTOON') {
+              wrap.scrollTop = img.offsetTop + (progress ? progress.offset : 0);
+            } else {
+              wrap.scrollLeft = img.offsetLeft + (progress ? progress.offset : 0);
+            }
+          }
+        }, 100);
+      });
+    } else {
+      this.loadPage(0);
+      this.loadPage(1);
     }
   },
 
@@ -19171,7 +19179,8 @@ const SlashLibReader = {
   saveProgress() {
     if (!this._fullSlug) return;
     const wrap = document.getElementById('readerPages');
-    const img = wrap.children[this._currentIndex];
+    const imgs = wrap.querySelectorAll('img');
+    const img = imgs[this._currentIndex];
     let offset = 0;
     if (img) {
       if (this._settings.mode === 'WEBTOON') offset = wrap.scrollTop - img.offsetTop;
@@ -19194,15 +19203,15 @@ const SlashLibReader = {
     wrap.className = 'reader-pages';
     if (mode === 'LEFT_TO_RIGHT') wrap.classList.add('horizontal');
     
-    // Сохраняем текущую позицию при смене режима
     this.scrollToIndex(this._currentIndex, false);
     this.updateSettingsUI();
   },
 
   scrollToIndex(idx, smooth = true) {
     const wrap = document.getElementById('readerPages');
-    if (!wrap || !wrap.children[idx]) return;
-    const img = wrap.children[idx];
+    const imgs = wrap.querySelectorAll('img');
+    if (!imgs[idx]) return;
+    const img = imgs[idx];
     if (this._settings.mode === 'WEBTOON') {
       wrap.scrollTo({ top: img.offsetTop - 10, behavior: smooth ? 'smooth' : 'auto' });
     } else {
@@ -19238,7 +19247,9 @@ const SlashLibReader = {
 
   async loadPage(idx) {
     if (this._blobUrls[idx]) return; 
-    const img = document.querySelector(`.reader-pages img[data-index="${idx}"]`);
+    const wrap = document.getElementById('readerPages');
+    const imgs = wrap.querySelectorAll('img');
+    const img = imgs[idx];
     if (!img) return;
 
     const pageInfo = this._pagesList[idx];
@@ -19283,7 +19294,7 @@ const SlashLibReader = {
       modal.classList.add('ui-hidden'); 
       
       const st = wrap.scrollTop, sl = wrap.scrollLeft;
-      const imgs = wrap.children;
+      const imgs = wrap.querySelectorAll('img'); // Ищем только картинки
       let idx = 0;
       
       if (this._settings.mode === 'WEBTOON') {
@@ -19299,11 +19310,8 @@ const SlashLibReader = {
       if (idx !== this._currentIndex) {
         this._currentIndex = idx;
         this.updateCounter();
-        
-        // Умная подгрузка (грузим текущий и следующий)
         this.loadPage(idx);
         if (idx + 1 < this._pagesList.length) this.loadPage(idx + 1);
-        
         this.checkNextChapterUI();
       }
     };
@@ -19312,6 +19320,7 @@ const SlashLibReader = {
     stage.addEventListener('touchstart', e => {
       if (e.touches.length === 1) { startX = e.touches[0].clientX; startY = e.touches[0].clientY; dragging = false; }
     }, { passive: true });
+    
     stage.addEventListener('touchmove', e => {
       if (e.touches.length !== 1) return;
       if (Math.abs(e.touches[0].clientX - startX) > 8 || Math.abs(e.touches[0].clientY - startY) > 8) dragging = true;
@@ -19327,10 +19336,39 @@ const SlashLibReader = {
         return; 
       }
       if (!dragging) {
+        // Защита от случайного срабатывания на кнопках
         if (e.target.closest('button') || e.target.closest('#readerNextBlock') || e.target.closest('.reader-settings-panel')) return; 
         modal.classList.toggle('ui-hidden');
       }
     }, { passive: true });
+
+    // Кнопка перехода на след. главу
+    document.addEventListener('click', (e) => {
+      if (e.target && e.target.id === 'btnNextChapter') {
+        this.loadChapter(this._nextChapter.volume, this._nextChapter.number, this._nextChapter.id);
+      }
+    });
+  },
+
+  async loadChapter(volume, number, chapterId) {
+    toast('Загружаю главу...', 'success');
+    const token = localStorage.getItem('slashlib_token');
+    try {
+      const chapRes = await nativeFetch(`https://api.cdnlibs.org/api/manga/${this._fullSlug}/chapter?volume=${volume}&number=${number}`, {
+        'Authorization': 'Bearer ' + token, 'Site-Id': '2',
+        'Origin': 'https://v2.shlib.life', 'Referer': 'https://v2.shlib.life/'
+      });
+      const chapJson = await chapRes.json();
+      const chapData = chapJson.data;
+      
+      if (chapData && chapData.pages && chapData.pages.length) {
+        const title = document.getElementById('readerTitle').textContent.split(' - ')[0] + ` - Том ${chapData.volume} Глава ${chapData.number}`;
+        // Открываем заново с новыми данными, сбрасывая прогресс
+        this.open(this._fullSlug, chapData.id, chapData.volume, chapData.number, chapData.pages, title, null, this._chaptersList);
+      }
+    } catch(e) {
+      toast('Ошибка загрузки главы', 'error');
+    }
   }
 };
   
