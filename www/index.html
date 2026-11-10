@@ -19258,6 +19258,7 @@ const SlashLibReader = {
   
       this._pagesList = pagesList.map(p => ({
         image: p.image,
+        url: p.url || '',
         chapterId: chapterId,
         volume: volume,
         number: number
@@ -19551,22 +19552,21 @@ const SlashLibReader = {
     const pageInfo = this._pagesList[idx];
     if (!pageInfo) return;
   
-    // Slashlib менял формат поля image. Поддерживаем три варианта:
-    // 1) полный URL (https://... или //...)
-    // 2) абсолютный путь от корня img3.hentaicdn.org (/manga/...)
-    // 3) просто имя файла (000.jpg) — старый формат
-    const raw = String(pageInfo.image || '');
-    let imgUrl;
-    if (/^https?:\/\//i.test(raw)) {
-      imgUrl = raw;
-    } else if (/^\/\//.test(raw)) {
-      imgUrl = 'https:' + raw;
-    } else if (raw.startsWith('/')) {
-      imgUrl = 'https://img3.hentaicdn.org' + raw;
-    } else if (raw.includes('/manga/')) {
-      imgUrl = 'https://img3.hentaicdn.org/' + raw.replace(/^\/+/, '');
+    
+    // Приоритет — канонический path из API (pageInfo.url):
+    //   //manga/{slug}/chapters/{vol}-{num}/{image}
+    // Фолбэк — старая склейка через chapterId (алиас, может умереть в любой момент).
+    let path;
+    const rawUrl = String(pageInfo.url || '').trim();
+    if (rawUrl) {
+      if (/^https?:\/\//i.test(rawUrl)) {
+        path = rawUrl;                              // полный URL — как есть
+      } else {
+        path = rawUrl.replace(/^\/+/, '');          // //manga/... или /manga/... → manga/...
+      }
     } else {
-      imgUrl = `https://img3.hentaicdn.org/manga/${this._shortSlug}/chapters/${pageInfo.chapterId}/${raw}`;
+      const raw = String(pageInfo.image || '').replace(/^\/+/, '');
+      path = `manga/${this._shortSlug}/chapters/${pageInfo.chapterId}/${raw}`;
     }
   
     const token = localStorage.getItem('slashlib_token');
@@ -19765,6 +19765,7 @@ const SlashLibReader = {
 
         this._pagesList.push({
           image: page.image,
+          url: page.url || '',
           chapterId: chapData.id,
           volume: chapData.volume,
           number: chapData.number
@@ -19847,6 +19848,7 @@ const SlashLibReader = {
 
       this._pagesList.unshift({
         image: chapData.pages[i].image,
+        url: chapData.pages[i].url || '',
         chapterId: chapData.id,
         volume: chapData.volume,
         number: chapData.number
