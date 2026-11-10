@@ -3721,9 +3721,9 @@ body.reader-open-bg {
   transform: translateX(-50%);
   display: flex;
   align-items: center;
-  gap: 2px;
-  padding: 6px 8px;
-  border-radius: 22px;
+  gap: 4px;
+  padding: 8px 14px;
+  border-radius: 24px;
   background: rgba(22, 22, 29, 0.72);
   backdrop-filter: blur(20px) saturate(1.4);
   -webkit-backdrop-filter: blur(20px) saturate(1.4);
@@ -3741,7 +3741,7 @@ body.reader-open-bg {
   pointer-events: none;
 }
 .reader-island-btn {
-  width: 40px; height: 40px;
+  width: 44px; height: 44px;
   border: 0;
   background: transparent;
   color: rgba(232, 232, 239, 0.85);
@@ -3759,9 +3759,13 @@ body.reader-open-bg {
 
 #readerLikeBtn {
   position: relative;
-  color: #5a5a6e;
-  transition: color .18s ease;
-}
+  color: rgba(232, 232, 239, 0.85);
+  transition: color .18s ease, filter .18s ease;
+  touch-action: manipulation;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  }
 #readerLikeBtn svg { transition: filter .18s ease; }
 #readerLikeBtn.lit { color: var(--ic, #ff5c8a); }
 #readerLikeBtn.lit svg {
@@ -3870,8 +3874,8 @@ body.reader-open-bg {
 }
 
 /* ===== МОДАЛКИ (настройки / главы) ===== */
-.reader-settings-modal,
-.reader-chapters-modal {
+/* Настройки — по центру, с затемнением */
+.reader-settings-modal {
   position: absolute;
   inset: 0;
   z-index: 30;
@@ -3883,13 +3887,37 @@ body.reader-open-bg {
   -webkit-backdrop-filter: blur(4px);
   padding: 20px;
 }
-.reader-settings-modal.on,
-.reader-chapters-modal.on { display: flex; }
+.reader-settings-modal.on { display: flex; }
 
-.reader-settings-panel,
+/* Главы — прозрачный фон, панель позиционируется JS-ом,
+   z-index ниже островка (11), чтобы кнопки островка были кликабельны */
+.reader-chapters-modal {
+  position: absolute;
+  inset: 0;
+  z-index: 9;
+  display: none;
+  background: transparent;
+  padding: 0;
+}
+.reader-chapters-modal.on { display: block; }
+
 .reader-chapters-panel {
+  position: absolute;
+  background: var(--bg2);
+  border: 1px solid #2a2a38;
+  border-radius: 14px;
+  box-shadow: 0 20px 60px rgba(0,0,0,.7);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  max-width: 280px;
+  max-height: 320px;
+  pointer-events: auto;
+  }
+
+.reader-settings-panel {
   width: 100%;
-  max-width: 360px;
+  max-width: 420px;
   max-height: calc(100% - 40px);
   background: var(--bg2);
   border: 1px solid #2a2a38;
@@ -3899,6 +3927,20 @@ body.reader-open-bg {
   flex-direction: column;
   overflow: hidden;
 }
+
+.reader-chapters-panel {
+  background: var(--bg2);
+  border: 1px solid #2a2a38;
+  border-radius: 14px;
+  box-shadow: 0 20px 60px rgba(0,0,0,.7);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  pointer-events: auto;
+  max-width: 280px;
+  max-height: 320px;
+  position: absolute;
+  }
 .rs-head, .rc-head {
   display: flex; justify-content: space-between; align-items: center;
   padding: 14px 18px;
@@ -3917,20 +3959,45 @@ body.reader-open-bg {
 
 .rs-body {
   flex: 1 1 auto; min-height: 0;
-  padding: 14px 18px 18px;
+  padding: 16px 20px 22px;
   overflow-y: auto;
   scrollbar-width: none;
-}
+  }
+  
 .rs-body::-webkit-scrollbar { display: none; }
-.rs-group { margin-bottom: 18px; }
-.rs-group:last-child { margin-bottom: 0; }
+.rs-group {
+  margin-bottom: 26px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid #22222e;
+}
+.rs-group:last-child {
+  margin-bottom: 0;
+  padding-bottom: 0;
+  border-bottom: 0;
+}
 .rs-group > label {
   display: block;
   font-size: 12px; color: var(--fg2);
   text-transform: uppercase; font-weight: 600; letter-spacing: .3px;
-  margin-bottom: 8px;
+  margin-bottom: 10px;
 }
 .rs-group .seg button { flex: 1; justify-content: center; }
+
+/* Тоггл в одну строку с подписью */
+.rs-group-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.rs-group-toggle > label {
+  flex: 1;
+  margin-bottom: 0;
+}
+.rs-group-toggle .rs-toggle {
+  flex: 0 0 auto;
+  padding: 0;
+  }
 
 .rs-toggle {
   display: inline-flex;
@@ -3976,8 +4043,8 @@ body.reader-open-bg {
 .rc-item {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px 18px;
+  gap: 10px;
+  padding: 10px 14px;
   font-size: 14px;
   color: var(--fg);
   cursor: pointer;
@@ -4009,6 +4076,60 @@ body.reader-open-bg {
   white-space: nowrap;
 }
 .rc-item.current .rc-item-vol { color: var(--acc2); }
+
+/* === Reader: пикер SVG === */
+.reader-tag-picker-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,.35);
+  z-index: 40;
+  display: none;
+}
+.reader-tag-picker-backdrop.on { display: block; }
+
+.reader-tag-picker {
+  position: absolute;
+  z-index: 41;
+  display: none;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+  background: var(--bg2);
+  border: 1px solid #2a2a38;
+  border-radius: 14px;
+  box-shadow: 0 12px 40px rgba(0,0,0,.7);
+  max-height: 55vh;
+  overflow-y: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.reader-tag-picker::-webkit-scrollbar { display: none; }
+.reader-tag-picker.on { display: flex; }
+
+.reader-tag-picker-item {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  background: var(--bg3);
+  border: 1px solid #26263a;
+  color: rgba(232, 232, 239, 0.75);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  padding: 0;
+  font-family: inherit;
+  transition: border-color .15s, background .15s, color .15s;
+  flex: 0 0 auto;
+}
+.reader-tag-picker-item svg { display: block; width: 24px; height: 24px; }
+.reader-tag-picker-item.lit { color: var(--ic); }
+.reader-tag-picker-item.lit svg {
+  filter: drop-shadow(0 0 3px var(--ic)) drop-shadow(0 0 8px var(--ic));
+}
+.reader-tag-picker-item.current {
+  border-color: var(--acc);
+  box-shadow: inset 0 0 0 1px var(--acc), 0 0 6px rgba(124,92,255,.4);
+  }
 
 </style>
 </head>
@@ -5567,10 +5688,14 @@ body.player-modal-open .player-modal {
   
   <div class="reader-island" id="readerIsland">
     <button class="reader-island-btn" id="readerChaptersBtn" title="Главы" aria-label="Главы">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-        <line x1="4" y1="6" x2="9" y2="6"/><line x1="4" y1="12" x2="9" y2="12"/><line x1="4" y1="18" x2="9" y2="18"/>
-        <line x1="13" y1="6" x2="20" y2="6"/><line x1="13" y1="12" x2="20" y2="12"/><line x1="13" y1="18" x2="20" y2="18"/>
-      </svg>
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+    <text x="3" y="8.5" font-size="5.5" font-weight="700" fill="currentColor" stroke="none" font-family="-apple-system, system-ui, sans-serif">1</text>
+    <text x="3" y="15" font-size="5.5" font-weight="700" fill="currentColor" stroke="none" font-family="-apple-system, system-ui, sans-serif">2</text>
+    <text x="3" y="21.5" font-size="5.5" font-weight="700" fill="currentColor" stroke="none" font-family="-apple-system, system-ui, sans-serif">3</text>
+    <line x1="10" y1="7" x2="20" y2="7"/>
+    <line x1="10" y1="13.5" x2="20" y2="13.5"/>
+    <line x1="10" y1="20" x2="20" y2="20"/>
+  </svg>
     </button>
     <button class="reader-island-btn" id="readerPinBtn" title="Сохранить положение" aria-label="Сохранить положение">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
@@ -5604,36 +5729,37 @@ body.player-modal-open .player-modal {
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
       </div>
-      <div class="rs-body">
-        <div class="rs-group">
-          <label>Режим чтения</label>
-          <div class="seg" id="rsViewMode">
-            <button type="button" data-v="WEBTOON">Вертикально</button>
-            <button type="button" data-v="LEFT_TO_RIGHT">Горизонтально</button>
-          </div>
-        </div>
-        <div class="rs-group">
-          <label>Увеличение двойным нажатием</label>
-          <label class="rs-toggle">
-            <input type="checkbox" id="rsDoubleTapZoom">
-            <span class="rs-toggle-track"><span class="rs-toggle-thumb"></span></span>
-          </label>
-        </div>
-        <div class="rs-group">
-          <label>Язык</label>
-          <div class="seg" id="rsLanguage">
-            <button type="button" data-v="ru">Русский</button>
-            <button type="button" data-v="en">Английский</button>
-          </div>
-        </div>
-        <div class="rs-group">
-          <label>Переход по главам</label>
-          <div class="seg" id="rsNextChapter">
-            <button type="button" data-v="button">Кнопки</button>
-            <button type="button" data-v="auto">Авто</button>
-          </div>
-        </div>
-      </div>
+<div class="rs-body">
+  <div class="rs-group">
+    <label>Режим чтения</label>
+    <div class="seg" id="rsViewMode">
+      <button type="button" data-v="WEBTOON">Вертикально</button>
+      <button type="button" data-v="LEFT_TO_RIGHT">Горизонтально</button>
+    </div>
+  </div>
+  <div class="rs-group rs-group-toggle">
+    <label>Увеличение двойным нажатием</label>
+    <label class="rs-toggle">
+      <input type="checkbox" id="rsDoubleTapZoom">
+      <span class="rs-toggle-track"><span class="rs-toggle-thumb"></span></span>
+    </label>
+  </div>
+  <div class="rs-group">
+    <label>Язык</label>
+    <div class="seg" id="rsLanguage">
+      <button type="button" data-v="ru">Русский</button>
+      <button type="button" data-v="en">Английский</button>
+    </div>
+  </div>
+  <div class="rs-group">
+    <label>Переход по главам</label>
+    <div class="seg" id="rsNextChapter">
+      <button type="button" data-v="button">Кнопки</button>
+      <button type="button" data-v="auto">Авто</button>
+    </div>
+  </div>
+</div>
+    
     </div>
   </div>
   
@@ -19445,30 +19571,36 @@ init() {
 
   const el = (id) => document.getElementById(id);
 
-  if (el('readerSettingsBtn')) el('readerSettingsBtn').onclick = () => this.toggleSettings(true);
+if (el('readerSettingsBtn')) el('readerSettingsBtn').onclick = () => {
+  this._closeChaptersList();
+  this.toggleSettings(true);
+};
   if (el('readerSettingsClose')) el('readerSettingsClose').onclick = () => this.toggleSettings(false);
   if (el('readerChaptersBtn')) el('readerChaptersBtn').onclick = () => this._openChaptersList();
   if (el('readerChaptersClose')) el('readerChaptersClose').onclick = () => this._closeChaptersList();
 
   if (el('readerPinBtn')) el('readerPinBtn').onclick = () => {
-    this.saveProgress();
-    toast('Позиция зафиксирована', 'success');
-  };
+  this._closeChaptersList();
+  this.saveProgress();
+  toast('Позиция зафиксирована', 'success');
+};
 
-  const likeBtn = el('readerLikeBtn');
-  if (likeBtn) {
-    this._bindLikeButton(likeBtn);
-    this._applyDefaultTagToLikeButton();
-  }
+const likeBtn = el('readerLikeBtn');
+if (likeBtn) {
+  this._bindLikeButton(likeBtn);
+  this._applyDefaultTagToLikeButton();
+}
 
-  if (el('readerPrevChapter')) el('readerPrevChapter').onclick = () => {
-    if (!this._prevChapter) return;
-    this.loadChapter(this._prevChapter.volume, this._prevChapter.number, this._prevChapter.id);
-  };
-  if (el('readerNextChapterBtn')) el('readerNextChapterBtn').onclick = () => {
-    if (!this._nextChapter) return;
-    this.loadChapter(this._nextChapter.volume, this._nextChapter.number, this._nextChapter.id);
-  };
+if (el('readerPrevChapter')) el('readerPrevChapter').onclick = () => {
+  this._closeChaptersList();
+  if (!this._prevChapter) return;
+  this.loadChapter(this._prevChapter.volume, this._prevChapter.number, this._prevChapter.id);
+};
+if (el('readerNextChapterBtn')) el('readerNextChapterBtn').onclick = () => {
+  this._closeChaptersList();
+  if (!this._nextChapter) return;
+  this.loadChapter(this._nextChapter.volume, this._nextChapter.number, this._nextChapter.id);
+};
 
   if (el('readerCloseBtn')) el('readerCloseBtn').onclick = () => this.close();
 
@@ -19515,13 +19647,9 @@ init() {
     }
   };
   const cModal = el('readerChaptersModal');
-  if (cModal) cModal.onclick = (e) => {
-    if (e.target === cModal) {
-      this._closeChaptersList();
-      const rm = document.getElementById('readerModal');
-      if (rm) rm.classList.add('ui-hidden');
-    }
-  };
+if (cModal) cModal.onclick = (e) => {
+  if (e.target === cModal) this._closeChaptersList();
+};
 
   this._bindProgressBar();
   this.bindGestures();
@@ -19634,43 +19762,71 @@ _updateIslandNavVisibility() {
 
 _openChaptersList() {
   const modal = document.getElementById('readerChaptersModal');
+  const panel = document.getElementById('readerChaptersPanel');
   const list = document.getElementById('readerChaptersList');
-  if (!modal || !list) return;
+  if (!modal || !panel || !list) return;
+
+  // Если уже открыта — закрываем (toggle по кнопке)
+  if (modal.classList.contains('on')) {
+    this._closeChaptersList();
+    return;
+  }
 
   const chapters = this._chaptersList || [];
   if (!chapters.length) {
-    list.innerHTML = '<div class="tmdb-status">Глав не найдено</div>';
-    modal.classList.add('on');
-    return;
+    list.innerHTML = '<div style="padding:20px;text-align:center;color:var(--fg2);font-size:13px;">Глав не найдено</div>';
+  } else {
+    const current = this.getCurrentChapterBounds();
+    const currentId = current ? current.chapterId : null;
+    const sorted = chapters.slice().sort((a, b) => (a.number || 0) - (b.number || 0));
+
+    list.innerHTML = sorted.map(c => {
+      const isCurrent = c.id === currentId;
+      return '<button type="button" class="rc-item' + (isCurrent ? ' current' : '') + '" data-id="' + esc(c.id) + '" data-vol="' + (c.volume || 0) + '" data-num="' + (c.number || 0) + '">' +
+        '<span class="rc-item-vol">Том ' + (c.volume || 0) + '</span>' +
+        '<span class="rc-item-title">Глава ' + (c.number || 0) + '</span>' +
+        '</button>';
+    }).join('');
+
+    list.querySelectorAll('.rc-item').forEach(btn => {
+      btn.onclick = () => {
+        const id = btn.dataset.id;
+        const vol = +btn.dataset.vol;
+        const num = +btn.dataset.num;
+        this._closeChaptersList();
+        this.loadChapter(vol, num, id);
+      };
+    });
   }
-  const current = this.getCurrentChapterBounds();
-  const currentId = current ? current.chapterId : null;
-  const sorted = chapters.slice().sort((a, b) => (a.number || 0) - (b.number || 0));
-
-  list.innerHTML = sorted.map(c => {
-    const isCurrent = c.id === currentId;
-    return '<button type="button" class="rc-item' + (isCurrent ? ' current' : '') + '" data-id="' + esc(c.id) + '" data-vol="' + (c.volume || 0) + '" data-num="' + (c.number || 0) + '">' +
-      '<span class="rc-item-vol">Том ' + (c.volume || 0) + '</span>' +
-      '<span class="rc-item-title">Глава ' + (c.number || 0) + '</span>' +
-      '</button>';
-  }).join('');
-
-  list.querySelectorAll('.rc-item').forEach(btn => {
-    btn.onclick = () => {
-      const id = btn.dataset.id;
-      const vol = +btn.dataset.vol;
-      const num = +btn.dataset.num;
-      this._closeChaptersList();
-      this.loadChapter(vol, num, id);
-    };
-  });
-
-  setTimeout(() => {
-    const cur = list.querySelector('.rc-item.current');
-    if (cur) cur.scrollIntoView({ block: 'center', behavior: 'auto' });
-  }, 50);
 
   modal.classList.add('on');
+
+  // Позиционируем панель: левым нижним углом к кнопке "главы"
+  const anchor = document.getElementById('readerChaptersBtn');
+  requestAnimationFrame(() => {
+    const pr = panel.getBoundingClientRect();
+    let left, top;
+    if (anchor) {
+      const ar = anchor.getBoundingClientRect();
+      // Левый нижний угол панели — к кнопке
+      left = ar.left;
+      top = ar.top - pr.height - 8;
+      // Если панель вылезает за верх — переворачиваем
+      if (top < 8) top = ar.bottom + 8;
+      // Не даём уехать за правый край
+      left = Math.max(8, Math.min(window.innerWidth - pr.width - 8, left));
+    } else {
+      left = (window.innerWidth - pr.width) / 2;
+      top = (window.innerHeight - pr.height) / 2;
+    }
+    panel.style.left = left + 'px';
+    panel.style.top = top + 'px';
+    panel.style.right = 'auto';
+    panel.style.bottom = 'auto';
+
+    const cur = list.querySelector('.rc-item.current');
+    if (cur) cur.scrollIntoView({ block: 'center', behavior: 'auto' });
+  });
 },
 
 _closeChaptersList() {
@@ -19794,10 +19950,9 @@ _closeChaptersList() {
             this.loadPagesBatch(afterIdx, 4);
     
             setTimeout(() => { this._restoring = false; }, 200);
-setTimeout(() => { this.checkPrevLoad(); }, 500);
-if (this._settings.nextChapter === 'auto') {
-  setTimeout(() => { this.checkPrevLoad(); }, 900);
-}
+            setTimeout(() => { this.checkPrevLoad(); }, 450);
+            setTimeout(() => { this.checkPrevLoad(); }, 900);
+            setTimeout(() => { this.checkPrevLoad(); }, 1600);
     
           } catch(e) {
             console.error('[Reader open]', e);
@@ -19941,9 +20096,10 @@ _updateLikeButtonState() {
   const tagsHere = this._getTagsOnCurrentPage();
   const isLit = tagsHere.has(tag);
   btn.classList.toggle('lit', isLit);
-  btn.style.setProperty('--ic', isLit ? momentColor(tag) : '#5a5a6e');
+  btn.style.setProperty('--ic', momentColor(tag));
 },
 
+  
 _bindLikeButton(btn) {
   let longPressTimer = null;
   let longPressed = false;
@@ -20085,7 +20241,7 @@ _openTagPicker(anchorBtn) {
   picker.innerHTML = Object.keys(MOMENT_ICONS).map(k => {
     const isLit = tagsHere.has(k);
     const isCurrent = k === currentTag;
-    const color = isLit ? MOMENT_ICONS[k].color : '#5a5a6e';
+    const color = MOMENT_ICONS[k].color;
     const cls = 'reader-tag-picker-item' +
       (isLit ? ' lit' : '') +
       (isCurrent ? ' current' : '');
@@ -20323,27 +20479,30 @@ updateChapterNav() {
     if (!wrap || !stage || !modal) return;
   
     wrap.onscroll = () => {
-      if (this._restoring) return;
-      if (!this._pagesList.length) return;
-      // Авто-показ UI при достижении самого верха/низа ленты (только в режиме "кнопки")
-if (this._settings.nextChapter === 'button') {
-  const stTop = wrap.scrollTop;
-  const stMax = wrap.scrollHeight - wrap.clientHeight;
-  if (stTop <= 4 || stTop >= stMax - 4) {
-    if (modal.classList.contains('ui-hidden')) {
-      modal.classList.remove('ui-hidden');
-      this._syncStatusBar();
+  if (this._restoring) return;
+  if (!this._pagesList.length) return;
+
+  // Авто-показ UI при достижении самого верха/низа (только в режиме "кнопки")
+  if (this._settings.nextChapter === 'button') {
+    const stTop = wrap.scrollTop;
+    const stMax = wrap.scrollHeight - wrap.clientHeight;
+    if (stTop <= 4 || stTop >= stMax - 4) {
+      if (modal.classList.contains('ui-hidden')) {
+        modal.classList.remove('ui-hidden');
+        this._syncStatusBar();
+      }
     }
   }
-}
-      // Программный скролл (загрузка картинок, восстановление позиции) не трогает UI/бары.
-      if (Date.now() - this._userScrolledAt > 500) return;
-  
-      const wasVisible = !modal.classList.contains('ui-hidden');
-      modal.classList.add('ui-hidden');
-      if (wasVisible) this._syncStatusBar();
-  
-      const st = wrap.scrollTop, sl = wrap.scrollLeft;
+
+  // Скрываем UI только при активном user-скролле
+  const isUserScroll = Date.now() - this._userScrolledAt <= 500;
+  if (isUserScroll) {
+    const wasVisible = !modal.classList.contains('ui-hidden');
+    modal.classList.add('ui-hidden');
+    if (wasVisible) this._syncStatusBar();
+  }
+
+  const st = wrap.scrollTop, sl = wrap.scrollLeft;
       const imgs = wrap.querySelectorAll('img');
       let idx = 0, found = false;
   
@@ -20419,86 +20578,80 @@ if (this._settings.nextChapter === 'button') {
     };
   },
   
-  async checkPrevLoad() {
-if (!this._prevChapter) return;
-if (this._prevLoading) return;
-if (this._restoring) return;
-if (!this._pagesList.length) return;
+async checkAutoLoad() {
+  if (this._settings.nextChapter !== 'auto') return;
+  if (!this._nextChapter) return;
+  if (this._autoLoading) return;
+  if (!this._pagesList.length) return;
 
-const bounds = this.getCurrentChapterBounds();
-if (!bounds) return;
+  const bounds = this.getCurrentChapterBounds();
+  if (!bounds) return;
 
-// Если первая страница ленты — из другой главы, значит предыдущая уже подгружена
-if (this._pagesList[0].chapterId !== bounds.chapterId) return;
-
-// В обычном режиме — только когда близко к началу; в auto — тянем всегда
-if (this._settings.nextChapter !== 'auto') {
-  const remaining = this._currentIndex - bounds.startIdx;
+  const remaining = bounds.endIdx - this._currentIndex;
   if (remaining > 2) return;
-}
 
-    // Если следующая глава уже подгружена — не дублируем
-    if (this._pagesList.length > bounds.endIdx + 1) return;
+  if (this._pagesList.length > bounds.endIdx + 1) return;
 
-    this._autoLoading = true;
-    try {
-      const token = localStorage.getItem('slashlib_token');
-      const chapRes = await nativeFetch(
-        `https://api.cdnlibs.org/api/manga/${this._fullSlug}/chapter?volume=${this._nextChapter.volume}&number=${this._nextChapter.number}`,
-        {
-          'Authorization': 'Bearer ' + token, 'Site-Id': '2',
-          'Origin': 'https://v2.shlib.life', 'Referer': 'https://v2.shlib.life/'
-        }
-      );
-      const chapJson = await chapRes.json();
-      const chapData = chapJson.data;
-      if (!chapData || !chapData.pages || !chapData.pages.length) return;
-
-      const wrap = document.getElementById('readerPages');
-      const nextBlock = document.getElementById('readerNextBlock');
-      if (!wrap) return;
-
-      const startIdx = this._pagesList.length;
-      chapData.pages.forEach((page, i) => {
-        const img = document.createElement('img');
-        img.alt = 'Страница ' + (startIdx + i + 1);
-        img.dataset.index = startIdx + i;
-        img.style.opacity = '0';
-        img.style.transition = 'opacity 0.3s ease';
-        if (nextBlock) wrap.insertBefore(img, nextBlock);
-        else wrap.appendChild(img);
-
-        this._pagesList.push({
-          image: page.image,
-          url: page.url || '',
-          chapterId: chapData.id,
-          volume: chapData.volume,
-          number: chapData.number
-        });
-      });
-
-      // Сдвигаем _nextChapter/_prevChapter
-      const currIdx = this._chaptersList.findIndex(c => c.id === chapData.id);
-      this._nextChapter = (currIdx !== -1 && currIdx < this._chaptersList.length - 1)
-        ? this._chaptersList[currIdx + 1] : null;
-      this._prevChapter = (currIdx > 0) ? this._chaptersList[currIdx - 1] : null;
-
-      this.updateChapterNav();
-      this.updateNextBlock();
-      this.updateReaderTitle();
-
-      // Подгружаем первые 3 страницы новой главы сразу
-      for (let i = 0; i < Math.min(3, chapData.pages.length); i++) {
-        try { await this.loadPage(startIdx + i); } catch(e){}
+  this._autoLoading = true;
+  try {
+    const token = localStorage.getItem('slashlib_token');
+    const chapRes = await nativeFetch(
+      `https://api.cdnlibs.org/api/manga/${this._fullSlug}/chapter?volume=${this._nextChapter.volume}&number=${this._nextChapter.number}`,
+      {
+        'Authorization': 'Bearer ' + token, 'Site-Id': '2',
+        'Origin': 'https://v2.shlib.life', 'Referer': 'https://v2.shlib.life/'
       }
-    } catch(e) {
-      console.warn('[AutoLoad chapter]', e);
-    } finally {
-      this._autoLoading = false;
-    }
-  },
+    );
+    const chapJson = await chapRes.json();
+    const chapData = chapJson.data;
+    if (!chapData || !chapData.pages || !chapData.pages.length) return;
 
-  async checkPrevLoad() {
+    const wrap = document.getElementById('readerPages');
+    const nextBlock = document.getElementById('readerNextBlock');
+    if (!wrap) return;
+
+    const startIdx = this._pagesList.length;
+    chapData.pages.forEach((page, i) => {
+      const img = document.createElement('img');
+      img.alt = 'Страница ' + (startIdx + i + 1);
+      img.dataset.index = startIdx + i;
+      img.style.opacity = '0';
+      img.style.transition = 'opacity 0.3s ease';
+      img.style.aspectRatio = '2 / 3';
+      img.style.width = '100%';
+      if (nextBlock) wrap.insertBefore(img, nextBlock);
+      else wrap.appendChild(img);
+
+      this._pagesList.push({
+        image: page.image,
+        url: page.url || '',
+        chapterId: chapData.id,
+        volume: chapData.volume,
+        number: chapData.number
+      });
+    });
+
+    const currIdx = this._chaptersList.findIndex(c => c.id === chapData.id);
+    this._nextChapter = (currIdx !== -1 && currIdx < this._chaptersList.length - 1)
+      ? this._chaptersList[currIdx + 1] : null;
+    this._prevChapter = (currIdx > 0) ? this._chaptersList[currIdx - 1] : null;
+
+    this.updateChapterNav();
+    this.updateNextBlock();
+    this.updateReaderTitle();
+
+    for (let i = 0; i < Math.min(3, chapData.pages.length); i++) {
+      try { await this.loadPage(startIdx + i); } catch(e){}
+    }
+  } catch(e) {
+    console.warn('[AutoLoad chapter]', e);
+  } finally {
+    this._autoLoading = false;
+  }
+},
+
+  
+async checkPrevLoad() {
   if (!this._prevChapter) return;
   if (this._prevLoading) return;
   if (this._restoring) return;
@@ -20506,11 +20659,15 @@ if (this._settings.nextChapter !== 'auto') {
 
   const bounds = this.getCurrentChapterBounds();
   if (!bounds) return;
-  if (bounds.startIdx === 0) return;  // страницы пред-главы уже вставлены
 
-  // Триггер: за 2 страницы от начала главы (симметрично checkAutoLoad)
-  const remaining = this._currentIndex - bounds.startIdx;
-  if (remaining > 2) return;
+  // Если первая страница ленты — уже из другой главы, значит предыдущая подгружена
+  if (this._pagesList[0].chapterId !== bounds.chapterId) return;
+
+  // В обычном режиме — только когда близко к началу; в auto — тянем всегда
+  if (this._settings.nextChapter !== 'auto') {
+    const remaining = this._currentIndex - bounds.startIdx;
+    if (remaining > 2) return;
+  }
 
   this._prevLoading = true;
   try {
@@ -20529,7 +20686,6 @@ if (this._settings.nextChapter !== 'auto') {
     const wrap = document.getElementById('readerPages');
     if (!wrap) return;
 
-    // Запоминаем относительное положение текущей страницы
     const imgsBefore = wrap.querySelectorAll('img');
     const curImgBefore = imgsBefore[this._currentIndex];
     const oldScroll = wrap.scrollTop;
@@ -20540,7 +20696,6 @@ if (this._settings.nextChapter !== 'auto') {
 
     this._restoring = true;
 
-    // Вставляем пустые <img> В НАЧАЛО (перед текущей главой)
     for (let i = 0; i < addedCount; i++) {
       const img = document.createElement('img');
       img.alt = 'Страница ' + (i + 1);
@@ -20560,28 +20715,23 @@ if (this._settings.nextChapter !== 'auto') {
       });
     }
 
-    // Сдвигаем индексы
     this._currentIndex += addedCount;
     this.updateReaderTitle();
 
-    // Сдвигаем уже загруженные blobUrls
     const shiftedBlobs = {};
     for (const [key, url] of Object.entries(this._blobUrls)) {
       shiftedBlobs[parseInt(key, 10) + addedCount] = url;
     }
     this._blobUrls = shiftedBlobs;
 
-    // Пересчитываем _prevChapter/_nextChapter относительно новой главы
     const currIdx = this._chaptersList.findIndex(c => c.id === chapData.id);
     this._prevChapter = (currIdx > 0) ? this._chaptersList[currIdx - 1] : null;
     this.updateChapterNav();
     this.updateCounter();
 
-    // Загружаем новые страницы пачками
     const indices = Array.from({ length: addedCount }, (_, i) => i);
     await this.loadPagesBatch(indices, 4);
 
-    // Снимаем placeholder aspect-ratio (у загруженных img теперь натуральные размеры)
     const allImgs = wrap.querySelectorAll('img');
     for (let i = 0; i < addedCount; i++) {
       if (allImgs[i]) {
@@ -20590,7 +20740,6 @@ if (this._settings.nextChapter !== 'auto') {
       }
     }
 
-    // Восстанавливаем scrollTop по текущей странице + относительное смещение
     const imgsAfter = wrap.querySelectorAll('img');
     const curImgAfter = imgsAfter[this._currentIndex];
     if (curImgAfter) {
@@ -20605,25 +20754,26 @@ if (this._settings.nextChapter !== 'auto') {
     this._prevLoading = false;
   }
 },
+  
+async loadChapter(volume, number, chapterId) {
+  toast('Загружаю главу...', 'success');
+  const token = localStorage.getItem('slashlib_token');
+  try {
+    const chapRes = await nativeFetch(
+      `https://api.cdnlibs.org/api/manga/${this._fullSlug}/chapter?volume=${volume}&number=${number}`,
+      {
+        'Authorization': 'Bearer ' + token, 'Site-Id': '2',
+        'Origin': 'https://v2.shlib.life', 'Referer': 'https://v2.shlib.life/'
+      }
+    );
+    const chapJson = await chapRes.json();
+    const chapData = chapJson.data;
 
-  async loadChapter(volume, number, chapterId) {
-    toast('Загружаю главу...', 'success');
-    const token = localStorage.getItem('slashlib_token');
-    try {
-      const chapRes = await nativeFetch(
-        `https://api.cdnlibs.org/api/manga/${this._fullSlug}/chapter?volume=${volume}&number=${number}`,
-        {
-          'Authorization': 'Bearer ' + token, 'Site-Id': '2',
-          'Origin': 'https://v2.shlib.life', 'Referer': 'https://v2.shlib.life/'
-        }
-      );
-      const chapJson = await chapRes.json();
-      const chapData = chapJson.data;
-
-      if (chapData && chapData.pages && chapData.pages.length) {
-        const baseTitle = (document.getElementById('readerTitle').textContent || '').split(' - ')[0];
-        const title = baseTitle + ` - Том ${chapData.volume} Глава ${chapData.number}`;
-        // Открываем заново с нуля — progress = null
+    if (chapData && chapData.pages && chapData.pages.length) {
+      // Берём базовое название из поля, а не из DOM (в DOM уже с "Том X · Глава Y")
+      const baseTitle = (this._baseTitle || '').trim();
+      const title = baseTitle + ` - Том ${chapData.volume} Глава ${chapData.number}`;
+  // Открываем заново с нуля — progress = null
         this.open(this._fullSlug, chapData.id, chapData.volume, chapData.number,
           chapData.pages, title, null, this._chaptersList, this._itemId);
       } else {
