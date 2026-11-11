@@ -19997,7 +19997,7 @@ updateReaderTitle() {
     } catch(e) { console.warn('[FullscreenBridge]', e); }
   },  
 
-  async _probeImageDims(page) {
+async _probeImageInfo(page) {
   const path = String(page.url || page.image || '').replace(/^\/+/, '');
   if (!path) return null;
   const domains = ['https://img3.cdnlibs.org', 'https://img3.cdnlibs.link', 'https://img3.hentaicdn.org'];
@@ -20021,37 +20021,80 @@ updateReaderTitle() {
       const bin = atob(b64);
       const bytes = new Uint8Array(bin.length);
       for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      // Хэш всего файла — по нему узнаём «этот дисклеймер уже видели»
+      const hashBuf = await crypto.subtle.digest('SHA-256', bytes);
+      const hash = Array.from(new Uint8Array(hashBuf)).slice(0, 8).map(x => x.toString(16).padStart(2, '0')).join('');
       const blob = new Blob([bytes]);
-      return await new Promise(res => {
+      const dims = await new Promise(res => {
         const u = URL.createObjectURL(blob);
         const im = new Image();
         im.onload = () => { URL.revokeObjectURL(u); res({ w: im.naturalWidth, h: im.naturalHeight }); };
         im.onerror = () => { URL.revokeObjectURL(u); res(null); };
         im.src = u;
       });
+      if (!dims) return null;
+      return { w: dims.w, h: dims.h, hash };
     } catch(e) {}
   }
   return null;
 },
+  
+_getDiscHashes() {
+  try {
+    const raw = localStorage.getItem('polka_reader_disc_hashes');
+    if (!raw) return new Set();
+    const arr = JSON.parse(raw);
+    if (!Array.isArray(arr)) return new Set();
+    return new Set(arr);
+  } catch(e) { return new Set(); }
+},
+
+_addDiscHash(hash) {
+  if (!hash) return;
+  try {
+    const set = this._getDiscHashes();
+    if (set.has(hash)) return;
+    set.add(hash);
+    // Ограничиваем пул — 300 хэшей максимум, чтобы не раздувать localStorage
+    const arr = Array.from(set).slice(-300);
+    localStorage.setItem('polka_reader_disc_hashes', JSON.stringify(arr));
+  } catch(e) {}
+},
 
 async _filterDisclaimers(pages) {
-  // Контент в вебтуне всегда сверхузкий (h/w > 8). Дисклеймер — короткий (h/w < 2).
-  const isDisc = d => d && d.w > 0 && d.h > 0 && (d.h / d.w) < 2;
+  if (!Array.isArray(pages) || !pages.length) return { pages, removedFromStart: 0 };
+
+  const isDiscBySize = info => info && info.w > 0 && info.h > 0 && (info.h / info.w) < 2;
+  const knownHashes = this._getDiscHashes();
   const discard = new Set();
 
-  // Сканируем начало — до первого не-дисклеймера
-  for (let i = 0; i < Math.min(2, pages.length); i++) {
-    const d = await this._probeImageDims(pages[i]);
-    if (isDisc(d)) discard.add(i);
-    else break;
+  // Проверяем до 3 страниц в начале. Стоп на первой не-дисклеймерной.
+  for (let i = 0; i < Math.min(3, pages.length); i++) {
+    const info = await this._probeImageInfo(pages[i]);
+    if (!info) break;
+    const isKnown = knownHashes.has(info.hash);
+    const isShort = isDiscBySize(info);
+    if (isKnown || isShort) {
+      discard.add(i);
+      if (!isKnown) this._addDiscHash(info.hash);
+    } else {
+      break;
+    }
   }
 
-  // Сканируем конец — до первого не-дисклеймера
-  for (let i = pages.length - 1; i >= Math.max(0, pages.length - 2); i--) {
-    if (i < 0 || discard.has(i)) continue;
-    const d = await this._probeImageDims(pages[i]);
-    if (isDisc(d)) discard.add(i);
-    else break;
+  // Проверяем до 3 страниц в конце
+  for (let i = pages.length - 1; i >= Math.max(0, pages.length - 3); i--) {
+    if (discard.has(i)) continue;
+    const info = await this._probeImageInfo(pages[i]);
+    if (!info) break;
+    const isKnown = knownHashes.has(info.hash);
+    const isShort = isDiscBySize(info);
+    if (isKnown || isShort) {
+      discard.add(i);
+      if (!isKnown) this._addDiscHash(info.hash);
+    } else {
+      break;
+    }
   }
 
   if (!discard.size) return { pages, removedFromStart: 0 };
@@ -20063,10 +20106,12 @@ async _filterDisclaimers(pages) {
   }
 
   const filtered = pages.filter((_, i) => !discard.has(i));
-  console.log('[reader] disclaimers filtered:', discard.size, '| before:', pages.length, '| after:', filtered.length);
+  console.log('[reader] disclaimers filtered:', discard.size,
+    '| known hashes:', knownHashes.size,
+    '| before:', pages.length, '| after:', filtered.length);
   return { pages: filtered, removedFromStart };
 },
-
+  
   _autoAdvanceStatusIfNeeded(chapterNumber) {
   if (!this._itemId) return;
   const num = parseInt(chapterNumber, 10);
