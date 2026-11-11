@@ -20391,17 +20391,23 @@ _bindDiscMarkTap() {
     e.preventDefault();
     e.stopPropagation();
 
-    // Ищем img под пальцем и берём его реальную позицию в DOM
-    const imgs = Array.from(wrap.querySelectorAll('img'));
-    let targetIdx = -1;
-    for (let i = 0; i < imgs.length; i++) {
-      const img = imgs[i];
-      const r = img.getBoundingClientRect();
-      if (r.height > 0 && e.clientY >= r.top && e.clientY <= r.bottom) {
-        targetIdx = i;
-        break;
-      }
-    }
+    // Ищем img под пальцем: берём тот, чей центр ближе всего к точке тапа,
+// и в чьи границы попадает clientY
+const imgs = Array.from(wrap.querySelectorAll('img'));
+let targetIdx = -1;
+let bestDist = Infinity;
+const tapY = e.clientY;
+for (let i = 0; i < imgs.length; i++) {
+  const r = imgs[i].getBoundingClientRect();
+  if (r.height <= 0) continue;
+  if (tapY < r.top || tapY > r.bottom) continue;
+  const centerY = r.top + r.height / 2;
+  const dist = Math.abs(centerY - tapY);
+  if (dist < bestDist) {
+    bestDist = dist;
+    targetIdx = i;
+  }
+}
     if (targetIdx < 0 || targetIdx >= this._pagesList.length) {
       toast('Не попал по фрейму, попробуй ещё', 'warn');
       return;
@@ -21709,24 +21715,26 @@ async checkPrevLoad() {
 
     this._restoring = true;
 
-    for (let i = 0; i < addedCount; i++) {
-      const img = document.createElement('img');
-      img.alt = 'Страница ' + (i + 1);
-      img.style.opacity = '0';
-      img.style.transition = 'opacity 0.3s ease';
-      img.style.aspectRatio = '2 / 3';
-      img.style.width = '100%';
-      if (firstChild) wrap.insertBefore(img, firstChild);
-      else wrap.appendChild(img);
+    // Вставляем в ОБРАТНОМ порядке — каждая вставка идёт в начало,
+// поэтому чтобы итоговый порядок был [P0, P1, P2, old...], начинаем с последней
+for (let i = addedCount - 1; i >= 0; i--) {
+  const img = document.createElement('img');
+  img.alt = 'Страница ' + (i + 1);
+  img.style.opacity = '0';
+  img.style.transition = 'opacity 0.3s ease';
+  img.style.aspectRatio = '2 / 3';
+  img.style.width = '100%';
+  if (firstChild) wrap.insertBefore(img, firstChild);
+  else wrap.appendChild(img);
 
-      this._pagesList.unshift({
-        image: filteredPages[i].image,
-        url: filteredPages[i].url || '',
-        chapterId: chapData.id,
-        volume: chapData.volume,
-        number: chapData.number
-      });
-    }
+  this._pagesList.unshift({
+    image: filteredPages[i].image,
+    url: filteredPages[i].url || '',
+    chapterId: chapData.id,
+    volume: chapData.volume,
+    number: chapData.number
+  });
+}
 
     // КРИТИЧНО: пересчитать dataset.index у всех img, чтобы старые индексы были валидны
     this._reindexReaderImgs();
@@ -21757,12 +21765,15 @@ async checkPrevLoad() {
     }
 
     const imgsAfter = wrap.querySelectorAll('img');
-    const curImgAfter = imgsAfter[this._currentIndex];
-    if (curImgAfter) {
-      wrap.scrollTop = curImgAfter.offsetTop + relOffset;
-    }
+const curImgAfter = imgsAfter[this._currentIndex];
+if (curImgAfter) {
+  wrap.scrollTop = curImgAfter.offsetTop + relOffset;
+}
 
-    setTimeout(() => { this._restoring = false; }, 200);
+// Финальная страховка: пересчитать индексы после всех вставок
+this._reindexReaderImgs();
+
+setTimeout(() => { this._restoring = false; }, 200);
   } catch(e) {
     console.warn('[PrevLoad chapter]', e);
     this._restoring = false;
