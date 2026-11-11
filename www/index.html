@@ -3811,10 +3811,10 @@ body.reader-open-bg {
 }
 @media (orientation: landscape) and (min-width: 720px) {
   .reader-pages:not(.horizontal) {
-    padding-left: clamp(24px, 22vw, 400px);
-    padding-right: clamp(24px, 22vw, 400px);
+    padding-left: clamp(16px, var(--reader-side-vw, 22vw), 400px);
+    padding-right: clamp(16px, var(--reader-side-vw, 22vw), 400px);
   }
-}
+  }
 .reader-pages.horizontal {
   flex-direction: row; 
   overflow-x: auto; overflow-y: hidden;
@@ -4276,6 +4276,58 @@ body.reader-open-bg {
 .reader-settings-panel .rs-head .reader-icon-btn svg { width: 16px; height: 16px; display: block; }
 .reader-settings-panel .rs-head .reader-icon-btn:active { background: rgba(255,255,255,0.08); }
 
+.rs-slider-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.rs-slider {
+  flex: 1;
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  background: rgba(255,255,255,0.15);
+  border-radius: 2px;
+  outline: none;
+  padding: 0;
+  margin: 0;
+}
+.rs-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--acc);
+  cursor: pointer;
+  border: 0;
+  box-shadow: 0 0 6px rgba(124,92,255,.6), 0 0 12px rgba(124,92,255,.3);
+}
+.rs-slider::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--acc);
+  cursor: pointer;
+  border: 0;
+  box-shadow: 0 0 6px rgba(124,92,255,.6);
+}
+.rs-slider::-moz-range-track {
+  height: 4px;
+  background: rgba(255,255,255,0.15);
+  border-radius: 2px;
+}
+.rs-slider-value {
+  flex: 0 0 auto;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--fg);
+  min-width: 38px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  }
+
+  
 </style>
 </head>
 <body>
@@ -5888,6 +5940,13 @@ body.player-modal-open .player-modal {
       <button type="button" data-v="WEBTOON">Вертикально</button>
       <button type="button" data-v="LEFT_TO_RIGHT">Горизонтально</button>
     </div>
+  </div>
+  <div class="rs-group">
+  <label>Ширина страницы (ландшафт)</label>
+  <div class="rs-slider-row">
+    <input type="range" id="rsPageWidth" min="8" max="36" step="1" value="22" class="rs-slider">
+    <span class="rs-slider-value" id="rsPageWidthValue">22%</span>
+  </div>
   </div>
   <div class="rs-group rs-group-toggle">
     <label>Увеличение двойным нажатием</label>
@@ -19798,6 +19857,7 @@ if (el('readerNextChapterBtn')) el('readerNextChapterBtn').onclick = () => {
     this.checkNextChapterUI();
     if (b.dataset.v === 'auto') this.checkAutoLoad();
   };
+  this._bindSideWidthSlider();
   const rsZoom = el('rsDoubleTapZoom');
   if (rsZoom) rsZoom.onchange = () => {
     this._settings.doubleTapZoom = !!rsZoom.checked;
@@ -20016,6 +20076,48 @@ async _saveAndSetBrightness(value) {
   }
 },
 
+_getSideVw() {
+  try {
+    const v = parseFloat(localStorage.getItem('polka_reader_side_vw'));
+    if (isFinite(v) && v >= 8 && v <= 36) return v;
+  } catch(e){}
+  return 22;
+},
+
+_applySideVw(vw) {
+  const clamped = Math.max(8, Math.min(36, vw));
+  document.documentElement.style.setProperty('--reader-side-vw', clamped + 'vw');
+  const slider = document.getElementById('rsPageWidth');
+  const label = document.getElementById('rsPageWidthValue');
+  if (slider) slider.value = String(clamped);
+  if (label) label.textContent = Math.round(clamped) + '%';
+},
+
+_saveSideVw(vw) {
+  try { localStorage.setItem('polka_reader_side_vw', String(vw)); }
+  catch(e){}
+},
+
+_bindSideWidthSlider() {
+  const slider = document.getElementById('rsPageWidth');
+  if (!slider || slider._bound) return;
+  slider._bound = true;
+
+  const start = this._getSideVw();
+  slider.value = String(start);
+  this._applySideVw(start);
+
+  slider.addEventListener('input', () => {
+    const v = parseFloat(slider.value);
+    this._applySideVw(v);
+  });
+
+  slider.addEventListener('change', () => {
+    const v = parseFloat(slider.value);
+    this._saveSideVw(v);
+  });
+},
+  
 _bindBrightnessSwipe() {
   const stage = document.getElementById('readerStage');
   if (!stage || stage._brightnessBound) return;
