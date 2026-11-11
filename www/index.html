@@ -19997,6 +19997,76 @@ updateReaderTitle() {
     } catch(e) { console.warn('[FullscreenBridge]', e); }
   },  
 
+  async _probeImageDims(page) {
+  const path = String(page.url || page.image || '').replace(/^\/+/, '');
+  if (!path) return null;
+  const domains = ['https://img3.cdnlibs.org', 'https://img3.cdnlibs.link', 'https://img3.hentaicdn.org'];
+  const token = localStorage.getItem('slashlib_token');
+  const headers = {
+    'Authorization': 'Bearer ' + token,
+    'Origin': 'https://v2.shlib.life',
+    'Referer': 'https://v2.shlib.life/',
+    'Site-Id': '2',
+    'Accept': 'image/*'
+  };
+  const CHttp = window.Capacitor?.Plugins?.CapacitorHttp;
+  if (!CHttp) return null;
+  for (const base of domains) {
+    try {
+      const url = path.startsWith('http') ? path : `${base}/${path}`;
+      const r = await CHttp.get({ url, headers, responseType: 'arraybuffer' });
+      if (r.status !== 200 || !r.data) continue;
+      let b64 = r.data;
+      if (b64.startsWith('data:image')) b64 = b64.split(',')[1];
+      const bin = atob(b64);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      const blob = new Blob([bytes]);
+      return await new Promise(res => {
+        const u = URL.createObjectURL(blob);
+        const im = new Image();
+        im.onload = () => { URL.revokeObjectURL(u); res({ w: im.naturalWidth, h: im.naturalHeight }); };
+        im.onerror = () => { URL.revokeObjectURL(u); res(null); };
+        im.src = u;
+      });
+    } catch(e) {}
+  }
+  return null;
+},
+
+async _filterDisclaimers(pages) {
+  // Контент в вебтуне всегда сверхузкий (h/w > 8). Дисклеймер — короткий (h/w < 2).
+  const isDisc = d => d && d.w > 0 && d.h > 0 && (d.h / d.w) < 2;
+  const discard = new Set();
+
+  // Сканируем начало — до первого не-дисклеймера
+  for (let i = 0; i < Math.min(2, pages.length); i++) {
+    const d = await this._probeImageDims(pages[i]);
+    if (isDisc(d)) discard.add(i);
+    else break;
+  }
+
+  // Сканируем конец — до первого не-дисклеймера
+  for (let i = pages.length - 1; i >= Math.max(0, pages.length - 2); i--) {
+    if (i < 0 || discard.has(i)) continue;
+    const d = await this._probeImageDims(pages[i]);
+    if (isDisc(d)) discard.add(i);
+    else break;
+  }
+
+  if (!discard.size) return { pages, removedFromStart: 0 };
+
+  let removedFromStart = 0;
+  for (let i = 0; i < pages.length; i++) {
+    if (discard.has(i)) removedFromStart++;
+    else break;
+  }
+
+  const filtered = pages.filter((_, i) => !discard.has(i));
+  console.log('[reader] disclaimers filtered:', discard.size, '| before:', pages.length, '| after:', filtered.length);
+  return { pages: filtered, removedFromStart };
+},
+
   _autoAdvanceStatusIfNeeded(chapterNumber) {
   if (!this._itemId) return;
   const num = parseInt(chapterNumber, 10);
@@ -20464,17 +20534,29 @@ this._blobUrls = {};
 this._autoAdvanceStatusIfNeeded(number);
     
         if (!pagesList || !pagesList.length) {
-          toast('В главе нет страниц', 'warn');
-          return;
-        }
-    
-        this._pagesList = pagesList.map(p => ({
-          image: p.image,
-          url: p.url || '',
-          chapterId: chapterId,
-          volume: volume,
-          number: number
-        }));
+  toast('В главе нет страниц', 'warn');
+  return;
+}
+
+// Вычищаем дисклеймеры (короткие фреймы в начале/конце главы)
+const filterResult = await this._filterDisclaimers(pagesList);
+pagesList = filterResult.pages;
+if (!pagesList.length) {
+  toast('В главе только дисклеймеры', 'warn');
+  return;
+}
+// Если прогресс указывал на страницу после дисклеймеров — сдвигаем на число удалённых
+if (progress && typeof progress.page === 'number' && filterResult.removedFromStart > 0) {
+  progress.page = Math.max(0, Math.min(progress.page - filterResult.removedFromStart, pagesList.length - 1));
+}
+
+this._pagesList = pagesList.map(p => ({
+  image: p.image,
+  url: p.url || '',
+  chapterId: chapterId,
+  volume: volume,
+  number: number
+}));
     
         const currIdx = this._chaptersList.findIndex(c => c.id === chapterId);
         this._nextChapter = (currIdx !== -1 && currIdx < this._chaptersList.length - 1)
