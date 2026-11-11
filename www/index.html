@@ -5896,6 +5896,13 @@ body.player-modal-open .player-modal {
       <span class="rs-toggle-track"><span class="rs-toggle-thumb"></span></span>
     </label>
   </div>
+  <div class="rs-group rs-group-toggle">
+  <label>Запоминать яркость</label>
+  <label class="rs-toggle">
+    <input type="checkbox" id="rsRememberBrightness">
+    <span class="rs-toggle-track"><span class="rs-toggle-thumb"></span></span>
+  </label>
+  </div>
   <div class="rs-group">
     <label>Язык</label>
     <div class="seg" id="rsLanguage">
@@ -19685,9 +19692,21 @@ if (readerModal && readerModal.classList.contains('on')) {
   }
 })();
 
-  /* =========================================
-   ЧИТАЛКА SLASHLIB (Ленивая загрузка)
-   ========================================= */
+// Динамический импорт, чтобы не ломать web-версию (на десктопе плагина нет)
+let ScreenBrightness = null;
+(async () => {
+  try {
+    const mod = await import('@capacitor-community/screen-brightness');
+    ScreenBrightness = mod.ScreenBrightness;
+  } catch (e) {
+    console.warn('[brightness] plugin not available (web?)');
+  }
+})();
+
+const BRIGHTNESS_VALUE_KEY = 'polka_reader_brightness_value';
+const BRIGHTNESS_REMEMBER_KEY = 'polka_reader_brightness_remember';
+const BRIGHTNESS_SWIPE_SENSITIVITY = 0.45; // свайп на 45% высоты экрана = 100% яркости
+  
 /* =========================================
    ЧИТАЛКА SLASHLIB (Ленивая загрузка)
    ========================================= */
@@ -19789,6 +19808,16 @@ if (el('readerNextChapterBtn')) el('readerNextChapterBtn').onclick = () => {
     this.saveSettings();
     toast('Скоро появится', 'warn');
   };
+  // Тоггл «Запоминать яркость»
+const rsBrightness = el('rsRememberBrightness');
+if (rsBrightness) {
+  rsBrightness.checked = this._isBrightnessRememberEnabled();
+  rsBrightness.onchange = () => {
+    this._setBrightnessRememberEnabled(rsBrightness.checked);
+  };
+}
+
+this._bindBrightnessSwipe();
   const rsLang = el('rsLanguage');
   if (rsLang) rsLang.onclick = (e) => {
     const b = e.target.closest('button[data-v]'); if(!b) return;
@@ -19944,6 +19973,100 @@ updateReaderTitle() {
     try { track.releasePointerCapture(e.pointerId); } catch(err){}
   });
   track.addEventListener('pointercancel', () => { dragging = false; });
+},
+
+  _isBrightnessRememberEnabled() {
+  try { return localStorage.getItem(BRIGHTNESS_REMEMBER_KEY) === '1'; }
+  catch(e){ return false; }
+},
+
+_setBrightnessRememberEnabled(on) {
+  try {
+    localStorage.setItem(BRIGHTNESS_REMEMBER_KEY, on ? '1' : '0');
+  } catch(e){}
+  const cb = document.getElementById('rsRememberBrightness');
+  if (cb) cb.checked = on;
+  if (!on) this._restoreSystemBrightness();
+},
+
+async _restoreSystemBrightness() {
+  if (!ScreenBrightness) return;
+  try {
+    await ScreenBrightness.setBrightness({ brightness: -1 });
+  } catch(e) { console.warn('[brightness] restore failed', e); }
+},
+
+async _applySavedBrightness() {
+  if (!ScreenBrightness) return;
+  if (!this._isBrightnessRememberEnabled()) return;
+  let saved = NaN;
+  try { saved = parseFloat(localStorage.getItem(BRIGHTNESS_VALUE_KEY)); }
+  catch(e){}
+  if (!isFinite(saved) || saved < 0 || saved > 1) return;
+  try {
+    await ScreenBrightness.setBrightness({ brightness: saved });
+  } catch(e) { console.warn('[brightness] apply failed', e); }
+},
+
+async _saveAndSetBrightness(value) {
+  if (!ScreenBrightness) return;
+  const clamped = Math.max(0, Math.min(1, value));
+  try {
+    await ScreenBrightness.setBrightness({ brightness: clamped });
+  } catch(e) { console.warn('[brightness] set failed', e); return; }
+  if (this._isBrightnessRememberEnabled()) {
+    try { localStorage.setItem(BRIGHTNESS_VALUE_KEY, String(clamped)); }
+    catch(e){}
+  }
+},
+
+_bindBrightnessSwipe() {
+  const stage = document.getElementById('readerStage');
+  if (!stage || stage._brightnessBound) return;
+  stage._brightnessBound = true;
+
+  let startX = 0, startY = 0, startBrightness = 0.5;
+  let tracking = false;
+
+  stage.addEventListener('touchstart', async (e) => {
+    if (e.touches.length !== 1) return;
+    const t = e.touches[0];
+    startX = t.clientX;
+    startY = t.clientY;
+    tracking = false;
+
+    // Начинаем только у левого или правого края, чтобы не мешать листанию в центре
+    const edgeZone = 40;
+    if (startX > edgeZone && startX < window.innerWidth - edgeZone) return;
+
+    if (!ScreenBrightness) return;
+    try {
+      const res = await ScreenBrightness.getBrightness();
+      // getBrightness может вернуть -1, если приложение ещё не меняло яркость
+      startBrightness = (res.brightness >= 0) ? res.brightness : 0.5;
+    } catch(e) { startBrightness = 0.5; }
+    tracking = true;
+  }, { passive: true });
+
+  stage.addEventListener('touchmove', (e) => {
+    if (!tracking || e.touches.length !== 1) return;
+    const t = e.touches[0];
+    const dx = t.clientX - startX;
+    const dy = t.clientY - startY;
+
+    // Вертикальный свайп: вверх — ярче, вниз — темнее
+    if (Math.abs(dy) < 8 && Math.abs(dx) < 8) return;
+    if (Math.abs(dy) < Math.abs(dx) * 1.2) return; // не горизонтальный жест
+
+    if (e.cancelable) e.preventDefault();
+
+    const delta = -dy / (window.innerHeight * BRIGHTNESS_SWIPE_SENSITIVITY);
+    const newVal = Math.max(0, Math.min(1, startBrightness + delta));
+    this._saveAndSetBrightness(newVal);
+  }, { passive: false });
+
+  stage.addEventListener('touchend', () => { tracking = false; });
+  stage.addEventListener('touchcancel', () => { tracking = false; });
 },
 
   _bindBackSwipe() {
@@ -20196,6 +20319,7 @@ _closeChaptersList() {
         const readerModalEl = document.getElementById('readerModal');
         if (readerModalEl) {
           readerModalEl.classList.add('on');
+          this._applySavedBrightness();
           readerModalEl.classList.remove('ui-hidden');
           void readerModalEl.offsetWidth;
         }
@@ -20288,6 +20412,7 @@ this._updateMusicBtnState();
 
 
   close() {
+  this._restoreSystemBrightness();
   this._closeTagPicker();
   this._closeChaptersList();
   this.toggleSettings(false);
