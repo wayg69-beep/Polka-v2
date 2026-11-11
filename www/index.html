@@ -20023,25 +20023,26 @@ _bindBrightnessSwipe() {
 
   let startX = 0, startY = 0, startBrightness = 0.5;
   let tracking = false;
+  let decided = false;
+  let isBrightness = false;
 
   stage.addEventListener('touchstart', async (e) => {
     if (e.touches.length !== 1) return;
+    // В горизонтальном режиме лента листается по горизонтали — не отбираем у неё жест
+    if (this._settings.mode === 'LEFT_TO_RIGHT') { tracking = false; return; }
+    if (!ScreenBrightness) { tracking = false; return; }
+
     const t = e.touches[0];
     startX = t.clientX;
     startY = t.clientY;
-    tracking = false;
+    tracking = true;
+    decided = false;
+    isBrightness = false;
 
-    // Начинаем только у левого или правого края, чтобы не мешать листанию в центре
-    const edgeZone = 40;
-    if (startX > edgeZone && startX < window.innerWidth - edgeZone) return;
-
-    if (!ScreenBrightness) return;
     try {
       const res = await ScreenBrightness.getBrightness();
-      // getBrightness может вернуть -1, если приложение ещё не меняло яркость
       startBrightness = (res.brightness >= 0) ? res.brightness : 0.5;
     } catch(e) { startBrightness = 0.5; }
-    tracking = true;
   }, { passive: true });
 
   stage.addEventListener('touchmove', (e) => {
@@ -20050,21 +20051,34 @@ _bindBrightnessSwipe() {
     const dx = t.clientX - startX;
     const dy = t.clientY - startY;
 
-    // Вертикальный свайп: вверх — ярче, вниз — темнее
-    if (Math.abs(dy) < 8 && Math.abs(dx) < 8) return;
-    if (Math.abs(dy) < Math.abs(dx) * 1.2) return; // не горизонтальный жест
+    if (!decided) {
+      if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+      decided = true;
+      // Горизонтальное движение — яркость; вертикальное — нативный скролл ленты
+      isBrightness = Math.abs(dx) > Math.abs(dy) * 1.2;
+    }
 
+    if (!isBrightness) return;
     if (e.cancelable) e.preventDefault();
 
-    const delta = -dy / (window.innerHeight * BRIGHTNESS_SWIPE_SENSITIVITY);
+    // Вправо — ярче, влево — темнее
+    const delta = dx / (window.innerWidth * BRIGHTNESS_SWIPE_SENSITIVITY);
     const newVal = Math.max(0, Math.min(1, startBrightness + delta));
     this._saveAndSetBrightness(newVal);
   }, { passive: false });
 
-  stage.addEventListener('touchend', () => { tracking = false; });
-  stage.addEventListener('touchcancel', () => { tracking = false; });
+  stage.addEventListener('touchend', () => {
+    tracking = false;
+    decided = false;
+    isBrightness = false;
+  });
+  stage.addEventListener('touchcancel', () => {
+    tracking = false;
+    decided = false;
+    isBrightness = false;
+  });
 },
-
+  
   _bindBackSwipe() {
   const modal = document.getElementById('readerModal');
   if (!modal || modal._backSwipeBound) return;
