@@ -20370,6 +20370,15 @@ _bindDiscMarkButton() {
   };
 },
 
+_reindexReaderImgs() {
+  const wrap = document.getElementById('readerPages');
+  if (!wrap) return;
+  const imgs = wrap.querySelectorAll('img');
+  imgs.forEach((img, i) => {
+    img.dataset.index = String(i);
+  });
+},
+
 _bindDiscMarkTap() {
   const wrap = document.getElementById('readerPages');
   if (!wrap || wrap._discMarkBound) return;
@@ -20378,20 +20387,22 @@ _bindDiscMarkTap() {
   wrap.addEventListener('pointerdown', async (e) => {
     if (!this._discMarkMode) return;
     if (this._discMarkProcessing) return;
+    if (e.button !== undefined && e.button !== 0) return;
     e.preventDefault();
     e.stopPropagation();
 
-    // Ищем img под пальцем
-    const imgs = wrap.querySelectorAll('img');
+    // Ищем img под пальцем и берём его реальную позицию в DOM
+    const imgs = Array.from(wrap.querySelectorAll('img'));
     let targetIdx = -1;
-    for (const img of imgs) {
+    for (let i = 0; i < imgs.length; i++) {
+      const img = imgs[i];
       const r = img.getBoundingClientRect();
       if (r.height > 0 && e.clientY >= r.top && e.clientY <= r.bottom) {
-        targetIdx = parseInt(img.dataset.index, 10);
+        targetIdx = i;
         break;
       }
     }
-    if (isNaN(targetIdx) || targetIdx < 0 || targetIdx >= this._pagesList.length) {
+    if (targetIdx < 0 || targetIdx >= this._pagesList.length) {
       toast('Не попал по фрейму, попробуй ещё', 'warn');
       return;
     }
@@ -20411,7 +20422,7 @@ _bindDiscMarkTap() {
     const btn = document.getElementById('readerDiscMarkBtn');
     if (btn) btn.classList.remove('active');
 
-    // Сохраняем позицию, чтобы после перезагрузки остаться на месте
+    // Запоминаем главу и позицию, чтобы вернуться туда же
     const bounds = this.getCurrentChapterBounds();
     const savedPage = bounds ? bounds.pageInChapter - 1 : 0;
     const savedVol = bounds ? bounds.volume : 1;
@@ -20778,7 +20789,7 @@ this._pagesList = pagesList.map(p => ({
   }
   wrap.appendChild(img);
 });
-        
+      this._reindexReaderImgs();
     
         const nextDiv = document.createElement('div');
         nextDiv.className = 'reader-next-chapter';
@@ -21600,15 +21611,19 @@ async checkAutoLoad() {
     const chapData = chapJson.data;
     if (!chapData || !chapData.pages || !chapData.pages.length) return;
 
+    // Фильтруем дисклеймеры в подгружаемой главе
+    const filterResult = await this._filterDisclaimers(chapData.pages);
+    const filteredPages = filterResult.pages;
+    if (!filteredPages.length) return;
+
     const wrap = document.getElementById('readerPages');
     const nextBlock = document.getElementById('readerNextBlock');
     if (!wrap) return;
 
     const startIdx = this._pagesList.length;
-    chapData.pages.forEach((page, i) => {
+    filteredPages.forEach((page, i) => {
       const img = document.createElement('img');
       img.alt = 'Страница ' + (startIdx + i + 1);
-      img.dataset.index = startIdx + i;
       img.style.opacity = '0';
       img.style.transition = 'opacity 0.3s ease';
       img.style.aspectRatio = '2 / 3';
@@ -21625,6 +21640,9 @@ async checkAutoLoad() {
       });
     });
 
+    // Пересчитать индексы у всех img
+    this._reindexReaderImgs();
+
     const currIdx = this._chaptersList.findIndex(c => c.id === chapData.id);
     this._nextChapter = (currIdx !== -1 && currIdx < this._chaptersList.length - 1)
       ? this._chaptersList[currIdx + 1] : null;
@@ -21634,7 +21652,7 @@ async checkAutoLoad() {
     this.updateNextBlock();
     this.updateReaderTitle();
 
-    for (let i = 0; i < Math.min(3, chapData.pages.length); i++) {
+    for (let i = 0; i < Math.min(3, filteredPages.length); i++) {
       try { await this.loadPage(startIdx + i); } catch(e){}
     }
   } catch(e) {
@@ -21643,7 +21661,6 @@ async checkAutoLoad() {
     this._autoLoading = false;
   }
 },
-
   
 async checkPrevLoad() {
   if (!this._prevChapter) return;
@@ -21653,11 +21670,8 @@ async checkPrevLoad() {
 
   const bounds = this.getCurrentChapterBounds();
   if (!bounds) return;
-
-  // Если первая страница ленты — уже из другой главы, значит предыдущая подгружена
   if (this._pagesList[0].chapterId !== bounds.chapterId) return;
 
-  // В обычном режиме — только когда близко к началу; в auto — тянем всегда
   if (this._settings.nextChapter !== 'auto') {
     const remaining = this._currentIndex - bounds.startIdx;
     if (remaining > 2) return;
@@ -21677,6 +21691,11 @@ async checkPrevLoad() {
     const chapData = chapJson.data;
     if (!chapData || !chapData.pages || !chapData.pages.length) return;
 
+    // Фильтруем дисклеймеры в подгружаемой главе
+    const filterResult = await this._filterDisclaimers(chapData.pages);
+    const filteredPages = filterResult.pages;
+    if (!filteredPages.length) return;
+
     const wrap = document.getElementById('readerPages');
     if (!wrap) return;
 
@@ -21685,7 +21704,7 @@ async checkPrevLoad() {
     const oldScroll = wrap.scrollTop;
     const relOffset = curImgBefore ? (oldScroll - curImgBefore.offsetTop) : 0;
 
-    const addedCount = chapData.pages.length;
+    const addedCount = filteredPages.length;
     const firstChild = wrap.firstChild;
 
     this._restoring = true;
@@ -21701,13 +21720,16 @@ async checkPrevLoad() {
       else wrap.appendChild(img);
 
       this._pagesList.unshift({
-        image: chapData.pages[i].image,
-        url: chapData.pages[i].url || '',
+        image: filteredPages[i].image,
+        url: filteredPages[i].url || '',
         chapterId: chapData.id,
         volume: chapData.volume,
         number: chapData.number
       });
     }
+
+    // КРИТИЧНО: пересчитать dataset.index у всех img, чтобы старые индексы были валидны
+    this._reindexReaderImgs();
 
     this._currentIndex += addedCount;
     this.updateReaderTitle();
