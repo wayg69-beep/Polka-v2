@@ -19692,16 +19692,12 @@ if (readerModal && readerModal.classList.contains('on')) {
   }
 })();
 
-// Динамический импорт, чтобы не ломать web-версию (на десктопе плагина нет)
-let ScreenBrightness = null;
-(async () => {
-  try {
-    const mod = await import('@capacitor-community/screen-brightness');
-    ScreenBrightness = mod.ScreenBrightness;
-  } catch (e) {
-    console.warn('[brightness] plugin not available (web?)');
-  }
-})();
+// Нативный плагин яркости — доступен через Capacitor.Plugins (как MS, StatusBar, InAppBrowser).
+// В web/десктоп его нет — останется null, все вызовы тихо пропустятся.
+const ScreenBrightness = window.Capacitor?.Plugins?.ScreenBrightness || null;
+if (!ScreenBrightness) {
+  console.warn('[brightness] plugin not available — проверь npx cap sync android');
+}
 
 const BRIGHTNESS_VALUE_KEY = 'polka_reader_brightness_value';
 const BRIGHTNESS_REMEMBER_KEY = 'polka_reader_brightness_remember';
