@@ -5783,6 +5783,13 @@ body.player-modal-open .player-modal {
 .bottom-nav-item[data-c="music"] > svg {
   transform: translateX(-1.5px);
 }
+
+#readerDiscMarkBtn.active {
+  color: #ff5c5c;
+}
+#readerDiscMarkBtn.active svg {
+  filter: drop-shadow(0 0 3px #ff5c5c) drop-shadow(0 0 8px #ff5c5c);
+  }
   
 </style>
 <div class="cloud-modal" id="cloudModal">
@@ -5901,6 +5908,15 @@ body.player-modal-open .player-modal {
   </button>
   <button class="reader-island-btn" id="readerLikeBtn" title="Метка" aria-label="Метка">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+  </button>
+  <button class="reader-island-btn" id="readerDiscMarkBtn" title="Пометить дисклеймер" aria-label="Пометить дисклеймер">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="12" r="8"/>
+    <line x1="12" y1="2" x2="12" y2="6"/>
+    <line x1="12" y1="18" x2="12" y2="22"/>
+    <line x1="2" y1="12" x2="6" y2="12"/>
+    <line x1="18" y1="12" x2="22" y2="12"/>
+  </svg>
   </button>
   <button class="reader-island-btn" id="readerMusicBtn" title="Музыка" aria-label="Музыка">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
@@ -19858,6 +19874,8 @@ if (el('readerNextChapterBtn')) el('readerNextChapterBtn').onclick = () => {
     if (b.dataset.v === 'auto') this.checkAutoLoad();
   };
   this._bindSideWidthSlider();
+  this._bindDiscMarkButton();
+this._bindDiscMarkTap();
   const rsZoom = el('rsDoubleTapZoom');
   if (rsZoom) rsZoom.onchange = () => {
     this._settings.doubleTapZoom = !!rsZoom.checked;
@@ -20038,6 +20056,25 @@ async _probeImageInfo(page) {
   }
   return null;
 },
+
+async _probeImageInfoCached(page) {
+  const path = String(page.url || page.image || '').replace(/^\/+/, '');
+  if (!path) return null;
+  let cache = {};
+  try { cache = JSON.parse(localStorage.getItem('polka_reader_img_cache') || '{}'); } catch(e){}
+  if (cache[path]) return cache[path];
+
+  const info = await this._probeImageInfo(page);
+  if (info) {
+    cache[path] = info;
+    const keys = Object.keys(cache);
+    if (keys.length > 500) {
+      keys.slice(0, keys.length - 500).forEach(k => delete cache[k]);
+    }
+    try { localStorage.setItem('polka_reader_img_cache', JSON.stringify(cache)); } catch(e){}
+  }
+  return info;
+},
   
 _getDiscHashes() {
   try {
@@ -20062,40 +20099,44 @@ _addDiscHash(hash) {
     console.warn('[reader] _addDiscHash FAILED:', e);
   }
 },
+
+_removeDiscHash(hash) {
+  if (!hash) return;
+  try {
+    const set = this._getDiscHashes();
+    set.delete(hash);
+    localStorage.setItem('polka_reader_disc_hashes', JSON.stringify(Array.from(set)));
+  } catch(e) {}
+},
   
 async _filterDisclaimers(pages) {
   if (!Array.isArray(pages) || !pages.length) return { pages, removedFromStart: 0 };
-
-  // Дисклеймер: короткий по форме ИЛИ короткий по абсолютной высоте
-  const isShortForm  = info => info && info.w > 0 && info.h > 0 && (info.h / info.w) < 2.5;
-  const isShortAbs   = info => info && info.h > 0 && info.h < 2500;
-  const isDisc = info => isShortForm(info) || isShortAbs(info);
-
   const knownHashes = this._getDiscHashes();
-  console.log('[reader] pool at start:', Array.from(knownHashes));
   const discard = new Set();
 
-  // Сканируем первые 5 и последние 5 страниц (без break)
-  const indicesToCheck = new Set();
-  for (let i = 0; i < Math.min(5, pages.length); i++) indicesToCheck.add(i);
-  for (let i = Math.max(0, pages.length - 5); i < pages.length; i++) indicesToCheck.add(i);
+  // 1. По известным хэшам — везде в главе (только если пул не пуст)
+  if (knownHashes.size > 0) {
+    for (let i = 0; i < pages.length; i++) {
+      const info = await this._probeImageInfoCached(pages[i]);
+      if (info && knownHashes.has(info.hash)) discard.add(i);
+    }
+  }
 
-  for (const i of indicesToCheck) {
-    const info = await this._probeImageInfo(pages[i]);
-    if (!info) {
-      console.log(`[reader] #${i + 1}: probe failed`);
-      continue;
-    }
-    const ratio = (info.h / info.w).toFixed(2);
-    const isKnown = knownHashes.has(info.hash);
-    const shortForm = isShortForm(info);
-    const shortAbs = isShortAbs(info);
-    const willDelete = isKnown || shortForm || shortAbs;
-    console.log(`[reader] #${i + 1}: ${info.w}×${info.h} ratio=${ratio} known=${isKnown} shortForm=${shortForm} shortAbs=${shortAbs} → ${willDelete ? 'DELETE' : 'keep'} hash=${info.hash}`);
-    if (willDelete) {
-      discard.add(i);
-      if (!isKnown) this._addDiscHash(info.hash);
-    }
+  // 2. По размеру — как в изначальной версии: максимум 2 с начала, 2 с конца, с break
+  const isDiscBySize = d => d && d.w > 0 && d.h > 0 && (d.h / d.w) < 2;
+
+  for (let i = 0; i < Math.min(2, pages.length); i++) {
+    if (discard.has(i)) continue;
+    const d = await this._probeImageInfoCached(pages[i]);
+    if (isDiscBySize(d)) discard.add(i);
+    else break;
+  }
+
+  for (let i = pages.length - 1; i >= Math.max(0, pages.length - 2); i--) {
+    if (i < 0 || discard.has(i)) continue;
+    const d = await this._probeImageInfoCached(pages[i]);
+    if (isDiscBySize(d)) discard.add(i);
+    else break;
   }
 
   if (!discard.size) return { pages, removedFromStart: 0 };
@@ -20108,8 +20149,7 @@ async _filterDisclaimers(pages) {
 
   const filtered = pages.filter((_, i) => !discard.has(i));
   console.log('[reader] disclaimers filtered:', discard.size,
-    '| known at start:', knownHashes.size,
-    '| pool now:', this._getDiscHashes().size,
+    '| pool:', knownHashes.size,
     '| before:', pages.length, '| after:', filtered.length);
   return { pages: filtered, removedFromStart };
 },
@@ -20315,6 +20355,79 @@ _bindSideWidthSlider() {
     const v = parseFloat(slider.value);
     this._saveSideVw(v);
   });
+},
+
+_bindDiscMarkButton() {
+  const btn = document.getElementById('readerDiscMarkBtn');
+  if (!btn || btn._bound) return;
+  btn._bound = true;
+  btn.onclick = () => {
+    this._discMarkMode = !this._discMarkMode;
+    btn.classList.toggle('active', this._discMarkMode);
+    if (this._discMarkMode) {
+      toast('Ткни на фрейм, чтобы пометить как дисклеймер', 'warn');
+    }
+  };
+},
+
+_bindDiscMarkTap() {
+  const wrap = document.getElementById('readerPages');
+  if (!wrap || wrap._discMarkBound) return;
+  wrap._discMarkBound = true;
+
+  wrap.addEventListener('pointerdown', async (e) => {
+    if (!this._discMarkMode) return;
+    if (this._discMarkProcessing) return;
+    e.preventDefault();
+    e.stopPropagation();
+
+    // Ищем img под пальцем
+    const imgs = wrap.querySelectorAll('img');
+    let targetIdx = -1;
+    for (const img of imgs) {
+      const r = img.getBoundingClientRect();
+      if (r.height > 0 && e.clientY >= r.top && e.clientY <= r.bottom) {
+        targetIdx = parseInt(img.dataset.index, 10);
+        break;
+      }
+    }
+    if (isNaN(targetIdx) || targetIdx < 0 || targetIdx >= this._pagesList.length) {
+      toast('Не попал по фрейму, попробуй ещё', 'warn');
+      return;
+    }
+
+    this._discMarkProcessing = true;
+    const page = this._pagesList[targetIdx];
+    toast('Запоминаю...', 'success');
+    const info = await this._probeImageInfo(page);
+    this._discMarkProcessing = false;
+    if (!info) {
+      toast('Не удалось скачать фрейм', 'error');
+      return;
+    }
+
+    this._addDiscHash(info.hash);
+    this._discMarkMode = false;
+    const btn = document.getElementById('readerDiscMarkBtn');
+    if (btn) btn.classList.remove('active');
+
+    // Сохраняем позицию, чтобы после перезагрузки остаться на месте
+    const bounds = this.getCurrentChapterBounds();
+    const savedPage = bounds ? bounds.pageInChapter - 1 : 0;
+    const savedVol = bounds ? bounds.volume : 1;
+    const savedNum = bounds ? bounds.number : 1;
+    const savedChapId = bounds ? bounds.chapterId : null;
+
+    toast('Дисклеймер запомнен', 'success', 'Отменить', () => {
+      this._removeDiscHash(info.hash);
+      if (savedChapId) this.loadChapter(savedVol, savedNum, savedChapId, { page: savedPage, offset: 0 });
+      toast('Отменено', 'warn');
+    });
+
+    if (savedChapId) {
+      this.loadChapter(savedVol, savedNum, savedChapId, { page: savedPage, offset: 0 });
+    }
+  }, { capture: true });
 },
   
 _bindBrightnessSwipe() {
@@ -20580,15 +20693,39 @@ this._blobUrls = {};
 // Автостатус: с 4-й главы «в планах» → «в процессе»
 this._autoAdvanceStatusIfNeeded(number);
     
-        if (!pagesList || !pagesList.length) {
+if (!pagesList || !pagesList.length) {
   toast('В главе нет страниц', 'warn');
   return;
+}
+
+// Показать читалку и оверлей загрузки СРАЗУ, до фильтрации —
+// иначе пока фильтр скачивает 2-4 фрейма, висит пустой экран
+const _rme0 = document.getElementById('readerModal');
+if (_rme0) {
+  _rme0.classList.add('on');
+  _rme0.classList.remove('ui-hidden');
+  void _rme0.offsetWidth;
+}
+document.body.classList.add('modal-open');
+{
+  const _stg0 = document.getElementById('readerStage');
+  if (_stg0 && !document.getElementById('readerLoadingOverlay')) {
+    const _ov0 = document.createElement('div');
+    _ov0.id = 'readerLoadingOverlay';
+    _ov0.className = 'reader-loading-overlay';
+    _ov0.innerHTML = '<div class="spinner"></div><div>Загрузка...</div>';
+    _stg0.appendChild(_ov0);
+  }
 }
 
 // Вычищаем дисклеймеры (короткие фреймы в начале/конце главы)
 const filterResult = await this._filterDisclaimers(pagesList);
 pagesList = filterResult.pages;
 if (!pagesList.length) {
+  if (_rme0) _rme0.classList.remove('on');
+  document.body.classList.remove('modal-open');
+  const _ovx = document.getElementById('readerLoadingOverlay');
+  if (_ovx) _ovx.remove();
   toast('В главе только дисклеймеры', 'warn');
   return;
 }
@@ -20713,10 +20850,20 @@ this._updateMusicBtnState();
           }
         })();
     
-      } finally {
-        this._opening = false;
-      }
-    },
+        } catch (outerErr) {
+    // Если что-то упало до создания wrap-логики — убрать оверлей и читалку,
+    // чтобы не висел чёрный экран со спиннером
+    console.error('[Reader open] outer error:', outerErr);
+    const _ovE = document.getElementById('readerLoadingOverlay');
+    if (_ovE) _ovE.remove();
+    const _rmE = document.getElementById('readerModal');
+    if (_rmE) _rmE.classList.remove('on');
+    document.body.classList.remove('modal-open');
+    toast('Ошибка загрузки главы', 'error');
+  } finally {
+    this._opening = false;
+  }
+},
   
   restoreScroll(offset) {
     const wrap = document.getElementById('readerPages');
@@ -21602,7 +21749,7 @@ async checkPrevLoad() {
   }
 },
   
-async loadChapter(volume, number, chapterId) {
+async loadChapter(volume, number, chapterId, progress) {
   toast('Загружаю главу...', 'success');
   const token = localStorage.getItem('slashlib_token');
   try {
@@ -21617,19 +21764,17 @@ async loadChapter(volume, number, chapterId) {
     const chapData = chapJson.data;
 
     if (chapData && chapData.pages && chapData.pages.length) {
-      // Берём базовое название из поля, а не из DOM (в DOM уже с "Том X · Глава Y")
       const baseTitle = (this._baseTitle || '').trim();
       const title = baseTitle + ` - Том ${chapData.volume} Глава ${chapData.number}`;
-  // Открываем заново с нуля — progress = null
-        this.open(this._fullSlug, chapData.id, chapData.volume, chapData.number,
-          chapData.pages, title, null, this._chaptersList, this._itemId);
-      } else {
-        toast('Не удалось загрузить главу', 'warn');
-      }
-    } catch(e) {
-      toast('Ошибка загрузки главы', 'error');
+      this.open(this._fullSlug, chapData.id, chapData.volume, chapData.number,
+        chapData.pages, title, progress || null, this._chaptersList, this._itemId);
+    } else {
+      toast('Не удалось загрузить главу', 'warn');
     }
+  } catch(e) {
+    toast('Ошибка загрузки главы', 'error');
   }
+},
 };          
   /* Читалка: инициализация на старте приложения, но отложенно —
    чтобы не мешать первому рендеру Полки и не дёргать интерфейс.
