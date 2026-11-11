@@ -20154,22 +20154,20 @@ async _filterDisclaimers(pages) {
   return { pages: filtered, removedFromStart };
 },
   
-  _autoAdvanceStatusIfNeeded(chapterNumber) {
+_autoAdvanceStatusIfNeeded(chapterNumber) {
   if (!this._itemId) return;
   const num = parseInt(chapterNumber, 10);
-  if (!isFinite(num) || num < 4) return;
+  if (num !== 4) return;  // ← триггер только на ровно 4-й главе
   const it = items.find(x => x.id === this._itemId);
   if (!it) return;
-  // Меняем только «в планах» — остальные статусы не трогаем
   if (it.status !== 'want') return;
   it.status = 'in_progress';
   it.updatedAt = Date.now();
   save();
   toast('Статус: В процессе', 'success');
-  // Сетка перерисуется, точка статуса на карточке обновится
   if (typeof render === 'function') render();
 },
-
+  
   _checkEndOfManga() {
   if (!this._itemId) return;
   const it = items.find(x => x.id === this._itemId);
