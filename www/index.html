@@ -20055,45 +20055,46 @@ _addDiscHash(hash) {
     const set = this._getDiscHashes();
     if (set.has(hash)) return;
     set.add(hash);
-    // Ограничиваем пул — 300 хэшей максимум, чтобы не раздувать localStorage
     const arr = Array.from(set).slice(-300);
     localStorage.setItem('polka_reader_disc_hashes', JSON.stringify(arr));
-  } catch(e) {}
+    console.log('[reader] hash added:', hash, '| pool size:', arr.length);
+  } catch(e) {
+    console.warn('[reader] _addDiscHash FAILED:', e);
+  }
 },
-
+  
 async _filterDisclaimers(pages) {
   if (!Array.isArray(pages) || !pages.length) return { pages, removedFromStart: 0 };
 
-  const isDiscBySize = info => info && info.w > 0 && info.h > 0 && (info.h / info.w) < 2;
+  // Дисклеймер: короткий по форме ИЛИ короткий по абсолютной высоте
+  const isShortForm  = info => info && info.w > 0 && info.h > 0 && (info.h / info.w) < 2.5;
+  const isShortAbs   = info => info && info.h > 0 && info.h < 2500;
+  const isDisc = info => isShortForm(info) || isShortAbs(info);
+
   const knownHashes = this._getDiscHashes();
+  console.log('[reader] pool at start:', Array.from(knownHashes));
   const discard = new Set();
 
-  // Проверяем до 3 страниц в начале. Стоп на первой не-дисклеймерной.
-  for (let i = 0; i < Math.min(3, pages.length); i++) {
-    const info = await this._probeImageInfo(pages[i]);
-    if (!info) break;
-    const isKnown = knownHashes.has(info.hash);
-    const isShort = isDiscBySize(info);
-    if (isKnown || isShort) {
-      discard.add(i);
-      if (!isKnown) this._addDiscHash(info.hash);
-    } else {
-      break;
-    }
-  }
+  // Сканируем первые 5 и последние 5 страниц (без break)
+  const indicesToCheck = new Set();
+  for (let i = 0; i < Math.min(5, pages.length); i++) indicesToCheck.add(i);
+  for (let i = Math.max(0, pages.length - 5); i < pages.length; i++) indicesToCheck.add(i);
 
-  // Проверяем до 3 страниц в конце
-  for (let i = pages.length - 1; i >= Math.max(0, pages.length - 3); i--) {
-    if (discard.has(i)) continue;
+  for (const i of indicesToCheck) {
     const info = await this._probeImageInfo(pages[i]);
-    if (!info) break;
+    if (!info) {
+      console.log(`[reader] #${i + 1}: probe failed`);
+      continue;
+    }
+    const ratio = (info.h / info.w).toFixed(2);
     const isKnown = knownHashes.has(info.hash);
-    const isShort = isDiscBySize(info);
-    if (isKnown || isShort) {
+    const shortForm = isShortForm(info);
+    const shortAbs = isShortAbs(info);
+    const willDelete = isKnown || shortForm || shortAbs;
+    console.log(`[reader] #${i + 1}: ${info.w}×${info.h} ratio=${ratio} known=${isKnown} shortForm=${shortForm} shortAbs=${shortAbs} → ${willDelete ? 'DELETE' : 'keep'} hash=${info.hash}`);
+    if (willDelete) {
       discard.add(i);
       if (!isKnown) this._addDiscHash(info.hash);
-    } else {
-      break;
     }
   }
 
@@ -20107,7 +20108,8 @@ async _filterDisclaimers(pages) {
 
   const filtered = pages.filter((_, i) => !discard.has(i));
   console.log('[reader] disclaimers filtered:', discard.size,
-    '| known hashes:', knownHashes.size,
+    '| known at start:', knownHashes.size,
+    '| pool now:', this._getDiscHashes().size,
     '| before:', pages.length, '| after:', filtered.length);
   return { pages: filtered, removedFromStart };
 },
