@@ -20259,15 +20259,22 @@ _closeChaptersList() {
 },
   
   async open(fullSlug, chapterId, volume, number, pagesList, title, progress, chaptersList, itemId) {
-      if (this._opening) return;
-      this._opening = true;
-    
-      try {
-        this._fullSlug = fullSlug;
-        this._shortSlug = fullSlug.split('--').pop();
-        this._chaptersList = chaptersList || [];
-        this._itemId = itemId || this._itemId || null;
-        this._blobUrls = {};
+    if (this._opening) return;
+    this._opening = true;
+  
+    try {
+      // Новая сессия — все loadPage из прошлого открытия (если ещё работают)
+      // увидят смену _sessionId и не запишут мусор в _blobUrls
+      this._sessionId = (this._sessionId || 0) + 1;
+      this._prevLoading = false;
+      this._autoLoading = false;
+      this._restoring = false;
+
+      this._fullSlug = fullSlug;
+      this._shortSlug = fullSlug.split('--').pop();
+      this._chaptersList = chaptersList || [];
+      this._itemId = itemId || this._itemId || null;
+      this._blobUrls = {};
     
         if (!pagesList || !pagesList.length) {
           toast('В главе нет страниц', 'warn');
@@ -20441,6 +20448,14 @@ this._updateMusicBtnState();
     this._prevChapter = null;
     this._chaptersList = [];
     this._currentIndex = 0;
+    // Сброс всех флагов «в процессе» — иначе после повторного открытия
+    // checkPrevLoad/checkAutoLoad навсегда заблокированы
+    this._prevLoading = false;
+    this._autoLoading = false;
+    this._restoring = false;
+    this._opening = false;
+    // Новая сессия — все висящие промисы loadPage станут stale
+    this._sessionId = (this._sessionId || 0) + 1;
     this.toggleSettings(false);
   
     const overlay = document.getElementById('readerLoadingOverlay');
@@ -20889,15 +20904,19 @@ updateChapterNav() {
   },
 
     async loadPage(idx) {
-      if (this._blobUrls[idx]) return;
-      const wrap = document.getElementById('readerPages');
-      if (!wrap) return;
-      const imgs = wrap.querySelectorAll('img');
-      const img = imgs[idx];
-      if (!img) return;
-    
-      const pageInfo = this._pagesList[idx];
-      if (!pageInfo) return;
+  if (this._blobUrls[idx]) return;
+  const wrap = document.getElementById('readerPages');
+  if (!wrap) return;
+  const imgs = wrap.querySelectorAll('img');
+  const img = imgs[idx];
+  if (!img) return;
+
+  const pageInfo = this._pagesList[idx];
+  if (!pageInfo) return;
+
+  // Запоминаем сессию — если она сменится, пока грузим из сети,
+  // значит пользователь закрыл/переоткрыл читалку
+  const mySession = this._sessionId;
     
       // Приоритет — канонический path из API (pageInfo.url):
       //   //manga/{slug}/chapters/{vol}-{num}/{image}
@@ -20939,10 +20958,12 @@ updateChapterNav() {
       let blob = null;
     
       for (const base of domains) {
-        const tryUrl = path.startsWith('http') ? path : `${base}/${path}`;
-        try {
-          const r = await CHttp.get({ url: tryUrl, headers, responseType: 'arraybuffer' });
-          if (r.status === 200 && r.data) {
+  if (this._sessionId !== mySession) return;
+  const tryUrl = path.startsWith('http') ? path : `${base}/${path}`;
+  try {
+    const r = await CHttp.get({ url: tryUrl, headers, responseType: 'arraybuffer' });
+    if (this._sessionId !== mySession) return;
+    if (r.status === 200 && r.data) {
             let b64 = r.data;
             if (b64.startsWith('data:image')) b64 = b64.split(',')[1];
             const bin = atob(b64);
@@ -20965,18 +20986,21 @@ updateChapterNav() {
         return;
       }
     
-      const blobUrl = URL.createObjectURL(blob);
-      this._blobUrls[idx] = blobUrl;
-    
-      const currentImgs = wrap.querySelectorAll('img');
-      const currentImg = currentImgs[idx];
-      if (currentImg) {
+        const blobUrl = URL.createObjectURL(blob);
+
+  const currentImgs = wrap.querySelectorAll('img');
+  const currentImg = currentImgs[idx];
+  if (!currentImg) {
+    // Читалку закрыли/переоткрыли, пока страница грузилась — этот URL никому не нужен
+    URL.revokeObjectURL(blobUrl);
+    return;
+  }
+  this._blobUrls[idx] = blobUrl;
   currentImg.src = blobUrl;
   currentImg.style.opacity = '1';
   currentImg.style.aspectRatio = '';
   currentImg.style.width = '';
-      }
-    },
+},
   
   bindGestures() {
     const wrap = document.getElementById('readerPages');
