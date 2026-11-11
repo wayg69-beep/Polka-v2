@@ -20852,9 +20852,6 @@ this._updateMusicBtnState();
             this.loadPagesBatch(afterIdx, 4);
     
             setTimeout(() => { this._restoring = false; }, 200);
-            setTimeout(() => { this.checkPrevLoad(); }, 450);
-            setTimeout(() => { this.checkPrevLoad(); }, 900);
-            setTimeout(() => { this.checkPrevLoad(); }, 1600);
     
           } catch(e) {
             console.error('[Reader open]', e);
@@ -21677,10 +21674,11 @@ async checkPrevLoad() {
   if (!bounds) return;
   if (this._pagesList[0].chapterId !== bounds.chapterId) return;
 
-  if (this._settings.nextChapter !== 'auto') {
-    const remaining = this._currentIndex - bounds.startIdx;
-    if (remaining > 2) return;
-  }
+  // Тянем предыдущую главу только когда близко к началу текущей —
+// в auto тоже. Иначе при открытии на середине глава-предыдущая
+// вставится в начало и пользователя отбросит назад
+const remaining = this._currentIndex - bounds.startIdx;
+if (remaining > 2) return;
 
   this._prevLoading = true;
   try {
