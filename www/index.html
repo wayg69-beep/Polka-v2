@@ -21343,7 +21343,8 @@ updateCounter() {
   }
 
     this._updateLikeButtonState();
-  this._checkEndOfManga();
+this._autoAdvanceStatusIfNeeded(bounds.number);
+this._checkEndOfManga();
 
   clearTimeout(this._saveTimer);
   this._saveTimer = setTimeout(() => this.saveProgress(), 1000);
