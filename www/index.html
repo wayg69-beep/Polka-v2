@@ -19997,6 +19997,45 @@ updateReaderTitle() {
     } catch(e) { console.warn('[FullscreenBridge]', e); }
   },  
 
+  _autoAdvanceStatusIfNeeded(chapterNumber) {
+  if (!this._itemId) return;
+  const num = parseInt(chapterNumber, 10);
+  if (!isFinite(num) || num < 4) return;
+  const it = items.find(x => x.id === this._itemId);
+  if (!it) return;
+  // Меняем только «в планах» — остальные статусы не трогаем
+  if (it.status !== 'want') return;
+  it.status = 'in_progress';
+  it.updatedAt = Date.now();
+  save();
+  toast('Статус: В процессе', 'success');
+  // Сетка перерисуется, точка статуса на карточке обновится
+  if (typeof render === 'function') render();
+},
+
+  _checkEndOfManga() {
+  if (!this._itemId) return;
+  const it = items.find(x => x.id === this._itemId);
+  if (!it) return;
+  // Уже прочитано — не спамим тостом при каждом возврате на последнюю страницу
+  if (it.status === 'done') return;
+  // Брошено — не трогаем, пользователь сознательно отказался
+  if (it.status === 'dropped') return;
+
+  const bounds = this.getCurrentChapterBounds();
+  if (!bounds) return;
+  // Не на последней странице главы — рано
+  if (this._currentIndex !== bounds.endIdx) return;
+  // Есть следующая глава — это не конец манги
+  if (this._nextChapter) return;
+
+  it.status = 'done';
+  it.updatedAt = Date.now();
+  save();
+  toast('Статус: Прочитано', 'success');
+  if (typeof render === 'function') render();
+},
+
   _bindProgressBar() {
   const track = document.getElementById('readerProgressTrack');
   if (!track) return;
@@ -20086,11 +20125,54 @@ _getSideVw() {
 
 _applySideVw(vw) {
   const clamped = Math.max(8, Math.min(36, vw));
-  document.documentElement.style.setProperty('--reader-side-vw', clamped + 'vw');
+  // Слайдер показывает ширину ФРЕЙМА. В CSS уходит ширина ПОЛЕЙ = 44 - слайдер.
+  // 22 слайдер → 22 поля (центр), 36 слайдер → 8 полей (фрейм широкий), 8 → 36 полей (фрейм узкий).
+  const padVw = 44 - clamped;
+
+  const wrap = document.getElementById('readerPages');
+
+  // 1. Запомнить якорь: индекс фрейма + доля внутри него (0..1)
+  let anchorIdx = this._currentIndex;
+  let anchorFrac = 0;
+  let imgs = wrap ? wrap.querySelectorAll('img') : [];
+
+  if (wrap && imgs.length) {
+    const curImg = imgs[anchorIdx];
+    if (curImg && curImg.offsetHeight > 0) {
+      anchorFrac = (wrap.scrollTop - curImg.offsetTop) / curImg.offsetHeight;
+      anchorFrac = Math.max(0, Math.min(1, anchorFrac));
+    } else {
+      for (let i = 0; i < imgs.length; i++) {
+        const im = imgs[i];
+        if (!im.offsetHeight) continue;
+        if (im.offsetTop + im.offsetHeight > wrap.scrollTop + 1) {
+          anchorIdx = i;
+          anchorFrac = Math.max(0, Math.min(1,
+            (wrap.scrollTop - im.offsetTop) / im.offsetHeight));
+          break;
+        }
+      }
+    }
+  }
+
+  // 2. Применить новую ширину полей
+  document.documentElement.style.setProperty('--reader-side-vw', padVw + 'vw');
+
+  // 3. Слайдер и лейбл показывают то, что видит пользователь — ширину фрейма
   const slider = document.getElementById('rsPageWidth');
   const label = document.getElementById('rsPageWidthValue');
   if (slider) slider.value = String(clamped);
   if (label) label.textContent = Math.round(clamped) + '%';
+
+  // 4. Форсировать reflow и восстановить позицию
+  if (wrap && imgs.length) {
+    void wrap.offsetHeight;
+    const newImgs = wrap.querySelectorAll('img');
+    const newImg = newImgs[anchorIdx];
+    if (newImg && newImg.offsetHeight > 0) {
+      wrap.scrollTop = newImg.offsetTop + anchorFrac * newImg.offsetHeight;
+    }
+  }
 },
 
 _saveSideVw(vw) {
@@ -20373,10 +20455,13 @@ _closeChaptersList() {
       this._restoring = false;
 
       this._fullSlug = fullSlug;
-      this._shortSlug = fullSlug.split('--').pop();
-      this._chaptersList = chaptersList || [];
-      this._itemId = itemId || this._itemId || null;
-      this._blobUrls = {};
+this._shortSlug = fullSlug.split('--').pop();
+this._chaptersList = chaptersList || [];
+this._itemId = itemId || this._itemId || null;
+this._blobUrls = {};
+
+// Автостатус: с 4-й главы «в планах» → «в процессе»
+this._autoAdvanceStatusIfNeeded(number);
     
         if (!pagesList || !pagesList.length) {
           toast('В главе нет страниц', 'warn');
@@ -20964,7 +21049,8 @@ updateCounter() {
     }
   }
 
-  this._updateLikeButtonState();
+    this._updateLikeButtonState();
+  this._checkEndOfManga();
 
   clearTimeout(this._saveTimer);
   this._saveTimer = setTimeout(() => this.saveProgress(), 1000);
