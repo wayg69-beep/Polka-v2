@@ -3663,7 +3663,7 @@ body.reader-open-bg {
     0 8px 32px rgba(0,0,0,.5),
     inset 0 1px 0 rgba(255,255,255,0.06);
   /* safe-area сверху + 3мм (~14px) — контент ниже статус-бара, фон под ним */
-  padding: calc(env(safe-area-inset-top, 0px) + 14px) 16px 26px;
+  padding: calc(env(safe-area-inset-top, 0px) + 0px) 16px 26px;
   pointer-events: auto;
   overflow: visible;
 }
@@ -3710,11 +3710,11 @@ body.reader-open-bg {
 .reader-head-title {
   position: absolute;
   left: 50%;
-  top: 50%;
+  top: 55%;
   transform: translate(-50%, -50%);
   font-family: 'Great Vibes', cursive;
   font-size: 30px;
-  font-weight: 500;
+  font-weight: 600;
   color: var(--fg);
   /* line-height под каллиграфию — завитушки сверху/снизу внутри line-box */
   line-height: 1.4;
