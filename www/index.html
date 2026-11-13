@@ -3642,7 +3642,7 @@ body.reader-open-bg {
   position: absolute;
   top: 0; left: 0; right: 0;
   z-index: 10;
-  padding-top: calc(env(safe-area-inset-top, 0px) + 8px);
+  /* padding-top убран — стекляшка идёт от самого верха, статус-бар учитывается внутри бара */
   pointer-events: none;
   transition: transform 0.3s ease, opacity 0.3s ease;
 }
@@ -3662,9 +3662,10 @@ body.reader-open-bg {
   box-shadow:
     0 8px 32px rgba(0,0,0,.5),
     inset 0 1px 0 rgba(255,255,255,0.06);
-  padding: 10px 16px 26px;
+  /* safe-area сверху + 3мм (~14px) — контент ниже статус-бара, фон под ним */
+  padding: calc(env(safe-area-inset-top, 0px) + 14px) 16px 26px;
   pointer-events: auto;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .reader-head-inner {
@@ -3673,7 +3674,7 @@ body.reader-open-bg {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  min-height: 44px;
+  min-height: 48px;
 }
 
 .reader-head-info {
@@ -3712,17 +3713,18 @@ body.reader-open-bg {
   top: 50%;
   transform: translate(-50%, -50%);
   font-family: 'Great Vibes', cursive;
-  font-size: 26px;
-  font-weight: 400;
+  font-size: 30px;
+  font-weight: 500;
   color: var(--fg);
-  line-height: 1;
+  /* line-height под каллиграфию — завитушки сверху/снизу внутри line-box */
+  line-height: 1.4;
   text-align: center;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  overflow: visible;
   max-width: calc(100% - 200px);
   pointer-events: none;
   letter-spacing: 0;
+  padding: 0;
 }
 
 .reader-close-btn {
