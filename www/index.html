@@ -4516,17 +4516,17 @@ body.reader-open-bg {
   transform: none;
   width: 100%;
   max-width: calc(100% - 88px);
-  margin: 0 auto;
-  padding: 0;
+  margin: 8px auto 0;
+  padding: 4px 6px 4px;
   text-align: center;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   font-size: 22px;
-  line-height: 1.2;
+  line-height: 1.5;
   display: block;
   box-sizing: border-box;
-}
+           }
   
 </style>
 </head>
@@ -20136,6 +20136,19 @@ if (cModal) cModal.onclick = (e) => {
 
   this._bindProgressBar();
 this._bindBackSwipe();
+
+// Перестройка заголовка при resize и повороте экрана
+if (!this._resizeBound) {
+  this._resizeBound = true;
+  let _rt = null;
+  const _refit = () => {
+    clearTimeout(_rt);
+    _rt = setTimeout(() => this._fitReaderTitle(), 120);
+  };
+  window.addEventListener('resize', _refit);
+  window.addEventListener('orientationchange', _refit);
+}
+
 this.bindGestures();
 this.updateSettingsUI();
 this._updateIslandNavVisibility();
@@ -21113,8 +21126,12 @@ this._updateMusicBtnState();
             this.restoreScroll(progress && typeof progress.offset === 'number' ? progress.offset : 0);
     
             wrap.style.visibility = 'visible';
-            const ov = document.getElementById('readerLoadingOverlay');
-            if (ov) ov.remove();
+const ov = document.getElementById('readerLoadingOverlay');
+if (ov) ov.remove();
+
+// Форсированный фит: после того как читалка видна и layout пересчитан.
+// Двойной rAF гарантирует, что clientWidth у title актуален.
+requestAnimationFrame(() => requestAnimationFrame(() => this._fitReaderTitle()));
     
             this.loadPagesBatch(afterIdx, 4);
     
