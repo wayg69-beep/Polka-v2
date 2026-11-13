@@ -4477,6 +4477,56 @@ body.reader-open-bg {
   -webkit-box-orient: vertical;
   box-sizing: border-box;
 }
+  /* ===== Узкий режим (мобильный) — info сверху, название под ним ===== */
+.reader-head-bar.narrow {
+  padding-bottom: 26px;
+}
+.reader-head-bar.narrow .reader-head-inner {
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 6px;
+  min-height: auto;
+}
+.reader-head-bar.narrow .reader-head-info {
+  order: 1;
+  width: 100%;
+  max-width: 100%;
+  flex-direction: row;
+  justify-content: center;
+  padding: 0 44px;
+  box-sizing: border-box;
+}
+.reader-head-bar.narrow .reader-head-info .reader-head-vol,
+.reader-head-bar.narrow .reader-head-info .reader-head-pos {
+  font-size: 13px;
+}
+.reader-head-bar.narrow .reader-close-btn {
+  position: absolute;
+  right: 8px;
+  top: 6px;
+  margin: 0;
+  transform: none;
+}
+.reader-head-bar.narrow .reader-head-title {
+  order: 2;
+  position: static;
+  left: auto;
+  top: auto;
+  transform: none;
+  width: 100%;
+  max-width: calc(100% - 88px);
+  margin: 0 auto;
+  padding: 0;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 22px;
+  line-height: 1.2;
+  display: block;
+  box-sizing: border-box;
+}
   
 </style>
 </head>
@@ -5569,12 +5619,21 @@ body.player-modal-open .player-modal {
    или оставь просто: top: 50%; left: 50%; transform: translate(-50%, -50%); */
 
 @media (max-width: 700px) {
-  /* Мини-плеер висит НАД нижней навигацией, а не поверх неё */
   .mini-player {
     bottom: calc(62px + env(safe-area-inset-bottom, 0px));
     border-bottom: 1px solid rgba(255,255,255,0.08);
+    display: none;
+    transform: none;
+  }
+  body.player-active .mini-player {
+    display: flex;
+    transform: none;
+  }
+  body.player-modal-open .mini-player {
+    display: none;
   }
 }
+  
 
   /* =========================================
    LANDSCAPE НА МАЛЕНЬКИХ ЭКРАНАХ (телефон)
@@ -20179,31 +20238,34 @@ updateReaderTitle() {
     } catch(e) { console.warn('[FullscreenBridge]', e); }
   },  
 
-  _fitReaderTitle() {
+_fitReaderTitle() {
   if (this._fitRafPending) return;
   this._fitRafPending = true;
   requestAnimationFrame(() => {
     this._fitRafPending = false;
     const bar = document.querySelector('.reader-head-bar');
     const el = document.getElementById('readerTitle');
+    if (!bar || !el) return;
+
+    // Сброс всех режимов
+    bar.classList.remove('wide', 'narrow');
+    el.style.cssText = '';
+    el.style.fontSize = '30px';
+
+    // Узкий экран (< 600px) — всегда narrow. Без проверки влезания
+    if (window.innerWidth < 600) {
+      el.style.fontSize = '';
+      el.style.maxWidth = '';
+      bar.classList.add('narrow');
+      return;
+    }
+
+    // Широкий — обычная раскладка, проверяем влезает ли в одну строку
     const inner = document.querySelector('.reader-head-inner');
     const info = document.querySelector('.reader-head-info');
     const close = document.querySelector('.reader-close-btn');
-    if (!bar || !el || !inner || !info || !close) return;
+    if (!inner || !info || !close) return;
 
-    // 1. Сбросить в обычный режим
-    bar.classList.remove('wide');
-    el.style.fontSize = '30px';
-    el.style.whiteSpace = 'nowrap';
-    el.style.display = '';
-    el.style.webkitBoxOrient = '';
-    el.style.webkitLineClamp = '';
-    el.style.overflow = '';
-    el.style.textOverflow = '';
-    el.style.marginTop = '';
-    el.style.padding = '';
-
-    // 2. Считаем max-width для обычного режима
     const innerW = inner.clientWidth;
     const infoW = info.offsetWidth;
     const closeW = close.offsetWidth;
@@ -20213,16 +20275,15 @@ updateReaderTitle() {
     if (maxW < 60) maxW = Math.max(60, innerW - 2 * (infoW + gap));
     el.style.maxWidth = maxW + 'px';
 
-    // 3. Проверяем влезает ли в одну строку
     if (el.scrollWidth <= el.clientWidth + 1) return;
 
-    // 4. Не влезает — переключаем в широкий режим
+    // Не влезает — wide (info колонка, название 2 строки)
+    el.style.fontSize = '';
+    el.style.maxWidth = '';
     bar.classList.add('wide');
-    el.style.maxWidth = '100%';
-    el.style.fontSize = '22px';
   });
 },
-
+  
 async _probeImageInfo(page) {
   const path = String(page.url || page.image || '').replace(/^\/+/, '');
   if (!path) return null;
