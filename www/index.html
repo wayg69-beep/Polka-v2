@@ -4479,14 +4479,14 @@ body.reader-open-bg {
 }
   /* ===== Узкий режим (мобильный) — info сверху, название под ним ===== */
 .reader-head-bar.narrow {
-  padding-bottom: 26px;
+  padding-bottom: 16px;
 }
 .reader-head-bar.narrow .reader-head-inner {
   flex-direction: column;
   align-items: center;
   justify-content: flex-start;
-  gap: 6px;
-  min-height: auto;
+  gap: 0;
+  min-height: 0;
 }
 .reader-head-bar.narrow .reader-head-info {
   order: 1;
@@ -4499,14 +4499,21 @@ body.reader-open-bg {
 }
 .reader-head-bar.narrow .reader-head-info .reader-head-vol,
 .reader-head-bar.narrow .reader-head-info .reader-head-pos {
-  font-size: 13px;
+  font-size: 12.5px;
+  line-height: 1.15;
 }
 .reader-head-bar.narrow .reader-close-btn {
   position: absolute;
   right: 8px;
-  top: 6px;
+  top: 4px;
   margin: 0;
   transform: none;
+  width: 32px;
+  height: 32px;
+}
+.reader-head-bar.narrow .reader-close-btn svg {
+  width: 20px;
+  height: 20px;
 }
 .reader-head-bar.narrow .reader-head-title {
   order: 2;
@@ -4516,17 +4523,17 @@ body.reader-open-bg {
   transform: none;
   width: 100%;
   max-width: calc(100% - 88px);
-  margin: 8px auto 0;
-  padding: 4px 6px 4px;
+  margin: 2px auto 0;
+  padding: 1px 6px 2px;
   text-align: center;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  font-size: 22px;
-  line-height: 1.5;
+  font-size: 20px;
+  line-height: 1.3;
   display: block;
   box-sizing: border-box;
-           }
+      }
   
 </style>
 </head>
