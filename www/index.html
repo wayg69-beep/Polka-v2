@@ -3644,7 +3644,6 @@ body.reader-open-bg {
   z-index: 10;
   /* padding-top убран — стекляшка идёт от самого верха, статус-бар учитывается внутри бара */
   pointer-events: none;
-  transition: transform 0.3s ease, opacity 0.3s ease;
 }
 .reader-modal.ui-hidden .reader-head {
   pointer-events: none;
@@ -3663,23 +3662,24 @@ body.reader-open-bg {
   padding: 16px 16px 16px;
   pointer-events: auto;
   overflow: visible;
+  transform: translateY(-100%);
   opacity: 0;
 }
 .reader-modal:not(.ui-hidden) .reader-head-bar {
-  animation: headBarShow 0.28s ease forwards;
+  animation: headBarShow 0.32s cubic-bezier(.2,.9,.3,1) forwards;
 }
 .reader-modal.ui-hidden .reader-head-bar {
   pointer-events: none;
-  animation: headBarHide 0.28s ease forwards;
+  animation: headBarHide 0.32s cubic-bezier(.2,.9,.3,1) forwards;
 }
 @keyframes headBarShow {
-  from { opacity: 0; }
-  to   { opacity: 1; }
+  from { transform: translateY(-100%); opacity: 0; }
+  to   { transform: translateY(0);     opacity: 1; }
 }
 @keyframes headBarHide {
-  from { opacity: 1; }
-  to   { opacity: 0; }
-  }
+  from { transform: translateY(0);     opacity: 1; }
+  to   { transform: translateY(-100%); opacity: 0; }
+       }
   
 .reader-head-inner {
   position: relative;
