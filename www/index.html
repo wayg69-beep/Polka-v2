@@ -4420,6 +4420,63 @@ body.reader-open-bg {
   font-variant-numeric: tabular-nums;
   }
 
+  /* ===== Широкий режим шапки (когда название не влезает) ===== */
+.reader-head-bar.wide {
+  padding-bottom: 30px;
+}
+.reader-head-bar.wide .reader-head-inner {
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0;
+  min-height: auto;
+}
+.reader-head-bar.wide .reader-head-info {
+  order: 1;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  max-width: calc(100% - 44px);
+  transform: none;
+}
+.reader-head-bar.wide .reader-head-vol {
+  font-size: 12px;
+}
+.reader-head-bar.wide .reader-head-pos {
+  font-size: 13px;
+}
+.reader-head-bar.wide .reader-head-pos::before {
+  content: '';
+  margin: 0;
+}
+.reader-head-bar.wide .reader-close-btn {
+  order: 2;
+  flex: 0 0 auto;
+  align-self: flex-start;
+  margin-top: -4px;
+}
+.reader-head-bar.wide .reader-head-title {
+  order: 3;
+  position: static;
+  left: auto;
+  top: auto;
+  transform: none;
+  flex: 0 0 100%;
+  width: 100%;
+  max-width: 100%;
+  text-align: center;
+  margin-top: 10px;
+  padding: 0 4px;
+  font-size: 22px;
+  line-height: 1.15;
+  white-space: normal;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  box-sizing: border-box;
+}
   
 </style>
 </head>
@@ -20127,33 +20184,42 @@ updateReaderTitle() {
   this._fitRafPending = true;
   requestAnimationFrame(() => {
     this._fitRafPending = false;
+    const bar = document.querySelector('.reader-head-bar');
     const el = document.getElementById('readerTitle');
     const inner = document.querySelector('.reader-head-inner');
     const info = document.querySelector('.reader-head-info');
     const close = document.querySelector('.reader-close-btn');
-    if (!el || !inner || !info || !close) return;
+    if (!bar || !el || !inner || !info || !close) return;
 
+    // 1. Сбросить в обычный режим
+    bar.classList.remove('wide');
+    el.style.fontSize = '30px';
+    el.style.whiteSpace = 'nowrap';
+    el.style.display = '';
+    el.style.webkitBoxOrient = '';
+    el.style.webkitLineClamp = '';
+    el.style.overflow = '';
+    el.style.textOverflow = '';
+    el.style.marginTop = '';
+    el.style.padding = '';
+
+    // 2. Считаем max-width для обычного режима
     const innerW = inner.clientWidth;
     const infoW = info.offsetWidth;
     const closeW = close.offsetWidth;
     const gap = 10;
-
-    // Title центрирован по центру inner через translate(-50%).
-    // Чтобы он не налезал на info (слева) и close (справа) —
-    // max-width должен быть = innerW - 2 * (max(infoW, closeW) + gap).
     const sideMargin = Math.max(infoW, closeW) + gap;
     let maxW = innerW - 2 * sideMargin;
     if (maxW < 60) maxW = Math.max(60, innerW - 2 * (infoW + gap));
     el.style.maxWidth = maxW + 'px';
 
-    // Подбираем размер: 30 → 29 → ... → 16
-    const maxSize = 30;
-    const minSize = 16;
-    for (let size = maxSize; size >= minSize; size--) {
-      el.style.fontSize = size + 'px';
-      if (el.scrollWidth <= el.clientWidth + 1) return;
-    }
-    // На минимуме — CSS-ellipsis обрежет остаток
+    // 3. Проверяем влезает ли в одну строку
+    if (el.scrollWidth <= el.clientWidth + 1) return;
+
+    // 4. Не влезает — переключаем в широкий режим
+    bar.classList.add('wide');
+    el.style.maxWidth = '100%';
+    el.style.fontSize = '22px';
   });
 },
 
