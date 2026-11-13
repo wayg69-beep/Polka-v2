@@ -20398,11 +20398,20 @@ _removeDiscHash(hash) {
   } catch(e) {}
 },
   
-async _filterDisclaimers(pages, depth) {
+async _filterDisclaimers(pages, depth, silent) {
   depth = depth || 0;
+  if (!silent) silent = false;
   if (!Array.isArray(pages) || !pages.length) {
     return { pages, removedFromStart: 0, allFiltered: false, warnings: [] };
   }
+
+  // Единый хелпер для тоста — один раз за сессию читалки
+  const showWarnOnce = () => {
+    if (silent) return;
+    if (this._discToastShown) return;
+    this._discToastShown = true;
+    toast('Глава может содержать дисклеймеры', 'warn');
+  };
 
   const isDiscBySize = d => d && d.w > 0 && d.h > 0 && (d.h / d.w) < 2;
   const knownHashes = this._getDiscHashes();
@@ -20431,7 +20440,6 @@ async _filterDisclaimers(pages, depth) {
     else break;
   }
 
-  // Ничего не удалили — возвращаем как есть
   if (!discard.size) {
     return { pages, removedFromStart: 0, allFiltered: false, warnings: [] };
   }
@@ -20466,7 +20474,7 @@ async _filterDisclaimers(pages, depth) {
       const nextJson = await nextRes.json();
       const nextPages = (nextJson.data && nextJson.data.pages) || [];
 
-      // Прогоняем следующую главу по размерному фильтру, чтобы узнать её дисклеймер-хэши
+      // Собираем хэши дисклеймеров следующей главы
       const nextDisc = new Set();
       for (let i = 0; i < Math.min(2, nextPages.length); i++) {
         const d = await this._probeImageInfoCached(nextPages[i]);
@@ -20480,7 +20488,8 @@ async _filterDisclaimers(pages, depth) {
 
       if (nextDisc.size > 0) {
         console.log('[reader] next chapter disclaimer hashes:', Array.from(nextDisc));
-        // Пересобираем discard для текущей главы: ТОЛЬКО по хэшам из следующей главы
+
+        // Строгая фильтрация — только по совпадению хэша, без размеров
         const strictDiscard = new Set();
         for (let i = 0; i < pages.length; i++) {
           const info = await this._probeImageInfoCached(pages[i]);
@@ -20489,29 +20498,29 @@ async _filterDisclaimers(pages, depth) {
         const strictFiltered = pages.filter((_, i) => !strictDiscard.has(i));
         console.log('[reader] strict filter:', strictDiscard.size, 'removed | after:', strictFiltered.length);
 
-        // Если strict-фильтр тоже всё убрал — фолбэк на показ всех страниц с тостом
+        // Строгий фильтр тоже всё убрал — показываем всё, один тост
         if (!strictFiltered.length) {
           console.warn('[reader] strict filter also emptied chapter — showing all with warning');
-          toast('Глава может содержать дисклеймеры', 'warn');
+          showWarnOnce();
           return { pages, removedFromStart: 0, allFiltered: true, warnings: ['strict-empty'] };
         }
 
-        // Strict справился (часть осталась) — запоминаем эти хэши в пул
+        // Запоминаем найденные хэши в пул
         strictDiscard.forEach(i => {
           this._probeImageInfoCached(pages[i]).then(info => {
             if (info && info.hash) this._addDiscHash(info.hash);
           });
         });
 
-        // Если strict удалил меньше, чем "по размеру", но больше 0 — 
-        // показываем оставшиеся с лёгким предупреждением
         let strictRemovedFromStart = 0;
         for (let i = 0; i < pages.length; i++) {
           if (strictDiscard.has(i)) strictRemovedFromStart++;
           else break;
         }
+
+        // Если strict убрал слишком много (>30%) — один тост
         if (strictFiltered.length < beforeCount * 0.7) {
-          toast('Глава может содержать дисклеймеры', 'warn');
+          showWarnOnce();
         }
         return {
           pages: strictFiltered,
@@ -20525,11 +20534,10 @@ async _filterDisclaimers(pages, depth) {
     }
   }
 
-  // 4. Если "по размеру" убрали слишком много, но следующей главы нет (или она не помогла) — 
-  //    показываем всё как есть с тостом. Пользователь почистит через прицел.
+  // 4. Слишком агрессивно, но следующая глава не помогла (или её нет) — показываем всё, один тост
   if (tooMuchRemoved) {
     console.warn('[reader] filter too aggressive, no strict fallback — showing all with warning');
-    toast('Глава может содержать дисклеймеры', 'warn');
+    showWarnOnce();
     return { pages, removedFromStart: 0, allFiltered: true, warnings: ['size-too-aggressive'] };
   }
 
@@ -21119,22 +21127,22 @@ document.body.classList.add('modal-open');
 const filterResult = await this._filterDisclaimers(pagesList);
 pagesList = filterResult.pages;
 if (!pagesList.length) {
-  // Все страницы отфильтрованы как дисклеймеры — 
-  // пробуем открыть следующую главу, если есть
   if (_rme0) _rme0.classList.remove('on');
   document.body.classList.remove('modal-open');
   const _ovx = document.getElementById('readerLoadingOverlay');
   if (_ovx) _ovx.remove();
-  if (this._nextChapter) {
+  if (this._nextChapter && !this._discToastShown) {
+    this._discToastShown = true;
     toast('Глава только из дисклеймеров, перехожу к следующей', 'warn');
     setTimeout(() => {
       this.loadChapter(this._nextChapter.volume, this._nextChapter.number, this._nextChapter.id, null);
     }, 400);
-  } else {
+  } else if (!this._discToastShown) {
+    this._discToastShown = true;
     toast('В главе только дисклеймеры', 'warn');
   }
   return;
-}
+}  
       
 // Если прогресс указывал на страницу после дисклеймеров — сдвигаем на число удалённых
 if (progress && typeof progress.page === 'number' && filterResult.removedFromStart > 0) {
@@ -21303,6 +21311,7 @@ requestAnimationFrame(() => requestAnimationFrame(() => this._fitReaderTitle()))
   this._closeChaptersList();
   this.toggleSettings(false);
   this._stopMusicBtnWatcher();
+  this._discToastShown = false;
   this.saveProgress();
   const rm = document.getElementById('readerModal');
     if (rm) {
@@ -22014,8 +22023,8 @@ async checkAutoLoad() {
     const chapData = chapJson.data;
     if (!chapData || !chapData.pages || !chapData.pages.length) return;
 
-    // Фильтруем дисклеймеры в подгружаемой главе
-    const filterResult = await this._filterDisclaimers(chapData.pages);
+    // Фильтруем дисклеймеры в подгружаемой главе — тихо, без тостов
+const filterResult = await this._filterDisclaimers(chapData.pages, 0, true);
     const filteredPages = filterResult.pages;
     if (!filteredPages.length) return;
 
@@ -22073,6 +22082,14 @@ async checkPrevLoad() {
 
   const bounds = this.getCurrentChapterBounds();
   if (!bounds) return;
+  // Не грузим "предыдущую", если её номер не меньше текущей (защита от кривого _prevChapter)
+if (this._prevChapter && this._prevChapter.number != null && bounds.number != null) {
+  if (parseFloat(this._prevChapter.number) >= parseFloat(bounds.number)) {
+    this._prevChapter = null;
+    this.updateChapterNav();
+    return;
+  }
+}
   if (this._pagesList[0].chapterId !== bounds.chapterId) return;
 
   // Тянем предыдущую главу только когда близко к началу текущей —
@@ -22095,8 +22112,8 @@ if (remaining > 2) return;
     const chapData = chapJson.data;
     if (!chapData || !chapData.pages || !chapData.pages.length) return;
 
-    // Фильтруем дисклеймеры в подгружаемой главе
-    const filterResult = await this._filterDisclaimers(chapData.pages);
+    // Фильтруем дисклеймеры в подгружаемой главе — тихо, без тостов
+const filterResult = await this._filterDisclaimers(chapData.pages, 0, true);
     const filteredPages = filterResult.pages;
     if (!filteredPages.length) return;
 
