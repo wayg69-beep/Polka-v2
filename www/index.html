@@ -3637,13 +3637,13 @@ body.reader-open-bg {
 }
 .reader-modal.on { display: flex; }
 
-/* ===== ШАПКА: прогресс над названием + крестик справа ===== */
+/* ===== ВЕРХНИЙ БАР — стеклянная подложка как у островка ===== */
 .reader-head {
-  position: absolute; top: 0; left: 0; right: 0;
-  display: flex; align-items: flex-start; gap: 12px;
-  padding: calc(env(safe-area-inset-top, 0px) + 10px) 14px 14px;
-  background: linear-gradient(to bottom, rgba(10,10,14,0.95) 0%, rgba(10,10,14,0) 100%);
+  position: absolute;
+  top: 0; left: 0; right: 0;
   z-index: 10;
+  padding-top: calc(env(safe-area-inset-top, 0px) + 8px);
+  pointer-events: none;
   transition: transform 0.3s ease, opacity 0.3s ease;
 }
 .reader-modal.ui-hidden .reader-head {
@@ -3651,55 +3651,80 @@ body.reader-open-bg {
   opacity: 0;
   pointer-events: none;
 }
-.reader-head-left {
-  flex: 1;
-  min-width: 0;
+
+.reader-head-bar {
+  position: relative;
+  background: rgba(22, 22, 29, 0.72);
+  backdrop-filter: blur(20px) saturate(1.4);
+  -webkit-backdrop-filter: blur(20px) saturate(1.4);
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  border-radius: 0 0 22px 22px;
+  box-shadow:
+    0 8px 32px rgba(0,0,0,.5),
+    inset 0 1px 0 rgba(255,255,255,0.06);
+  padding: 10px 16px 26px;
+  pointer-events: auto;
+  overflow: hidden;
+}
+
+.reader-head-inner {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 44px;
+}
+
+.reader-head-info {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 3px;
+  min-width: 0;
+  flex: 0 1 auto;
+  max-width: 42%;
 }
-.reader-progress-track {
-  position: relative;
-  width: 100%;
-  height: 3px;
-  cursor: pointer;
-  padding: 12px 0;
-  margin: -12px 0;
-  box-sizing: content-box;
-  touch-action: none;
-}
-.reader-progress-track::before {
-  content: '';
-  position: absolute;
-  left: 0; right: 0; top: 50%;
-  height: 3px;
-  transform: translateY(-50%);
-  background: rgba(255,255,255,0.15);
-  border-radius: 2px;
-  pointer-events: none;
-}
-.reader-progress-fill {
-  position: absolute;
-  left: 0; top: 50%;
-  height: 3px;
-  transform: translateY(-50%);
-  background: var(--acc);
-  border-radius: 2px;
-  width: 0%;
-  pointer-events: none;
-  box-shadow: 0 0 6px rgba(124,92,255,.55);
-  transition: width .12s ease;
-  z-index: 1;
-}
-.reader-head-info {
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--fg);
+
+.reader-head-vol {
+  font-size: 11px;
+  font-weight: 500;
+  color: rgba(232, 232, 239, 0.68);
+  letter-spacing: .3px;
+  line-height: 1.2;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  line-height: 1.2;
 }
+
+.reader-head-pos {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--fg);
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.reader-head-title {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  font-family: 'Great Vibes', cursive;
+  font-size: 26px;
+  font-weight: 400;
+  color: var(--fg);
+  line-height: 1;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: calc(100% - 200px);
+  pointer-events: none;
+  letter-spacing: 0;
+}
+
 .reader-close-btn {
   flex: 0 0 auto;
   width: 36px; height: 36px;
@@ -3712,11 +3737,48 @@ body.reader-open-bg {
   padding: 0;
   font-family: inherit;
   transition: opacity .15s;
-  margin-top: -2px;
 }
 .reader-close-btn:active { opacity: .5; }
 .reader-close-btn svg { display: block; width: 22px; height: 22px; }
 
+/* Неоновый прогресс — внизу стекляшки, с местом для свечения */
+.reader-progress-track {
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  bottom: 10px;
+  height: 12px;
+  cursor: pointer;
+  touch-action: none;
+  z-index: 2;
+}
+.reader-progress-track::before {
+  content: '';
+  position: absolute;
+  left: 0; right: 0; top: 50%;
+  height: 3px;
+  transform: translateY(-50%);
+  background: rgba(255,255,255,0.1);
+  border-radius: 2px;
+  pointer-events: none;
+}
+.reader-progress-fill {
+  position: absolute;
+  left: 0; top: 50%;
+  height: 3px;
+  transform: translateY(-50%);
+  background: #5e00ff;
+  border-radius: 2px;
+  width: 0%;
+  pointer-events: none;
+  box-shadow:
+    0 0 4px #5e00ff,
+    0 0 10px rgba(110, 0, 255, 0.8),
+    0 0 20px rgba(110, 0, 255, 0.5);
+  transition: width .12s ease;
+  z-index: 1;
+       }
+  
 /* ===== ОСТРОВОК (нижние кнопки) ===== */
 .reader-island {
   position: absolute;
@@ -5878,17 +5940,23 @@ body.player-modal-open .player-modal {
 
 <!-- ЧИТАЛКА SLASHLIB -->
 <div class="reader-modal" id="readerModal">
-  <div class="reader-head" id="readerHead">
-    <div class="reader-head-left">
-      <div class="reader-progress-track" id="readerProgressTrack">
-        <div class="reader-progress-fill" id="readerProgressFill"></div>
+<div class="reader-head" id="readerHead">
+  <div class="reader-head-bar">
+    <div class="reader-head-inner">
+      <div class="reader-head-info">
+        <div class="reader-head-vol" id="readerHeadVol"></div>
+        <div class="reader-head-pos" id="readerHeadPos"></div>
       </div>
-      <div class="reader-head-info" id="readerTitle">Читалка</div>
+      <div class="reader-head-title" id="readerTitle"></div>
+      <button class="reader-close-btn" id="readerCloseBtn" title="Закрыть" aria-label="Закрыть">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
     </div>
-    <button class="reader-close-btn" id="readerCloseBtn" title="Закрыть" aria-label="Закрыть">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-    </button>
+    <div class="reader-progress-track" id="readerProgressTrack">
+      <div class="reader-progress-fill" id="readerProgressFill"></div>
+    </div>
   </div>
+</div>
   
   <div class="reader-stage" id="readerStage">
     <div class="reader-pages" id="readerPages"></div>
@@ -20772,8 +20840,6 @@ this._pagesList = pagesList.map(p => ({
         }
         this._currentIndex = startPage;
     
-        const titleEl = document.getElementById('readerTitle');
-        if (titleEl) titleEl.textContent = title;
         this._baseTitle = (title || '').split(' - ')[0].trim();
     
         const wrap = document.getElementById('readerPages');
@@ -21318,20 +21384,27 @@ _closeTagPicker() {
 updateCounter() {
   const bounds = this.getCurrentChapterBounds();
   const titleEl = document.getElementById('readerTitle');
+  const volEl = document.getElementById('readerHeadVol');
+  const posEl = document.getElementById('readerHeadPos');
   const fill = document.getElementById('readerProgressFill');
 
+  // Название — Great Vibes, по центру
+  if (titleEl) {
+    titleEl.textContent = this._baseTitle || 'Полка';
+  }
+
   if (!bounds) {
-    if (titleEl) titleEl.textContent = this._baseTitle || 'Читалка';
+    if (volEl) volEl.textContent = '';
+    if (posEl) posEl.textContent = '';
     if (fill) fill.style.width = '0%';
     this._updateLikeButtonState();
     return;
   }
-  const base = (this._baseTitle || '').trim();
-  const prefix = base ? base + ' · ' : '';
-  if (titleEl) {
-  titleEl.textContent = prefix + 'Том ' + bounds.volume + ' · Глава ' + bounds.number +
-    ' · Фрейм ' + bounds.pageInChapter + ' / ' + bounds.totalInChapter;
-  }
+
+  if (volEl) volEl.textContent = 'Том ' + bounds.volume;
+  if (posEl) posEl.textContent = 'Глава ' + bounds.number + ' • Фрейм ' +
+    bounds.pageInChapter + '/' + bounds.totalInChapter;
+
   if (fill) {
     if (bounds.totalInChapter > 1) {
       const pct = ((bounds.pageInChapter - 1) / (bounds.totalInChapter - 1)) * 100;
@@ -21341,9 +21414,9 @@ updateCounter() {
     }
   }
 
-    this._updateLikeButtonState();
-this._autoAdvanceStatusIfNeeded(bounds.number);
-this._checkEndOfManga();
+  this._updateLikeButtonState();
+  this._autoAdvanceStatusIfNeeded(bounds.number);
+  this._checkEndOfManga();
 
   clearTimeout(this._saveTimer);
   this._saveTimer = setTimeout(() => this.saveProgress(), 1000);
