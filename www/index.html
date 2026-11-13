@@ -3647,11 +3647,9 @@ body.reader-open-bg {
   transition: transform 0.3s ease, opacity 0.3s ease;
 }
 .reader-modal.ui-hidden .reader-head {
-  transform: translateY(-100%);
-  opacity: 0;
   pointer-events: none;
-}
-
+                  }
+  
 .reader-head-bar {
   position: relative;
   background: rgba(22, 22, 29, 0.72);
@@ -3662,12 +3660,27 @@ body.reader-open-bg {
   box-shadow:
     0 8px 32px rgba(0,0,0,.5),
     inset 0 1px 0 rgba(255,255,255,0.06);
-  /* safe-area сверху + 3мм (~14px) — контент ниже статус-бара, фон под ним */
   padding: 16px 16px 16px;
   pointer-events: auto;
   overflow: visible;
+  opacity: 0;
 }
-
+.reader-modal:not(.ui-hidden) .reader-head-bar {
+  animation: headBarShow 0.28s ease forwards;
+}
+.reader-modal.ui-hidden .reader-head-bar {
+  pointer-events: none;
+  animation: headBarHide 0.28s ease forwards;
+}
+@keyframes headBarShow {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes headBarHide {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+  }
+  
 .reader-head-inner {
   position: relative;
   display: flex;
