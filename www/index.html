@@ -10562,25 +10562,33 @@ async function refreshCard(id) {
 const isSlashlibCard = it.link && it.link.includes('shlib.life');
 const isComizyCard = it.link_comizy && it.link_comizy.includes('comizy.io');
 
-// Если карточка из Comizy (link_comizy есть, но link на Slashlib тоже есть) — 
-// это "гибрид": title/cover/desc от Slashlib, главы от Comizy. Обновляем только главы.
+// Гибрид: title/cover/desc/tags с Slashlib + главы с Comizy.
+// Обновляем оба источника — иначе пользователь видит обновление только одной части.
 if (isComizyCard && isSlashlibCard) {
-  toast('Обновляю главы из Comizy...', 'success');
-  try {
-    const slug = it.link_comizy.split('/').pop();
-    const details = await ComizyParser.getMangaDetails(slug);
-    if (details) {
-      it.comizyChapters = await ComizyParser.getChapters(details.hid);
-      it.updatedAt = Date.now();
-      save(); render();
-      if (document.getElementById('viewModal').classList.contains('on')) openView(it.id);
-      toast('Главы обновлены (' + it.comizyChapters.length + ')', 'success');
-      return;
-    }
-  } catch(e) {
-    toast('Ошибка обновления Comizy: ' + e.message, 'error');
+  const token = localStorage.getItem('slashlib_token');
+  if (!token) {
+    toast('Нужно войти в Slashlib', 'error');
     return;
   }
+
+  toast('Обновляю со Slashlib и Comizy...', 'success');
+
+  // 1. Главы Comizy по сохранённой ссылке
+  try {
+    const slug = it.link_comizy.split('/').pop();
+    const cDetails = await ComizyParser.getMangaDetails(slug);
+    if (cDetails) {
+      it.comizyChapters = await ComizyParser.getChapters(cDetails.hid);
+    }
+  } catch(e) {
+    console.warn('Comizy chapters refresh failed:', e);
+  }
+
+  // 2. Поля со Slashlib — refreshSlashlibNative делает всё сам:
+  //    тянет данные, обновляет поля, делает auto-search Comizy
+  //    (если найдёт — уточнит link_comizy; если нет — оставит наши свежие главы),
+  //    вызывает save/render/openView и свой тост.
+  return refreshSlashlibNative(it);
 }
 
   // Если карточка уже из Comizy — обновляем только главы и метаданные
