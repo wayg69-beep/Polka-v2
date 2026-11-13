@@ -3688,8 +3688,8 @@ body.reader-open-bg {
   justify-content: space-between;
   gap: 12px;
   min-height: 48px;
-}
-
+  }
+  
 .reader-head-info {
   display: flex;
   flex-direction: row;
@@ -3731,7 +3731,7 @@ body.reader-open-bg {
   font-weight: 400;
   }
   
-.reader-head-title {
+  .reader-head-title {
   position: absolute;
   left: 50%;
   top: 55%;
@@ -3740,16 +3740,16 @@ body.reader-open-bg {
   font-size: 30px;
   font-weight: 550;
   color: var(--fg);
-  /* line-height под каллиграфию — завитушки сверху/снизу внутри line-box */
   line-height: 1.4;
   text-align: center;
   white-space: nowrap;
-  overflow: visible;
-  max-width: calc(100% - 200px);
+  overflow: hidden;
+  text-overflow: ellipsis;
   pointer-events: none;
   letter-spacing: 0;
   padding: 0;
-}
+  max-width: 100%;
+                             }
 
 .reader-close-btn {
   flex: 0 0 auto;
@@ -20121,6 +20121,41 @@ updateReaderTitle() {
       else FB.show();
     } catch(e) { console.warn('[FullscreenBridge]', e); }
   },  
+
+  _fitReaderTitle() {
+  if (this._fitRafPending) return;
+  this._fitRafPending = true;
+  requestAnimationFrame(() => {
+    this._fitRafPending = false;
+    const el = document.getElementById('readerTitle');
+    const inner = document.querySelector('.reader-head-inner');
+    const info = document.querySelector('.reader-head-info');
+    const close = document.querySelector('.reader-close-btn');
+    if (!el || !inner || !info || !close) return;
+
+    const innerW = inner.clientWidth;
+    const infoW = info.offsetWidth;
+    const closeW = close.offsetWidth;
+    const gap = 10;
+
+    // Title центрирован по центру inner через translate(-50%).
+    // Чтобы он не налезал на info (слева) и close (справа) —
+    // max-width должен быть = innerW - 2 * (max(infoW, closeW) + gap).
+    const sideMargin = Math.max(infoW, closeW) + gap;
+    let maxW = innerW - 2 * sideMargin;
+    if (maxW < 60) maxW = Math.max(60, innerW - 2 * (infoW + gap));
+    el.style.maxWidth = maxW + 'px';
+
+    // Подбираем размер: 30 → 29 → ... → 16
+    const maxSize = 30;
+    const minSize = 16;
+    for (let size = maxSize; size >= minSize; size--) {
+      el.style.fontSize = size + 'px';
+      if (el.scrollWidth <= el.clientWidth + 1) return;
+    }
+    // На минимуме — CSS-ellipsis обрежет остаток
+  });
+},
 
 async _probeImageInfo(page) {
   const path = String(page.url || page.image || '').replace(/^\/+/, '');
