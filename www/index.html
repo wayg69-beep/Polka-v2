@@ -3663,7 +3663,7 @@ body.reader-open-bg {
     0 8px 32px rgba(0,0,0,.5),
     inset 0 1px 0 rgba(255,255,255,0.06);
   /* safe-area сверху + 3мм (~14px) — контент ниже статус-бара, фон под ним */
-  padding: 24px 16px 16px;
+  padding: 16px 16px 16px;
   pointer-events: auto;
   overflow: visible;
 }
@@ -3679,24 +3679,26 @@ body.reader-open-bg {
 
 .reader-head-info {
   display: flex;
-  flex-direction: column;
-  gap: 3px;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
   min-width: 0;
   flex: 0 1 auto;
-  max-width: 42%;
-}
-
+  max-width: 52%;
+  }
+  
 .reader-head-vol {
-  font-size: 11px;
-  font-weight: 500;
+  font-size: 13px;
+  font-weight: 600;
   color: rgba(232, 232, 239, 0.68);
   letter-spacing: .3px;
   line-height: 1.2;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
+  flex: 0 0 auto;
+  }
+  
 .reader-head-pos {
   font-size: 13px;
   font-weight: 600;
@@ -3705,8 +3707,16 @@ body.reader-open-bg {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  flex: 0 1 auto;
+  min-width: 0;
 }
-
+.reader-head-pos::before {
+  content: '·';
+  margin-right: 8px;
+  color: rgba(232, 232, 239, 0.5);
+  font-weight: 400;
+  }
+  
 .reader-head-title {
   position: absolute;
   left: 50%;
