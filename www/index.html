@@ -20003,6 +20003,17 @@ const SlashLibReader = {
   _blobUrls: {},
   _currentIndex: 0,
   _saveTimer: null,
+  _zoom: 1,
+_pinchActive: false,
+_pinchStartDist: 0,
+_pinchStartZoom: 1,
+_pinchContentX: 0,
+_pinchContentY: 0,
+_lastTapTime: 0,
+_lastTapX: 0,
+_lastTapY: 0,
+_tapTimer: null,
+_zoomAnimFrame: null,
   _chaptersList: [],
   _nextChapter: null,
   _prevChapter: null,
@@ -20091,11 +20102,11 @@ if (el('readerNextChapterBtn')) el('readerNextChapterBtn').onclick = () => {
   this._bindDiscMarkButton();
 this._bindDiscMarkTap();
   const rsZoom = el('rsDoubleTapZoom');
-  if (rsZoom) rsZoom.onchange = () => {
-    this._settings.doubleTapZoom = !!rsZoom.checked;
-    this.saveSettings();
-    toast('Скоро появится', 'warn');
-  };
+if (rsZoom) rsZoom.onchange = () => {
+  this._settings.doubleTapZoom = !!rsZoom.checked;
+  this.saveSettings();
+  if (!rsZoom.checked) this._resetZoom();
+};
   // Тоггл «Запоминать яркость»
 const rsBrightness = el('rsRememberBrightness');
 if (rsBrightness) {
@@ -20286,6 +20297,89 @@ _fitReaderTitle() {
     el.style.maxWidth = '';
     bar.classList.add('wide');
   });
+},
+
+_resetZoom() {
+  if (this._zoomAnimFrame) {
+    cancelAnimationFrame(this._zoomAnimFrame);
+    this._zoomAnimFrame = null;
+  }
+  this._zoom = 1;
+  this._pinchActive = false;
+  const wrap = document.getElementById('readerPages');
+  if (wrap) {
+    wrap.style.transform = '';
+    wrap.style.transformOrigin = '';
+  }
+},
+
+_applyZoomTransform(z) {
+  const wrap = document.getElementById('readerPages');
+  if (!wrap) return;
+  if (z === 1) {
+    wrap.style.transform = '';
+    wrap.style.transformOrigin = '';
+  } else {
+    wrap.style.transform = `scale(${z})`;
+    wrap.style.transformOrigin = '0 0';
+  }
+},
+
+_animateZoomTo(targetZ, contentX, contentY, fxRel, fyRel, duration) {
+  const wrap = document.getElementById('readerPages');
+  if (!wrap) return;
+
+  if (this._zoomAnimFrame) {
+    cancelAnimationFrame(this._zoomAnimFrame);
+    this._zoomAnimFrame = null;
+  }
+
+  const startZ = this._zoom || 1;
+  const startTime = performance.now();
+  const ease = t => t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+
+  const step = (now) => {
+    const t = Math.min(1, (now - startTime) / duration);
+    const e = ease(t);
+    const z = startZ + (targetZ - startZ) * e;
+
+    this._zoom = z;
+    this._applyZoomTransform(z);
+
+    const maxSL = wrap.scrollWidth - wrap.clientWidth;
+    const maxST = wrap.scrollHeight - wrap.clientHeight;
+    wrap.scrollLeft = Math.max(0, Math.min(maxSL, contentX * z - fxRel));
+    wrap.scrollTop  = Math.max(0, Math.min(maxST, contentY * z - fyRel));
+
+    if (t < 1) {
+      this._zoomAnimFrame = requestAnimationFrame(step);
+    } else {
+      this._zoom = targetZ;
+      this._applyZoomTransform(targetZ);
+      this._zoomAnimFrame = null;
+    }
+  };
+  this._zoomAnimFrame = requestAnimationFrame(step);
+},
+
+_handleDoubleTap(clientX, clientY) {
+  const stage = document.getElementById('readerStage');
+  const wrap = document.getElementById('readerPages');
+  if (!stage || !wrap) return;
+
+  const stageRect = stage.getBoundingClientRect();
+  const currentZoom = this._zoom || 1;
+  const zoomIn = currentZoom < 1.5;
+
+  // Приближаем — к точке тапа; отдаляем — к центру экрана
+  const fx = zoomIn ? clientX - stageRect.left : stageRect.width / 2;
+  const fy = zoomIn ? clientY - stageRect.top  : stageRect.height / 2;
+
+  const targetZoom = zoomIn ? 2 : 1;
+  const contentX = (wrap.scrollLeft + fx) / currentZoom;
+  const contentY = (wrap.scrollTop + fy) / currentZoom;
+
+  this._animateZoomTo(targetZoom, contentX, contentY, fx, fy, 280);
 },
   
 async _probeImageInfo(page) {
@@ -21096,6 +21190,7 @@ _closeChaptersList() {
       this._prevLoading = false;
       this._autoLoading = false;
       this._restoring = false;
+      this._resetZoom();
 
       this._fullSlug = fullSlug;
 this._shortSlug = fullSlug.split('--').pop();
@@ -21314,13 +21409,14 @@ requestAnimationFrame(() => requestAnimationFrame(() => this._fitReaderTitle()))
 
 
   close() {
-  this._restoreSystemBrightness();
-  this._closeTagPicker();
-  this._closeChaptersList();
-  this.toggleSettings(false);
-  this._stopMusicBtnWatcher();
-  this._discToastShown = false;
-  this.saveProgress();
+this._restoreSystemBrightness();
+this._closeTagPicker();
+this._closeChaptersList();
+this.toggleSettings(false);
+this._stopMusicBtnWatcher();
+this._discToastShown = false;
+this._resetZoom();
+this.saveProgress();
   const rm = document.getElementById('readerModal');
     if (rm) {
       rm.classList.remove('on');
@@ -21695,18 +21791,19 @@ _closeTagPicker() {
   if (picker) picker.classList.remove('on');
 },
   
-  applyMode(mode) {
-    this._settings.mode = mode;
-    const wrap = document.getElementById('readerPages');
-    if (!wrap) return;
-    wrap.className = 'reader-pages';
-    if (mode === 'LEFT_TO_RIGHT') wrap.classList.add('horizontal');
+applyMode(mode) {
+  this._settings.mode = mode;
+  const wrap = document.getElementById('readerPages');
+  if (!wrap) return;
+  this._resetZoom();
+  wrap.className = 'reader-pages';
+  if (mode === 'LEFT_TO_RIGHT') wrap.classList.add('horizontal');
 
-    // При ручном переключении — прыгаем на текущую страницу
-    this.scrollToIndex(this._currentIndex, false);
-    this.updateSettingsUI();
-  },
-
+  // При ручном переключении — прыгаем на текущую страницу
+  this.scrollToIndex(this._currentIndex, false);
+  this.updateSettingsUI();
+},
+  
   scrollToIndex(idx, smooth = true) {
     const wrap = document.getElementById('readerPages');
     if (!wrap) return;
@@ -21901,165 +21998,261 @@ updateChapterNav() {
   void wrap.scrollHeight;
 },
   
-  bindGestures() {
-    const wrap = document.getElementById('readerPages');
-    const stage = document.getElementById('readerStage');
-    const modal = document.getElementById('readerModal');
-    if (!wrap || !stage || !modal) return;
-  
-    wrap.onscroll = () => {
-  if (this._restoring) return;
-  if (!this._pagesList.length) return;
+bindGestures() {
+  const wrap = document.getElementById('readerPages');
+  const stage = document.getElementById('readerStage');
+  const modal = document.getElementById('readerModal');
+  if (!wrap || !stage || !modal) return;
 
-// Авто-показ UI при достижении самого верха/низа (только в режиме "кнопки").
-// Порог 80px — инерционный скролл шлёт последнее событие за 50-100px до низа,
-// а последние пиксели без событий. 80px ловит этот случай.
-{
-  const showUI = () => {
-    if (modal.classList.contains('ui-hidden')) {
-      modal.classList.remove('ui-hidden');
-      this._syncStatusBar();
-      this._lastAutoShowAt = Date.now();
-    }
-  };
-  const hideUI = () => {
-    if (!modal.classList.contains('ui-hidden')) {
-      modal.classList.add('ui-hidden');
-      this._syncStatusBar();
-    }
-  };
+  wrap.onscroll = () => {
+    if (this._restoring) return;
+    if (!this._pagesList.length) return;
 
-  const stTop = wrap.scrollTop;
-  const stMax = wrap.scrollHeight - wrap.clientHeight;
-  const atTop = stTop <= 80;
-  const atBottom = stTop >= stMax - 80;
-  const atStartManga = !this._prevChapter;
-  const atEndManga = !this._nextChapter;
-  const isButtonMode = this._settings.nextChapter === 'button';
-  const isUserScroll = Date.now() - this._userScrolledAt <= 500;
+    // Авто-показ UI у края (только в режиме "кнопки")
+    {
+      const showUI = () => {
+        if (modal.classList.contains('ui-hidden')) {
+          modal.classList.remove('ui-hidden');
+          this._syncStatusBar();
+          this._lastAutoShowAt = Date.now();
+        }
+      };
+      const hideUI = () => {
+        if (!modal.classList.contains('ui-hidden')) {
+          modal.classList.add('ui-hidden');
+          this._syncStatusBar();
+        }
+      };
 
-  const shouldShow = (isButtonMode && (atTop || atBottom)) ||
-                     (atStartManga && atTop) ||
-                     (atEndManga && atBottom);
+      const stTop = wrap.scrollTop;
+      const stMax = wrap.scrollHeight - wrap.clientHeight;
+      const atTop = stTop <= 80;
+      const atBottom = stTop >= stMax - 80;
+      const atStartManga = !this._prevChapter;
+      const atEndManga = !this._nextChapter;
+      const isButtonMode = this._settings.nextChapter === 'button';
+      const isUserScroll = Date.now() - this._userScrolledAt <= 500;
 
-  if (isUserScroll && !shouldShow) {
-    // Пользователь активно скроллит и НЕ у края — скрываем
-    hideUI();
-  } else if (shouldShow) {
-    // У края — показываем
-    showUI();
-  }
+      const shouldShow = (isButtonMode && (atTop || atBottom)) ||
+                         (atStartManga && atTop) ||
+                         (atEndManga && atBottom);
 
-  clearTimeout(this._scrollEndTimer);
-  if (modal.classList.contains('ui-hidden')) {
-    this._scrollEndTimer = setTimeout(() => {
-      if (!modal.classList.contains('ui-hidden')) return;
-      const st = wrap.scrollTop;
-      const mx = wrap.scrollHeight - wrap.clientHeight;
-      const t = st <= 80;
-      const b = st >= mx - 80;
-      if ((this._settings.nextChapter === 'button' && (t || b)) ||
-          (!this._nextChapter && b) ||
-          (!this._prevChapter && t)) {
+      if (isUserScroll && !shouldShow) {
+        hideUI();
+      } else if (shouldShow) {
         showUI();
       }
-    }, 200);
-  }
-}
-  
-  
-      const imgs = wrap.querySelectorAll('img');
-      let idx = 0, found = false;
-  
-      if (this._settings.mode === 'WEBTOON') {
-        const threshold = st + (window.innerHeight / 3);
-        for (let i = 0; i < imgs.length; i++) {
-          if (!imgs[i].src) continue;
-          if (imgs[i].offsetTop <= threshold) { idx = i; found = true; }
-        }
-      } else {
-        for (let i = 0; i < imgs.length; i++) {
-          if (!imgs[i].src) continue;
-          if (imgs[i].offsetLeft <= sl + 100) { idx = i; found = true; }
-        }
-      }
-  
-      if (!found) idx = this._currentIndex;
-  
-      if (idx !== this._currentIndex) {
-        this._currentIndex = idx;
-        this.updateCounter();
-        this.updateChapterNav();
-        this.updateReaderTitle();
-        this.loadPage(idx);
-        if (idx + 1 < this._pagesList.length) this.loadPage(idx + 1);
-        this.checkNextChapterUI();
-      }
-      this.checkAutoLoad();
-      this.checkPrevLoad();
-    };
-  
-    let startX = 0, startY = 0, dragging = false;
-  
-    stage.ontouchstart = (e) => {
-      if (e.touches.length === 1) {
-        startX = e.touches[0].clientX;
-        startY = e.touches[0].clientY;
-        dragging = false;
-      }
-    };
-  
-    stage.ontouchmove = (e) => {
-      if (e.touches.length !== 1) return;
-      if (Math.abs(e.touches[0].clientX - startX) > 8 ||
-          Math.abs(e.touches[0].clientY - startY) > 8) {
-        dragging = true;
-        this._userScrolledAt = Date.now();
-      }
-    };
-  
-    stage.ontouchend = (e) => {
-  // Форс scroll до max перед проверкой: если пользователь упирается в низ
-  // и scrollTop отстаёт на пару px — программный довод гарантирует
-  // срабатывание порогов в wrap.onscroll.
-  {
-    const w = document.getElementById('readerPages');
-    if (w) {
-      const mx = w.scrollHeight - w.clientHeight;
-      const dist = mx - w.scrollTop;
-      // Только если близко к низу (не более 350px) и есть куда докрутить
-      if (dist > 0 && dist < 350) {
-        w.scrollTop = mx;
+
+      clearTimeout(this._scrollEndTimer);
+      if (modal.classList.contains('ui-hidden')) {
+        this._scrollEndTimer = setTimeout(() => {
+          if (!modal.classList.contains('ui-hidden')) return;
+          const st = wrap.scrollTop;
+          const mx = wrap.scrollHeight - wrap.clientHeight;
+          const t = st <= 80;
+          const b = st >= mx - 80;
+          if ((this._settings.nextChapter === 'button' && (t || b)) ||
+              (!this._nextChapter && b) ||
+              (!this._prevChapter && t)) {
+            showUI();
+          }
+        }, 200);
       }
     }
-  }
 
-  // Дальше — твой существующий код без изменений
-      if (this._settings.mode !== 'WEBTOON' && dragging) {
-        const dx = e.changedTouches[0].clientX - startX;
-        if (Math.abs(dx) > 50) {
-          if (dx < 0 && this._currentIndex < this._pagesList.length - 1) {
-            this.scrollToIndex(this._currentIndex + 1);
-          } else if (dx > 0 && this._currentIndex > 0) {
-            this.scrollToIndex(this._currentIndex - 1);
-          }
+    const imgs = wrap.querySelectorAll('img');
+    let idx = 0, found = false;
+
+    if (this._settings.mode === 'WEBTOON') {
+      const threshold = wrap.scrollTop + (window.innerHeight / 3);
+      for (let i = 0; i < imgs.length; i++) {
+        if (!imgs[i].src) continue;
+        if (imgs[i].offsetTop <= threshold) { idx = i; found = true; }
+      }
+    } else {
+      for (let i = 0; i < imgs.length; i++) {
+        if (!imgs[i].src) continue;
+        if (imgs[i].offsetLeft <= wrap.scrollLeft + 100) { idx = i; found = true; }
+      }
+    }
+
+    if (!found) idx = this._currentIndex;
+
+    if (idx !== this._currentIndex) {
+      this._currentIndex = idx;
+      this.updateCounter();
+      this.updateChapterNav();
+      this.updateReaderTitle();
+      this.loadPage(idx);
+      if (idx + 1 < this._pagesList.length) this.loadPage(idx + 1);
+      this.checkNextChapterUI();
+    }
+    this.checkAutoLoad();
+    this.checkPrevLoad();
+  };
+
+  let startX = 0, startY = 0, dragging = false;
+
+  stage.ontouchstart = (e) => {
+    // ── Pinch ──
+    if (e.touches.length === 2 && this._settings.doubleTapZoom) {
+      const stageRect = stage.getBoundingClientRect();
+      const d = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      if (d <= 0) return;
+
+      this._pinchStartDist = d;
+      this._pinchStartZoom = this._zoom || 1;
+
+      const mx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+      const my = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+      const fxRel = mx - stageRect.left;
+      const fyRel = my - stageRect.top;
+
+      this._pinchContentX = (wrap.scrollLeft + fxRel) / this._pinchStartZoom;
+      this._pinchContentY = (wrap.scrollTop  + fyRel) / this._pinchStartZoom;
+      this._pinchActive = true;
+
+      this._lastTapTime = 0;
+      clearTimeout(this._tapTimer);
+      return;
+    }
+
+    if (e.touches.length === 1) {
+      startX = e.touches[0].clientX;
+      startY = e.touches[0].clientY;
+      dragging = false;
+    }
+  };
+
+  stage.ontouchmove = (e) => {
+    // ── Pinch ──
+    if (this._pinchActive && e.touches.length === 2) {
+      if (e.cancelable) e.preventDefault();
+
+      const d = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      if (this._pinchStartDist <= 0) return;
+
+      let z = this._pinchStartZoom * (d / this._pinchStartDist);
+      z = Math.max(1, Math.min(3, z));
+
+      const stageRect = stage.getBoundingClientRect();
+      const mx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+      const my = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+      const fxRel = mx - stageRect.left;
+      const fyRel = my - stageRect.top;
+
+      this._zoom = z;
+      this._applyZoomTransform(z);
+
+      const maxSL = wrap.scrollWidth - wrap.clientWidth;
+      const maxST = wrap.scrollHeight - wrap.clientHeight;
+      wrap.scrollLeft = Math.max(0, Math.min(maxSL, this._pinchContentX * z - fxRel));
+      wrap.scrollTop  = Math.max(0, Math.min(maxST, this._pinchContentY * z - fyRel));
+      return;
+    }
+
+    if (e.touches.length !== 1) return;
+    if (Math.abs(e.touches[0].clientX - startX) > 8 ||
+        Math.abs(e.touches[0].clientY - startY) > 8) {
+      dragging = true;
+      this._userScrolledAt = Date.now();
+    }
+  };
+
+  stage.ontouchend = (e) => {
+    // ── Завершение pinch ──
+    if (this._pinchActive && e.touches.length < 2) {
+      this._pinchActive = false;
+
+      // Авто-подгрузка: если близко к низу — дожмём до максимума
+      {
+        const mx = wrap.scrollHeight - wrap.clientHeight;
+        const dist = mx - wrap.scrollTop;
+        if (dist > 0 && dist < 350) wrap.scrollTop = mx;
+      }
+
+      // Мягкий снап к 1 если отдалили почти до конца
+      if (this._zoom < 1.1 && this._zoom > 1.001) {
+        const stageRect = stage.getBoundingClientRect();
+        const fxRel = stageRect.width / 2;
+        const fyRel = stageRect.height / 2;
+        const contentX = (wrap.scrollLeft + fxRel) / this._zoom;
+        const contentY = (wrap.scrollTop  + fyRel) / this._zoom;
+        this._animateZoomTo(1, contentX, contentY, fxRel, fyRel, 200);
+      }
+
+      this._lastTapTime = 0;
+      clearTimeout(this._tapTimer);
+      return;
+    }
+
+    // Форс-скролл до низа для авто-подгрузки (было раньше)
+    {
+      const mx = wrap.scrollHeight - wrap.clientHeight;
+      const dist = mx - wrap.scrollTop;
+      if (dist > 0 && dist < 350) wrap.scrollTop = mx;
+    }
+
+    // Горизонтальный режим
+    if (this._settings.mode !== 'WEBTOON' && dragging) {
+      const dx = e.changedTouches[0].clientX - startX;
+      if (Math.abs(dx) > 50) {
+        if (dx < 0 && this._currentIndex < this._pagesList.length - 1) {
+          this.scrollToIndex(this._currentIndex + 1);
+        } else if (dx > 0 && this._currentIndex > 0) {
+          this.scrollToIndex(this._currentIndex - 1);
         }
+      }
+      return;
+    }
+
+    if (!dragging) {
+      if (e.target.closest('button')) return;
+      if (e.target.closest('#readerNextBlock')) return;
+      if (e.target.closest('.reader-island')) return;
+      if (e.target.closest('.reader-head')) return;
+      if (e.target.closest('.reader-settings-modal')) return;
+      if (e.target.closest('.reader-chapters-modal')) return;
+      if (Date.now() - (this._lastAutoShowAt || 0) < 500) return;
+
+      const touch = e.changedTouches[0];
+      const now = Date.now();
+      const tapDist = Math.hypot(touch.clientX - this._lastTapX, touch.clientY - this._lastTapY);
+
+      // ── Double-tap ──
+      if (this._settings.doubleTapZoom && now - this._lastTapTime < 300 && tapDist < 40) {
+        clearTimeout(this._tapTimer);
+        this._lastTapTime = 0;
+        this._handleDoubleTap(touch.clientX, touch.clientY);
         return;
       }
-      if (!dragging) {
-  if (e.target.closest('button')) return;
-  if (e.target.closest('#readerNextBlock')) return;
-  if (e.target.closest('.reader-island')) return;
-  if (e.target.closest('.reader-head')) return;
-  if (e.target.closest('.reader-settings-modal')) return;
-  if (e.target.closest('.reader-chapters-modal')) return;
-  // Не мигаем, если авто-показ только что сработал (500мс)
-  if (Date.now() - (this._lastAutoShowAt || 0) < 500) return;
-  modal.classList.toggle('ui-hidden');
-  this._syncStatusBar();
-      }
-    };
-  },
+
+      // ── Одиночный тап: отложенный toggle UI ──
+      this._lastTapTime = now;
+      this._lastTapX = touch.clientX;
+      this._lastTapY = touch.clientY;
+
+      clearTimeout(this._tapTimer);
+      this._tapTimer = setTimeout(() => {
+        if (Date.now() - this._lastTapTime >= 280) {
+          modal.classList.toggle('ui-hidden');
+          this._syncStatusBar();
+        }
+      }, 280);
+    }
+  };
+
+  stage.ontouchcancel = () => {
+    this._pinchActive = false;
+    dragging = false;
+  };
+},
   
 async checkAutoLoad() {
   if (this._settings.nextChapter !== 'auto') return;
