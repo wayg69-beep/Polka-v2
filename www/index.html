@@ -4027,21 +4027,25 @@ body.reader-open-bg {
                                          }
 
 .rs-head, .rc-head {
-  display: flex; justify-content: space-between; align-items: center;
-  padding: 14px 18px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 16px 18px 12px;
   border-bottom: 1px solid #22222e;
   flex: 0 0 auto;
 }
-.rs-head h3, .rc-head h3 { margin: 0; font-size: 16px; font-weight: 700; }
-.rs-head .reader-icon-btn, .rc-head .reader-icon-btn {
-  width: 32px; height: 32px; border-radius: 9px;
-  background: transparent; border: 0;
-  color: var(--fg2);
-  display: grid; place-items: center; cursor: pointer; padding: 0;
-}
-.rs-head .reader-icon-btn svg, .rc-head .reader-icon-btn svg { width: 18px; height: 18px; display: block; }
-.rs-head .reader-icon-btn:active, .rc-head .reader-icon-btn:active { background: var(--bg3); }
-
+.rs-head h3, .rc-head h3 {
+  margin: 0;
+  font-family: 'Great Vibes', cursive;
+  font-size: 26px;
+  font-weight: 500;
+  color: var(--fg);
+  letter-spacing: 0;
+  line-height: 1.2;
+  padding: 2px 0;
+  text-align: center;
+  }
+  
 .rs-body {
   flex: 1 1 auto; min-height: 0;
   padding: 16px 20px 22px;
@@ -4354,21 +4358,10 @@ body.reader-open-bg {
   border-left-color: rgba(164, 139, 255, 0.2);
   }
 
-  .reader-settings-panel .rs-head {
+.reader-settings-panel .rs-head {
   border-bottom: 1px solid rgba(255,255,255,0.06);
-}
-.reader-settings-panel .rs-head h3 {
-  font-size: 14px;
-  letter-spacing: .2px;
-}
-.reader-settings-panel .rs-head .reader-icon-btn {
-  width: 30px; height: 30px; border-radius: 9px;
-  background: transparent; border: 0;
-  color: var(--fg2);
-}
-.reader-settings-panel .rs-head .reader-icon-btn svg { width: 16px; height: 16px; display: block; }
-.reader-settings-panel .rs-head .reader-icon-btn:active { background: rgba(255,255,255,0.08); }
-
+                             }
+  
 .rs-slider-row {
   display: flex;
   align-items: center;
@@ -6166,10 +6159,7 @@ body.player-modal-open .player-modal {
   <div class="reader-settings-modal" id="readerSettingsModal">
     <div class="reader-settings-panel" id="readerSettingsPanel">
       <div class="rs-head">
-        <h3>Настройки</h3>
-        <button class="reader-icon-btn" id="readerSettingsClose">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-        </button>
+  <h3>Настройки</h3>
       </div>
 <div class="rs-body">
   <div class="rs-group">
@@ -6222,10 +6212,7 @@ body.player-modal-open .player-modal {
   <div class="reader-chapters-modal" id="readerChaptersModal">
     <div class="reader-chapters-panel" id="readerChaptersPanel">
       <div class="rc-head">
-        <h3>Главы</h3>
-        <button class="reader-icon-btn" id="readerChaptersClose">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-        </button>
+  <h3>Главы</h3>
       </div>
       <div class="rc-list" id="readerChaptersList"></div>
     </div>
@@ -20050,9 +20037,7 @@ if (el('readerSettingsBtn')) el('readerSettingsBtn').onclick = () => {
   this._closeChaptersList();
   this.toggleSettings(true);
 };
-  if (el('readerSettingsClose')) el('readerSettingsClose').onclick = () => this.toggleSettings(false);
   if (el('readerChaptersBtn')) el('readerChaptersBtn').onclick = () => this._openChaptersList();
-  if (el('readerChaptersClose')) el('readerChaptersClose').onclick = () => this._closeChaptersList();
 
   if (el('readerMusicBtn')) el('readerMusicBtn').onclick = () => {
   this._closeChaptersList();
