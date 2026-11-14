@@ -4526,13 +4526,6 @@ body.reader-open-bg {
   display: block;
   box-sizing: border-box;
       }
-  .reader-zoom-wrap {
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0;
-  }
   
 </style>
 </head>
@@ -20098,10 +20091,11 @@ if (el('readerNextChapterBtn')) el('readerNextChapterBtn').onclick = () => {
   this._bindDiscMarkButton();
 this._bindDiscMarkTap();
   const rsZoom = el('rsDoubleTapZoom');
-if (rsZoom) rsZoom.onchange = () => {
-  this._settings.doubleTapZoom = !!rsZoom.checked;
-  this.saveSettings();
-};
+  if (rsZoom) rsZoom.onchange = () => {
+    this._settings.doubleTapZoom = !!rsZoom.checked;
+    this.saveSettings();
+    toast('Скоро появится', 'warn');
+  };
   // Тоггл «Запоминать яркость»
 const rsBrightness = el('rsRememberBrightness');
 if (rsBrightness) {
@@ -20235,28 +20229,6 @@ toggleSettings(show) {
 
 updateReaderTitle() {
   this.updateCounter();
-},
-
-  _applyZoom(scale, tapX, tapY) {
-  const wrap = document.getElementById('readerPages');
-  const zoomWrap = document.getElementById('readerZoomWrap');
-  if (!wrap || !zoomWrap) return;
-  
-  // Точка тапа в координатах контента (до зума)
-  const cy = wrap.scrollTop + tapY;
-  // Padding wrap не масштабируется — вычитаем его при компенсации
-  const pad = parseFloat(getComputedStyle(wrap).paddingTop) || 0;
-  
-  zoomWrap.style.zoom = scale === 1 ? '' : String(scale);
-  void wrap.offsetHeight; // форс reflow, чтобы native пересчитал scrollHeight
-  
-  if (scale !== 1) {
-    // Компенсируем скролл: точка тапа остаётся на месте
-    const newTop = scale * cy - tapY - (scale - 1) * pad;
-    wrap.scrollTop = Math.max(0, newTop);
-  }
-  
-  this._zoomScale = scale;
 },
   
   _syncStatusBar() {
@@ -21205,24 +21177,17 @@ this._pagesList = pagesList.map(p => ({
         this._currentIndex = startPage;
     
         this._baseTitle = (title || '').split(' - ')[0].trim();
-    //
+    
         const wrap = document.getElementById('readerPages');
-if (!wrap) return;
-wrap.innerHTML = '';
-wrap.scrollTop = 0;
-wrap.scrollLeft = 0;
-
-wrap.className = 'reader-pages';
-if (this._settings.mode === 'LEFT_TO_RIGHT') wrap.classList.add('horizontal');
-
-// Контейнер для зума (double-tap). Сброс при каждом открытии.
-this._zoomScale = 1;
-const zoomWrap = document.createElement('div');
-zoomWrap.className = 'reader-zoom-wrap';
-zoomWrap.id = 'readerZoomWrap';
-wrap.appendChild(zoomWrap);
-
-this._pagesList.forEach((page, i) => {
+        if (!wrap) return;
+        wrap.innerHTML = '';
+        wrap.scrollTop = 0;
+        wrap.scrollLeft = 0;
+    
+        wrap.className = 'reader-pages';
+        if (this._settings.mode === 'LEFT_TO_RIGHT') wrap.classList.add('horizontal');
+    
+        this._pagesList.forEach((page, i) => {
   const img = document.createElement('img');
   img.alt = 'Страница ' + (i + 1);
   img.dataset.index = i;
@@ -21232,16 +21197,15 @@ this._pagesList.forEach((page, i) => {
     img.style.aspectRatio = '2 / 3';
     img.style.width = '100%';
   }
-  zoomWrap.appendChild(img);
+  wrap.appendChild(img);
 });
       this._reindexReaderImgs();
-
-const nextDiv = document.createElement('div');
-nextDiv.className = 'reader-next-chapter';
-nextDiv.id = 'readerNextBlock';
-zoomWrap.appendChild(nextDiv);
-this.updateNextBlock();
-      // тут
+    
+        const nextDiv = document.createElement('div');
+        nextDiv.className = 'reader-next-chapter';
+        nextDiv.id = 'readerNextBlock';
+        wrap.appendChild(nextDiv);
+        this.updateNextBlock();
     
         const readerModalEl = document.getElementById('readerModal');
         if (readerModalEl) {
@@ -21352,9 +21316,6 @@ requestAnimationFrame(() => requestAnimationFrame(() => this._fitReaderTitle()))
   close() {
   this._restoreSystemBrightness();
   this._closeTagPicker();
-  this._zoomScale = 1;
-  const _zw = document.getElementById('readerZoomWrap');
-  if (_zw) _zw.style.zoom = '';
   this._closeChaptersList();
   this.toggleSettings(false);
   this._stopMusicBtnWatcher();
@@ -22092,38 +22053,10 @@ updateChapterNav() {
   if (e.target.closest('.reader-head')) return;
   if (e.target.closest('.reader-settings-modal')) return;
   if (e.target.closest('.reader-chapters-modal')) return;
-  
-  const now = Date.now();
-  const t = e.changedTouches[0];
-  const dxTap = Math.abs(t.clientX - (this._lastTapX || 0));
-  const dyTap = Math.abs(t.clientY - (this._lastTapY || 0));
-  
-  // Double-tap зум — только для WEBTOON
-  if (this._settings.doubleTapZoom &&
-      this._settings.mode === 'WEBTOON' &&
-      now - (this._lastTapAt || 0) < 300 &&
-      dxTap < 40 && dyTap < 40) {
-    clearTimeout(this._tapToggleTimer);
-    this._lastTapAt = 0;
-    const currentScale = this._zoomScale || 1;
-    const newScale = currentScale > 1 ? 1 : 2;
-    this._applyZoom(newScale, t.clientX, t.clientY);
-    return;
-  }
-  
-  this._lastTapAt = now;
-  this._lastTapX = t.clientX;
-  this._lastTapY = t.clientY;
-  
+  // Не мигаем, если авто-показ только что сработал (500мс)
   if (Date.now() - (this._lastAutoShowAt || 0) < 500) return;
-  
-  // Откладываем toggle на 280мс — если придёт второй тап,
-  // это double-tap, и UI не должен мигать
-  clearTimeout(this._tapToggleTimer);
-  this._tapToggleTimer = setTimeout(() => {
-    modal.classList.toggle('ui-hidden');
-    this._syncStatusBar();
-  }, 280);
+  modal.classList.toggle('ui-hidden');
+  this._syncStatusBar();
       }
     };
   },
@@ -22173,16 +22106,8 @@ const filterResult = await this._filterDisclaimers(chapData.pages, 0, true);
       img.style.transition = 'opacity 0.3s ease';
       img.style.aspectRatio = '2 / 3';
       img.style.width = '100%';
-      const zoomWrap = document.getElementById('readerZoomWrap');
-if (zoomWrap && nextBlock && nextBlock.parentNode === zoomWrap) {
-  zoomWrap.insertBefore(img, nextBlock);
-} else if (zoomWrap) {
-  zoomWrap.appendChild(img);
-} else if (nextBlock) {
-  wrap.insertBefore(img, nextBlock);
-} else {
-  wrap.appendChild(img);
-}
+      if (nextBlock) wrap.insertBefore(img, nextBlock);
+      else wrap.appendChild(img);
 
       this._pagesList.push({
         image: page.image,
@@ -22267,12 +22192,12 @@ const filterResult = await this._filterDisclaimers(chapData.pages, 0, true);
     const relOffset = curImgBefore ? (oldScroll - curImgBefore.offsetTop) : 0;
 
     const addedCount = filteredPages.length;
-const zoomWrap = document.getElementById('readerZoomWrap');
-const container = zoomWrap || wrap;
-const firstChild = container.firstChild;
+    const firstChild = wrap.firstChild;
 
-this._restoring = true;
+    this._restoring = true;
 
+    // Вставляем в ОБРАТНОМ порядке — каждая вставка идёт в начало,
+// поэтому чтобы итоговый порядок был [P0, P1, P2, old...], начинаем с последней
 for (let i = addedCount - 1; i >= 0; i--) {
   const img = document.createElement('img');
   img.alt = 'Страница ' + (i + 1);
@@ -22280,8 +22205,8 @@ for (let i = addedCount - 1; i >= 0; i--) {
   img.style.transition = 'opacity 0.3s ease';
   img.style.aspectRatio = '2 / 3';
   img.style.width = '100%';
-  if (firstChild) container.insertBefore(img, firstChild);
-  else container.appendChild(img);
+  if (firstChild) wrap.insertBefore(img, firstChild);
+  else wrap.appendChild(img);
 
   this._pagesList.unshift({
     image: filteredPages[i].image,
