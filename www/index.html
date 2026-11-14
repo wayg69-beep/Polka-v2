@@ -21915,39 +21915,43 @@ updateChapterNav() {
 // Порог 80px — инерционный скролл шлёт последнее событие за 50-100px до низа,
 // а последние пиксели без событий. 80px ловит этот случай.
 if (this._settings.nextChapter === 'button') {
-  // Проверяем через getBoundingClientRect — он синхронизирован с native compositor,
-  // а scrollTop в WebView 157 отстаёт после инерционного скролла
-  const wRect = wrap.getBoundingClientRect();
-  const imgs = wrap.querySelectorAll('img');
-  let atBottom = false, atTop = false;
-  if (imgs.length > 0) {
-    if (!this._nextChapter) {
-      const lastR = imgs[imgs.length - 1].getBoundingClientRect();
-      atBottom = lastR.bottom <= wRect.bottom + 20;
-    }
-    if (!this._prevChapter) {
-      const firstR = imgs[0].getBoundingClientRect();
-      atTop = firstR.top >= wRect.top - 20;
-    }
-  }
   const showUI = () => {
     if (modal.classList.contains('ui-hidden')) {
       modal.classList.remove('ui-hidden');
       this._syncStatusBar();
     }
   };
-  if (atTop || atBottom) showUI();
-}
 
-  // Плюс страховка: через 200мс после последнего скролла проверяем ещё раз
+  // Считаем "у края" по реальному положению картинок в viewport,
+  // а не по scrollTop — он в WebView 157 отстаёт от native после инерции.
+  const isAtEdge = () => {
+    const wRect = wrap.getBoundingClientRect();
+    const imgs = wrap.querySelectorAll('img');
+    if (!imgs.length) return false;
+    // В конце манги — проверяем последнюю картинку
+    if (!this._nextChapter) {
+      const lastR = imgs[imgs.length - 1].getBoundingClientRect();
+      if (lastR.bottom <= wRect.bottom + 20) return true;
+    }
+    // В начале манги — первую картинку
+    if (!this._prevChapter) {
+      const firstR = imgs[0].getBoundingClientRect();
+      if (firstR.top >= wRect.top - 20) return true;
+    }
+    // В середине — обычный scrollTop
+    const stTop = wrap.scrollTop;
+    const stMax = wrap.scrollHeight - wrap.clientHeight;
+    return stTop <= 80 || stTop >= stMax - 80;
+  };
+
+  if (isAtEdge()) showUI();
+
+  // Страховка: через 200мс после последнего скролла
   clearTimeout(this._scrollEndTimer);
   this._scrollEndTimer = setTimeout(() => {
-    const st = wrap.scrollTop;
-    const mx = wrap.scrollHeight - wrap.clientHeight;
-    if (st <= 80 || st >= mx - 80) showUI();
+    if (isAtEdge()) showUI();
   }, 200);
 }
-
   // Скрываем UI только при активном user-скролле
   const isUserScroll = Date.now() - this._userScrolledAt <= 500;
   if (isUserScroll) {
