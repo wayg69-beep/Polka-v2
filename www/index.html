@@ -20405,7 +20405,6 @@ async _filterDisclaimers(pages, depth, silent) {
     return { pages, removedFromStart: 0, allFiltered: false, warnings: [] };
   }
 
-  // Единый хелпер для тоста — один раз за сессию читалки
   const showWarnOnce = () => {
     if (silent) return;
     if (this._discToastShown) return;
@@ -20415,18 +20414,16 @@ async _filterDisclaimers(pages, depth, silent) {
 
   const isDiscBySize = d => d && d.w > 0 && d.h > 0 && (d.h / d.w) < 2;
   const knownHashes = this._getDiscHashes();
-  const discard = new Set();
   const beforeCount = pages.length;
 
-  // 1. По известным хэшам — везде в главе (если пул не пуст)
+  // === ШАГ 1: обычный фильтр (known hashes + размеры) ===
+  const discard = new Set();
   if (knownHashes.size > 0) {
     for (let i = 0; i < pages.length; i++) {
       const info = await this._probeImageInfoCached(pages[i]);
       if (info && knownHashes.has(info.hash)) discard.add(i);
     }
   }
-
-  // 2. По размеру — 2 с начала, 2 с конца, с break
   for (let i = 0; i < Math.min(2, pages.length); i++) {
     if (discard.has(i)) continue;
     const d = await this._probeImageInfoCached(pages[i]);
@@ -20449,19 +20446,60 @@ async _filterDisclaimers(pages, depth, silent) {
     if (discard.has(i)) removedFromStart++;
     else break;
   }
-
   const filtered = pages.filter((_, i) => !discard.has(i));
 
   console.log('[reader] disclaimers filtered:', discard.size,
     '| pool:', knownHashes.size,
     '| before:', pages.length, '| after:', filtered.length);
 
-  // 3. Если глава "схлопнулась" (пусто или меньше половины) — 
-  //    пробуем заглянуть в следующую главу за хэшами (только 1 раз)
   const tooMuchRemoved = (filtered.length === 0) || (filtered.length < beforeCount * 0.5);
+  if (!tooMuchRemoved) {
+    return { pages: filtered, removedFromStart, allFiltered: false, warnings: [] };
+  }
 
-  if (tooMuchRemoved && depth === 0 && this._nextChapter) {
-    console.log('[reader] filter too aggressive, checking next chapter for disclaimer hashes...');
+  // === Хелпер: "показать всё, но минус указанные хэши" ===
+  const softFallback = async (extraHashes) => {
+    const strictSet = new Set(extraHashes || []);
+    const softDiscard = new Set();
+    for (let i = 0; i < pages.length; i++) {
+      const info = await this._probeImageInfoCached(pages[i]);
+      if (info && (knownHashes.has(info.hash) || strictSet.has(info.hash))) {
+        softDiscard.add(i);
+      }
+    }
+    const softFiltered = pages.filter((_, i) => !softDiscard.has(i));
+
+    // Совсем всё убрали — тогда показываем ВСЁ как есть, один тост
+    if (!softFiltered.length) {
+      console.warn('[reader] soft fallback emptied chapter — showing all with warning');
+      showWarnOnce();
+      return { pages, removedFromStart: 0, allFiltered: true, warnings: ['soft-empty'] };
+    }
+
+    let softRemovedFromStart = 0;
+    for (let i = 0; i < pages.length; i++) {
+      if (softDiscard.has(i)) softRemovedFromStart++;
+      else break;
+    }
+
+    // Запоминаем только что найденные хэши из strict-ветки (extraHashes)
+    if (strictSet.size > 0) {
+      strictSet.forEach(hash => this._addDiscHash(hash));
+    }
+
+    console.log('[reader] soft fallback:', softDiscard.size, 'removed | after:', softFiltered.length);
+    if (softFiltered.length < beforeCount * 0.7) showWarnOnce();
+    return {
+      pages: softFiltered,
+      removedFromStart: softRemovedFromStart,
+      allFiltered: false,
+      warnings: []
+    };
+  };
+
+  // === ШАГ 2: пробуем strict через следующую главу (один раз) ===
+  if (depth === 0 && this._nextChapter) {
+    console.log('[reader] filter too aggressive, checking next chapter for hashes...');
     try {
       const token = localStorage.getItem('slashlib_token');
       const nextRes = await nativeFetch(
@@ -20474,7 +20512,6 @@ async _filterDisclaimers(pages, depth, silent) {
       const nextJson = await nextRes.json();
       const nextPages = (nextJson.data && nextJson.data.pages) || [];
 
-      // Собираем хэши дисклеймеров следующей главы
       const nextDisc = new Set();
       for (let i = 0; i < Math.min(2, nextPages.length); i++) {
         const d = await this._probeImageInfoCached(nextPages[i]);
@@ -20487,9 +20524,9 @@ async _filterDisclaimers(pages, depth, silent) {
       }
 
       if (nextDisc.size > 0) {
-        console.log('[reader] next chapter disclaimer hashes:', Array.from(nextDisc));
+        console.log('[reader] next chapter hashes:', Array.from(nextDisc));
 
-        // Строгая фильтрация — только по совпадению хэша, без размеров
+        // Strict: только по совпадению хэша
         const strictDiscard = new Set();
         for (let i = 0; i < pages.length; i++) {
           const info = await this._probeImageInfoCached(pages[i]);
@@ -20498,50 +20535,39 @@ async _filterDisclaimers(pages, depth, silent) {
         const strictFiltered = pages.filter((_, i) => !strictDiscard.has(i));
         console.log('[reader] strict filter:', strictDiscard.size, 'removed | after:', strictFiltered.length);
 
-        // Строгий фильтр тоже всё убрал — показываем всё, один тост
-        if (!strictFiltered.length) {
-          console.warn('[reader] strict filter also emptied chapter — showing all with warning');
-          showWarnOnce();
-          return { pages, removedFromStart: 0, allFiltered: true, warnings: ['strict-empty'] };
-        }
-
-        // Запоминаем найденные хэши в пул
-        strictDiscard.forEach(i => {
-          this._probeImageInfoCached(pages[i]).then(info => {
-            if (info && info.hash) this._addDiscHash(info.hash);
+        if (strictFiltered.length > 0) {
+          // Strict справился — запоминаем хэши, возвращаем результат
+          strictDiscard.forEach(i => {
+            this._probeImageInfoCached(pages[i]).then(info => {
+              if (info && info.hash) this._addDiscHash(info.hash);
+            });
           });
-        });
-
-        let strictRemovedFromStart = 0;
-        for (let i = 0; i < pages.length; i++) {
-          if (strictDiscard.has(i)) strictRemovedFromStart++;
-          else break;
+          let strictRemovedFromStart = 0;
+          for (let i = 0; i < pages.length; i++) {
+            if (strictDiscard.has(i)) strictRemovedFromStart++;
+            else break;
+          }
+          if (strictFiltered.length < beforeCount * 0.7) showWarnOnce();
+          return {
+            pages: strictFiltered,
+            removedFromStart: strictRemovedFromStart,
+            allFiltered: false,
+            warnings: []
+          };
         }
 
-        // Если strict убрал слишком много (>30%) — один тост
-        if (strictFiltered.length < beforeCount * 0.7) {
-          showWarnOnce();
-        }
-        return {
-          pages: strictFiltered,
-          removedFromStart: strictRemovedFromStart,
-          allFiltered: false,
-          warnings: []
-        };
+        // Strict тоже 0 — идём в soft-фолбэк с хэшами следующей главы
+        // (known hashes ∪ next chapter hashes)
+        return await softFallback(Array.from(nextDisc));
       }
     } catch(e) {
       console.warn('[reader] next-chapter probe failed:', e);
     }
   }
 
-  // 4. Слишком агрессивно, но следующая глава не помогла (или её нет) — показываем всё, один тост
-  if (tooMuchRemoved) {
-    console.warn('[reader] filter too aggressive, no strict fallback — showing all with warning');
-    showWarnOnce();
-    return { pages, removedFromStart: 0, allFiltered: true, warnings: ['size-too-aggressive'] };
-  }
-
-  return { pages: filtered, removedFromStart, allFiltered: false, warnings: [] };
+  // === ШАГ 3: следующей главы нет / она не дала хэшей ===
+  // Показываем всё, но минус известные хэши из пула (ручные пометки не теряем)
+  return await softFallback([]);
 },
   
 _autoAdvanceStatusIfNeeded(chapterNumber) {
