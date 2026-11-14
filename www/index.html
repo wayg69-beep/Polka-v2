@@ -21906,23 +21906,6 @@ updateChapterNav() {
 },
   
   bindGestures() {
-    stage.ontouchend = (e) => {
-  // Форс scroll до max перед проверкой: если пользователь упирается в низ
-  // и scrollTop отстаёт на пару px — программный довод гарантирует
-  // срабатывание порогов в wrap.onscroll.
-  {
-    const w = document.getElementById('readerPages');
-    if (w) {
-      const mx = w.scrollHeight - w.clientHeight;
-      const dist = mx - w.scrollTop;
-      // Только если близко к низу (не более 350px) и есть куда докрутить
-      if (dist > 0 && dist < 350) {
-        w.scrollTop = mx;
-      }
-    }
-  }
-
-  // Дальше — твой существующий код без изменений
     const wrap = document.getElementById('readerPages');
     const stage = document.getElementById('readerStage');
     const modal = document.getElementById('readerModal');
@@ -22032,6 +22015,22 @@ updateChapterNav() {
     };
   
     stage.ontouchend = (e) => {
+  // Форс scroll до max перед проверкой: если пользователь упирается в низ
+  // и scrollTop отстаёт на пару px — программный довод гарантирует
+  // срабатывание порогов в wrap.onscroll.
+  {
+    const w = document.getElementById('readerPages');
+    if (w) {
+      const mx = w.scrollHeight - w.clientHeight;
+      const dist = mx - w.scrollTop;
+      // Только если близко к низу (не более 350px) и есть куда докрутить
+      if (dist > 0 && dist < 350) {
+        w.scrollTop = mx;
+      }
+    }
+  }
+
+  // Дальше — твой существующий код без изменений
       if (this._settings.mode !== 'WEBTOON' && dragging) {
         const dx = e.changedTouches[0].clientX - startX;
         if (Math.abs(dx) > 50) {
