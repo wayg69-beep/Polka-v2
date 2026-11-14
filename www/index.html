@@ -4041,10 +4041,10 @@ body.reader-open-bg {
   justify-content: center;
   align-items: center;
   padding: 6px 18px 6px;
-  border-bottom: 1px solid #22222e;
+  border-bottom: 1px solid rgba(255,255,255,0.15);
   flex: 0 0 auto;
-}
-.rc-head h3 {
+  }
+  .rc-head h3 {
   margin: 0;
   font-family: 'Great Vibes', cursive;
   font-size: 26px;
@@ -21922,6 +21922,12 @@ updateChapterNav() {
       this._lastAutoShowAt = Date.now();
     }
   };
+  const hideUI = () => {
+    if (!modal.classList.contains('ui-hidden')) {
+      modal.classList.add('ui-hidden');
+      this._syncStatusBar();
+    }
+  };
 
   const stTop = wrap.scrollTop;
   const stMax = wrap.scrollHeight - wrap.clientHeight;
@@ -21930,15 +21936,20 @@ updateChapterNav() {
   const atStartManga = !this._prevChapter;
   const atEndManga = !this._nextChapter;
   const isButtonMode = this._settings.nextChapter === 'button';
+  const isUserScroll = Date.now() - this._userScrolledAt <= 500;
 
-  if ((isButtonMode && (atTop || atBottom)) ||
-      (atStartManga && atTop) ||
-      (atEndManga && atBottom)) {
+  const shouldShow = (isButtonMode && (atTop || atBottom)) ||
+                     (atStartManga && atTop) ||
+                     (atEndManga && atBottom);
+
+  if (isUserScroll && !shouldShow) {
+    // Пользователь активно скроллит и НЕ у края — скрываем
+    hideUI();
+  } else if (shouldShow) {
+    // У края — показываем
     showUI();
   }
 
-  // Страховка через 200мс — только если UI ещё скрыт.
-  // Если уже показан, таймер не нужен, иначе он перебьёт touchend-скрытие.
   clearTimeout(this._scrollEndTimer);
   if (modal.classList.contains('ui-hidden')) {
     this._scrollEndTimer = setTimeout(() => {
@@ -21955,6 +21966,7 @@ updateChapterNav() {
     }, 200);
   }
 }
+  
   
       const imgs = wrap.querySelectorAll('img');
       let idx = 0, found = false;
