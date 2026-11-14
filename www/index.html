@@ -4062,6 +4062,7 @@ body.reader-open-bg {
   line-height: 1.2;
   padding: 0;
   text-align: center;
+  transform: translateY(2px);
   }
   
   
@@ -4292,33 +4293,12 @@ body.reader-open-bg {
 
 .rc-head {
   display: flex;
-  justify-content: space-between;
+  justify-content: center;
   align-items: center;
-  padding: 12px 14px 10px 18px;
+  padding: 18px 18px 14px;
   border-bottom: 1px solid rgba(255,255,255,0.06);
   flex: 0 0 auto;
-}
-.rc-head h3 {
-  margin: 0;
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--fg);
-  letter-spacing: .2px;
-}
-.rc-head .reader-icon-btn {
-  width: 30px;
-  height: 30px;
-  border-radius: 9px;
-  background: transparent;
-  border: 0;
-  color: var(--fg2);
-  display: grid;
-  place-items: center;
-  cursor: pointer;
-  padding: 0;
-}
-.rc-head .reader-icon-btn svg { width: 16px; height: 16px; display: block; }
-.rc-head .reader-icon-btn:active { background: rgba(255,255,255,0.08); }
+                                 }
 
 .rc-list {
   flex: 1 1 auto;
@@ -21929,17 +21909,28 @@ updateChapterNav() {
   if (this._restoring) return;
   if (!this._pagesList.length) return;
 
-  // Авто-показ UI при достижении самого верха/низа (только в режиме "кнопки")
-  if (this._settings.nextChapter === 'button') {
-    const stTop = wrap.scrollTop;
-    const stMax = wrap.scrollHeight - wrap.clientHeight;
-    if (stTop <= 4 || stTop >= stMax - 4) {
-      if (modal.classList.contains('ui-hidden')) {
-        modal.classList.remove('ui-hidden');
-        this._syncStatusBar();
-      }
+// Авто-показ UI при достижении самого верха/низа (только в режиме "кнопки").
+// Порог 80px — инерционный скролл шлёт последнее событие за 50-100px до низа,
+// а последние пиксели без событий. 80px ловит этот случай.
+if (this._settings.nextChapter === 'button') {
+  const stTop = wrap.scrollTop;
+  const stMax = wrap.scrollHeight - wrap.clientHeight;
+  const showUI = () => {
+    if (modal.classList.contains('ui-hidden')) {
+      modal.classList.remove('ui-hidden');
+      this._syncStatusBar();
     }
-  }
+  };
+  if (stTop <= 80 || stTop >= stMax - 80) showUI();
+
+  // Плюс страховка: через 200мс после последнего скролла проверяем ещё раз
+  clearTimeout(this._scrollEndTimer);
+  this._scrollEndTimer = setTimeout(() => {
+    const st = wrap.scrollTop;
+    const mx = wrap.scrollHeight - wrap.clientHeight;
+    if (st <= 80 || st >= mx - 80) showUI();
+  }, 200);
+}
 
   // Скрываем UI только при активном user-скролле
   const isUserScroll = Date.now() - this._userScrolledAt <= 500;
