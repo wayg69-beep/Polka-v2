@@ -21927,6 +21927,7 @@ updateChapterNav() {
     if (modal.classList.contains('ui-hidden')) {
       modal.classList.remove('ui-hidden');
       this._syncStatusBar();
+      this._lastAutoShowAt = Date.now();
     }
   };
 
@@ -21938,36 +21939,31 @@ updateChapterNav() {
   const atEndManga = !this._nextChapter;
   const isButtonMode = this._settings.nextChapter === 'button';
 
-  // button-режим: показываем у верха/низа любой главы
-  // auto-режим: показываем только в начале/конце манги
   if ((isButtonMode && (atTop || atBottom)) ||
       (atStartManga && atTop) ||
       (atEndManga && atBottom)) {
     showUI();
   }
 
+  // Страховка через 200мс — только если UI ещё скрыт.
+  // Если уже показан, таймер не нужен, иначе он перебьёт touchend-скрытие.
   clearTimeout(this._scrollEndTimer);
-  this._scrollEndTimer = setTimeout(() => {
-    const st = wrap.scrollTop;
-    const mx = wrap.scrollHeight - wrap.clientHeight;
-    const t = st <= 80;
-    const b = st >= mx - 80;
-    if ((this._settings.nextChapter === 'button' && (t || b)) ||
-        (!this._nextChapter && b) ||
-        (!this._prevChapter && t)) {
-      showUI();
-    }
-  }, 200);
-}
-  // Скрываем UI только при активном user-скролле
-  const isUserScroll = Date.now() - this._userScrolledAt <= 500;
-  if (isUserScroll) {
-    const wasVisible = !modal.classList.contains('ui-hidden');
-    modal.classList.add('ui-hidden');
-    if (wasVisible) this._syncStatusBar();
+  if (modal.classList.contains('ui-hidden')) {
+    this._scrollEndTimer = setTimeout(() => {
+      if (!modal.classList.contains('ui-hidden')) return;
+      const st = wrap.scrollTop;
+      const mx = wrap.scrollHeight - wrap.clientHeight;
+      const t = st <= 80;
+      const b = st >= mx - 80;
+      if ((this._settings.nextChapter === 'button' && (t || b)) ||
+          (!this._nextChapter && b) ||
+          (!this._prevChapter && t)) {
+        showUI();
+      }
+    }, 200);
   }
-
-  const st = wrap.scrollTop, sl = wrap.scrollLeft;
+}
+  
       const imgs = wrap.querySelectorAll('img');
       let idx = 0, found = false;
   
@@ -22053,6 +22049,8 @@ updateChapterNav() {
   if (e.target.closest('.reader-head')) return;
   if (e.target.closest('.reader-settings-modal')) return;
   if (e.target.closest('.reader-chapters-modal')) return;
+  // Не мигаем, если авто-показ только что сработал (500мс)
+  if (Date.now() - (this._lastAutoShowAt || 0) < 500) return;
   modal.classList.toggle('ui-hidden');
   this._syncStatusBar();
       }
