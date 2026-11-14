@@ -20576,20 +20576,18 @@ _autoAdvanceStatusIfNeeded(chapterNumber) {
   if (typeof render === 'function') render();
 },
   
-  _checkEndOfManga() {
+_checkEndOfManga() {
   if (!this._itemId) return;
   const it = items.find(x => x.id === this._itemId);
   if (!it) return;
-  // Уже прочитано — не спамим тостом при каждом возврате на последнюю страницу
   if (it.status === 'done') return;
-  // Брошено — не трогаем, пользователь сознательно отказался
   if (it.status === 'dropped') return;
+  // Онгоинг и анонс — не «Прочитано», потому что будут ещё главы
+  if (it.projectStatus === 'ongoing' || it.projectStatus === 'announced') return;
 
   const bounds = this.getCurrentChapterBounds();
   if (!bounds) return;
-  // Не на последней странице главы — рано
   if (this._currentIndex !== bounds.endIdx) return;
-  // Есть следующая глава — это не конец манги
   if (this._nextChapter) return;
 
   it.status = 'done';
@@ -20598,7 +20596,7 @@ _autoAdvanceStatusIfNeeded(chapterNumber) {
   toast('Статус: Прочитано', 'success');
   if (typeof render === 'function') render();
 },
-
+  
   _bindProgressBar() {
   const track = document.getElementById('readerProgressTrack');
   if (!track) return;
