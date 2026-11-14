@@ -21894,14 +21894,35 @@ updateChapterNav() {
     URL.revokeObjectURL(blobUrl);
     return;
   }
-  this._blobUrls[idx] = blobUrl;
+    this._blobUrls[idx] = blobUrl;
   currentImg.src = blobUrl;
   currentImg.style.opacity = '1';
   currentImg.style.aspectRatio = '';
   currentImg.style.width = '';
+  // Форс reflow: после снятия aspect-ratio layout вырос, но scrollHeight
+  // в JS кэшируется — native рендерит новую высоту, а JS видит старую.
+  // Пустое чтение scrollHeight форсит пересчёт, пороги по stTop начинают работать.
+  void wrap.scrollHeight;
 },
   
   bindGestures() {
+    stage.ontouchend = (e) => {
+  // Форс scroll до max перед проверкой: если пользователь упирается в низ
+  // и scrollTop отстаёт на пару px — программный довод гарантирует
+  // срабатывание порогов в wrap.onscroll.
+  {
+    const w = document.getElementById('readerPages');
+    if (w) {
+      const mx = w.scrollHeight - w.clientHeight;
+      const dist = mx - w.scrollTop;
+      // Только если близко к низу (не более 350px) и есть куда докрутить
+      if (dist > 0 && dist < 350) {
+        w.scrollTop = mx;
+      }
+    }
+  }
+
+  // Дальше — твой существующий код без изменений
     const wrap = document.getElementById('readerPages');
     const stage = document.getElementById('readerStage');
     const modal = document.getElementById('readerModal');
@@ -21914,7 +21935,7 @@ updateChapterNav() {
 // Авто-показ UI при достижении самого верха/низа (только в режиме "кнопки").
 // Порог 80px — инерционный скролл шлёт последнее событие за 50-100px до низа,
 // а последние пиксели без событий. 80px ловит этот случай.
-if (this._settings.nextChapter === 'button') {
+{
   const showUI = () => {
     if (modal.classList.contains('ui-hidden')) {
       modal.classList.remove('ui-hidden');
@@ -21922,34 +21943,33 @@ if (this._settings.nextChapter === 'button') {
     }
   };
 
-  // Считаем "у края" по реальному положению картинок в viewport,
-  // а не по scrollTop — он в WebView 157 отстаёт от native после инерции.
-  const isAtEdge = () => {
-    const wRect = wrap.getBoundingClientRect();
-    const imgs = wrap.querySelectorAll('img');
-    if (!imgs.length) return false;
-    // В конце манги — проверяем последнюю картинку
-    if (!this._nextChapter) {
-      const lastR = imgs[imgs.length - 1].getBoundingClientRect();
-      if (lastR.bottom <= wRect.bottom + 20) return true;
-    }
-    // В начале манги — первую картинку
-    if (!this._prevChapter) {
-      const firstR = imgs[0].getBoundingClientRect();
-      if (firstR.top >= wRect.top - 20) return true;
-    }
-    // В середине — обычный scrollTop
-    const stTop = wrap.scrollTop;
-    const stMax = wrap.scrollHeight - wrap.clientHeight;
-    return stTop <= 80 || stTop >= stMax - 80;
-  };
+  const stTop = wrap.scrollTop;
+  const stMax = wrap.scrollHeight - wrap.clientHeight;
+  const atTop = stTop <= 80;
+  const atBottom = stTop >= stMax - 80;
+  const atStartManga = !this._prevChapter;
+  const atEndManga = !this._nextChapter;
+  const isButtonMode = this._settings.nextChapter === 'button';
 
-  if (isAtEdge()) showUI();
+  // button-режим: показываем у верха/низа любой главы
+  // auto-режим: показываем только в начале/конце манги
+  if ((isButtonMode && (atTop || atBottom)) ||
+      (atStartManga && atTop) ||
+      (atEndManga && atBottom)) {
+    showUI();
+  }
 
-  // Страховка: через 200мс после последнего скролла
   clearTimeout(this._scrollEndTimer);
   this._scrollEndTimer = setTimeout(() => {
-    if (isAtEdge()) showUI();
+    const st = wrap.scrollTop;
+    const mx = wrap.scrollHeight - wrap.clientHeight;
+    const t = st <= 80;
+    const b = st >= mx - 80;
+    if ((this._settings.nextChapter === 'button' && (t || b)) ||
+        (!this._nextChapter && b) ||
+        (!this._prevChapter && t)) {
+      showUI();
+    }
   }, 200);
 }
   // Скрываем UI только при активном user-скролле
