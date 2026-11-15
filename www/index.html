@@ -5575,8 +5575,8 @@ body.player-active .fab-emergency {
   transition: bottom .4s cubic-bezier(.25,1,.5,1) !important;
 }
 @media (max-width: 700px) {
-  body.player-active .fab { top: auto !important; bottom: calc(64px + 62px + 20px + env(safe-area-inset-bottom, 0px)) !important; }
-  body.player-active .fab-emergency { top: auto !important; bottom: calc(64px + 62px + 20px + env(safe-area-inset-bottom, 0px)) !important; }
+  body.player-active .fab { top: auto !important; bottom: calc(64px + 62px + 20px) !important; }
+body.player-active .fab-emergency { top: auto !important; bottom: calc(64px + 62px + 20px) !important; }
 }
 
 /* --- 6. БЛОКИРОВКА КЛИКОВ ПОД ПЛЕЕРОМ --- */
@@ -5629,12 +5629,13 @@ body.player-modal-open .player-modal {
    или оставь просто: top: 50%; left: 50%; transform: translate(-50%, -50%); */
 
 @media (max-width: 700px) {
-  .mini-player {
-    bottom: calc(62px + env(safe-area-inset-bottom, 0px));
-    border-bottom: 1px solid rgba(255,255,255,0.08);
-    display: none;
-    transform: none;
-  }
+.mini-player {
+  bottom: 62px;
+  height: 64px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  display: none;
+  transform: none;
+}
   body.player-active .mini-player {
     display: flex;
     transform: none;
