@@ -15972,7 +15972,8 @@ if (uploadError){
         try{ localStorage.removeItem('polka_dirty'); }catch(e){}
       }
       if(showToast) toast('☁️ Синхронизировано');
-      return true;
+if (typeof DiscHashesCloud !== 'undefined') DiscHashesCloud.pullAndMerge();
+return true;
     } catch(e){
       console.error('Sync failed:', e);
       const why = describeCloudError(e);
@@ -16652,8 +16653,9 @@ const signUpRes = await sb.auth.signUp({ email: email, password: pass });
     }
 
     this.updateButton();
-    statusEl.textContent = 'Готово!';
-    Cloud.smartSyncAfterLogin();
+statusEl.textContent = 'Готово!';
+Cloud.smartSyncAfterLogin();
+if (typeof DiscHashesCloud !== 'undefined') DiscHashesCloud.pullAndMerge();
     // Подтягиваем токены из облака (если на этом устройстве их нет)
 loadTokensFromCloud().then((data) => {
   if (data && data.slashlib_token) {
@@ -16721,10 +16723,10 @@ try{
   if((profMissing || nameBroken || (profile && localAv && !serverAv)) && dispName){
     saveProfile({ display_name: dispName, avatar: serverAv || localAv }, true);
   }
-  setTimeout(() => Cloud.sync(false), 1200);
-      // Токены с другого устройства
-loadTokensFromCloud();
-    } else if (!sessErr && cloudGet() && cloudGet().user_id) {
+setTimeout(() => Cloud.sync(false), 1200);
+      loadTokensFromCloud();
+if (typeof DiscHashesCloud !== 'undefined') DiscHashesCloud.pullAndMerge();
+  } else if (!sessErr && cloudGet() && cloudGet().user_id) {
       // Вход был по-старому (до закрытой базы): в приложении «залогинена», а сессии в Supabase нет —
       // из-за этого каждый бэкап падал с «Нет сессии». Сбрасываем и просим войти заново.
       cloudClear();
@@ -16753,8 +16755,9 @@ document.addEventListener('visibilitychange', () => {
   if(document.visibilityState === 'visible'){
     Cloud.pullInbox(true);
     Cloud.syncIfStale();
+    if (typeof DiscHashesCloud !== 'undefined') DiscHashesCloud.pullAndMerge();
   } else if(Cloud._dirty && Cloud.isReady()){
-    Cloud.sync(false);   // уходим из приложения — пробуем отправить несохранённое
+    Cloud.sync(false);
   }
 });
   /* ============ БАННЕР «ОБЛАКО НЕДОСТУПНО» ============ */
@@ -20546,17 +20549,19 @@ _addDiscHash(hash) {
     const arr = Array.from(set).slice(-300);
     localStorage.setItem('polka_reader_disc_hashes', JSON.stringify(arr));
     console.log('[reader] hash added:', hash, '| pool size:', arr.length);
+    if (typeof DiscHashesCloud !== 'undefined') DiscHashesCloud.pushDebounced();
   } catch(e) {
     console.warn('[reader] _addDiscHash FAILED:', e);
   }
 },
-
+  
 _removeDiscHash(hash) {
   if (!hash) return;
   try {
     const set = this._getDiscHashes();
     set.delete(hash);
     localStorage.setItem('polka_reader_disc_hashes', JSON.stringify(Array.from(set)));
+    if (typeof DiscHashesCloud !== 'undefined') DiscHashesCloud.pushDebounced();
   } catch(e) {}
 },
   
