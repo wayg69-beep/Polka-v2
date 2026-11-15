@@ -20355,8 +20355,37 @@ _animateZoomTo(targetZ, clientX, clientY, duration) {
   const fy = clientY - stageRect.top;
 
   const startZ = this._zoom || 1;
-  const contentX = (wrap.scrollLeft + fx - padL) / startZ;
-  const contentY = (wrap.scrollTop  + fy - padT) / startZ;
+  const startSL = wrap.scrollLeft;
+  const startST = wrap.scrollTop;
+  const contentX = (startSL + fx - padL) / startZ;
+  const contentY = (startST + fy - padT) / startZ;
+
+  // === Предварительный reflow: узнаём ФИНАЛЬНЫЕ размеры один раз ===
+  // Делаем синхронно в одном тике — браузер отрендерит только конечное
+  // состояние (startZ), промежуточное не покажет
+  this._applyZoomTransform(targetZ);
+  void wrap.offsetWidth;
+  wrap.getBoundingClientRect();
+  const finalMaxSL = wrap.scrollWidth - wrap.clientWidth;
+  const finalMaxST = wrap.scrollHeight - wrap.clientHeight;
+  const finalSL = Math.max(0, Math.min(finalMaxSL, contentX * targetZ + padL - fx));
+  const finalST = Math.max(0, Math.min(finalMaxST, contentY * targetZ + padT - fy));
+
+  // Откат к старту — теперь у нас есть готовые финальные координаты
+  this._applyZoomTransform(startZ);
+  void wrap.offsetWidth;
+  wrap.getBoundingClientRect();
+  wrap.scrollLeft = startSL;
+  wrap.scrollTop = startST;
+  // === Конец предварительного reflow ===
+
+  if (duration <= 0) {
+    this._zoom = targetZ;
+    this._applyZoomTransform(targetZ);
+    wrap.scrollLeft = finalSL;
+    wrap.scrollTop = finalST;
+    return;
+  }
 
   const startTime = performance.now();
   const ease = t => t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
@@ -20368,24 +20397,25 @@ _animateZoomTo(targetZ, clientX, clientY, duration) {
 
     this._zoom = z;
     this._applyZoomTransform(z);
-    void wrap.offsetWidth;
 
-    const maxSL = wrap.scrollWidth - wrap.clientWidth;
-    const maxST = wrap.scrollHeight - wrap.clientHeight;
-    wrap.scrollLeft = Math.max(0, Math.min(maxSL, contentX * z + padL - fx));
-    wrap.scrollTop  = Math.max(0, Math.min(maxST, contentY * z + padT - fy));
+    // НЕ читаем scrollWidth/scrollHeight в кадрах — интерполируем
+    // напрямую от старта к финалу, чтобы не клипалось в 0
+    wrap.scrollLeft = startSL + (finalSL - startSL) * e;
+    wrap.scrollTop  = startST + (finalST - startST) * e;
 
     if (t < 1) {
       this._zoomAnimFrame = requestAnimationFrame(step);
     } else {
       this._zoom = targetZ;
       this._applyZoomTransform(targetZ);
+      wrap.scrollLeft = finalSL;
+      wrap.scrollTop = finalST;
       this._zoomAnimFrame = null;
     }
   };
   this._zoomAnimFrame = requestAnimationFrame(step);
 },
-
+  
 _handleDoubleTap(clientX, clientY) {
   const currentZoom = this._zoom || 1;
   const targetZoom = currentZoom < 1.5 ? 2 : 1;
@@ -22172,11 +22202,17 @@ stage.ontouchmove = (e) => {
   }
 
   if (e.touches.length !== 1) return;
-  if (Math.abs(e.touches[0].clientX - startX) > 8 ||
-      Math.abs(e.touches[0].clientY - startY) > 8) {
-    dragging = true;
-    this._userScrolledAt = Date.now();
+if (Math.abs(e.touches[0].clientX - startX) > 8 ||
+    Math.abs(e.touches[0].clientY - startY) > 8) {
+  if (!dragging) {
+    // Жест стал скроллом — отменяем отложенный тап, чтобы
+    // UI не мигнул посреди скролла через 280 мс
+    clearTimeout(this._tapTimer);
+    this._lastTapTime = 0;
   }
+  dragging = true;
+  this._userScrolledAt = Date.now();
+}
 };
 
 stage.ontouchend = (e) => {
