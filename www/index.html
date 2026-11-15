@@ -3881,17 +3881,20 @@ body.reader-open-bg {
 
 /* ===== ВЕРТИКАЛЬНЫЙ РЕЖИМ (ВЕБТУН) ===== */
 .reader-pages {
-  width: 100%; height: 100%;
-  overflow-y: auto; overflow-x: hidden;
-  display: flex; flex-direction: column; 
-  align-items: center;
-  gap: 0;
-  padding: 16px 16px 16px;
-  scrollbar-width: none;
-  box-sizing: border-box;
-  overscroll-behavior: contain;
-    }
+width: 100%; height: 100%;
+overflow-y: auto; overflow-x: hidden;
+display: flex; flex-direction: column; 
+align-items: flex-start;
+gap: 0;
+padding: 16px 16px 16px;
+scrollbar-width: none;
+box-sizing: border-box;
+overscroll-behavior: contain;
+  }
 
+.reader-pages::-webkit-scrollbar { display: none; }
+
+/* Zoom: разрешаем горизонтальный скролл + сами картинки растягиваются */
 .reader-pages.zoomed {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
@@ -3899,14 +3902,8 @@ body.reader-open-bg {
 .reader-pages:not(.horizontal) img {
   width: calc(100% * var(--reader-zoom, 1));
   max-width: none;
-  }
+    }
   
-  .reader-pages:not(.horizontal) img {
-  width: calc(100% * var(--reader-zoom, 1));
-  max-width: none;
-                         }
-  
-  .reader-pages::-webkit-scrollbar { display: none; }
 .reader-pages img {
   display: block; 
   width: 100%;
@@ -20332,26 +20329,35 @@ _applyZoomTransform(z) {
   const wrap = document.getElementById('readerPages');
   if (!wrap) return;
   const shouldZoom = z > 1.005;
-  if (wrap.classList.contains('zoomed') !== shouldZoom) {
-    wrap.classList.toggle('zoomed', shouldZoom);
-  }
   if (shouldZoom) {
     wrap.style.setProperty('--reader-zoom', String(z));
+    if (!wrap.classList.contains('zoomed')) wrap.classList.add('zoomed');
   } else {
     wrap.style.removeProperty('--reader-zoom');
+    wrap.classList.remove('zoomed');
   }
 },
 
-_animateZoomTo(targetZ, contentX, contentY, fxRel, fyRel, duration) {
+_animateZoomTo(targetZ, clientX, clientY, duration) {
   const wrap = document.getElementById('readerPages');
-  if (!wrap) return;
-
+  const stage = document.getElementById('readerStage');
+  if (!wrap || !stage) return;
   if (this._zoomAnimFrame) {
     cancelAnimationFrame(this._zoomAnimFrame);
     this._zoomAnimFrame = null;
   }
 
+  const stageRect = stage.getBoundingClientRect();
+  const cs = getComputedStyle(wrap);
+  const padL = parseFloat(cs.paddingLeft) || 0;
+  const padT = parseFloat(cs.paddingTop) || 0;
+  const fx = clientX - stageRect.left;
+  const fy = clientY - stageRect.top;
+
   const startZ = this._zoom || 1;
+  const contentX = (wrap.scrollLeft + fx - padL) / startZ;
+  const contentY = (wrap.scrollTop  + fy - padT) / startZ;
+
   const startTime = performance.now();
   const ease = t => t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
 
@@ -20366,19 +20372,14 @@ _animateZoomTo(targetZ, contentX, contentY, fxRel, fyRel, duration) {
 
     const maxSL = wrap.scrollWidth - wrap.clientWidth;
     const maxST = wrap.scrollHeight - wrap.clientHeight;
-    wrap.scrollLeft = Math.max(0, Math.min(maxSL, contentX * z - fxRel));
-    wrap.scrollTop = Math.max(0, Math.min(maxST, contentY * z - fyRel));
+    wrap.scrollLeft = Math.max(0, Math.min(maxSL, contentX * z + padL - fx));
+    wrap.scrollTop  = Math.max(0, Math.min(maxST, contentY * z + padT - fy));
 
     if (t < 1) {
       this._zoomAnimFrame = requestAnimationFrame(step);
     } else {
       this._zoom = targetZ;
       this._applyZoomTransform(targetZ);
-      void wrap.offsetWidth;
-      const mxSL = wrap.scrollWidth - wrap.clientWidth;
-      const mxST = wrap.scrollHeight - wrap.clientHeight;
-      wrap.scrollLeft = Math.max(0, Math.min(mxSL, contentX * targetZ - fxRel));
-      wrap.scrollTop = Math.max(0, Math.min(mxST, contentY * targetZ - fyRel));
       this._zoomAnimFrame = null;
     }
   };
@@ -20386,22 +20387,9 @@ _animateZoomTo(targetZ, contentX, contentY, fxRel, fyRel, duration) {
 },
 
 _handleDoubleTap(clientX, clientY) {
-  const stage = document.getElementById('readerStage');
-  const wrap = document.getElementById('readerPages');
-  if (!stage || !wrap) return;
-
-  const stageRect = stage.getBoundingClientRect();
   const currentZoom = this._zoom || 1;
-  const zoomIn = currentZoom < 1.5;
-
-  const fx = zoomIn ? clientX - stageRect.left : stageRect.width / 2;
-  const fy = zoomIn ? clientY - stageRect.top : stageRect.height / 2;
-
-  const targetZoom = zoomIn ? 2 : 1;
-  const contentX = (wrap.scrollLeft + fx) / currentZoom;
-  const contentY = (wrap.scrollTop + fy) / currentZoom;
-
-  this._animateZoomTo(targetZoom, contentX, contentY, fx, fy, 280);
+  const targetZoom = currentZoom < 1.5 ? 2 : 1;
+  this._animateZoomTo(targetZoom, clientX, clientY, 280);
 },
   
 async _probeImageInfo(page) {
@@ -22117,23 +22105,28 @@ bindGestures() {
 
 stage.ontouchstart = (e) => {
   if (e.touches.length === 2 && this._settings.doubleTapZoom) {
-    const stageRect = stage.getBoundingClientRect();
     const d = Math.hypot(
       e.touches[0].clientX - e.touches[1].clientX,
       e.touches[0].clientY - e.touches[1].clientY
     );
     if (d <= 0) return;
 
-    this._pinchStartDist = d;
-    this._pinchStartZoom = this._zoom || 1;
+    const wrapRect = wrap.getBoundingClientRect();
+    const cs = getComputedStyle(wrap);
+    const padL = parseFloat(cs.paddingLeft) || 0;
+    const padT = parseFloat(cs.paddingTop) || 0;
 
     const mx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
     const my = (e.touches[0].clientY + e.touches[1].clientY) / 2;
-    const fxRel = mx - stageRect.left;
-    const fyRel = my - stageRect.top;
+    const fxRel = mx - wrapRect.left;
+    const fyRel = my - wrapRect.top;
 
-    this._pinchContentX = (wrap.scrollLeft + fxRel) / this._pinchStartZoom;
-    this._pinchContentY = (wrap.scrollTop  + fyRel) / this._pinchStartZoom;
+    this._pinchStartDist = d;
+    this._pinchStartZoom = this._zoom || 1;
+    this._pinchContentX = (wrap.scrollLeft + fxRel - padL) / this._pinchStartZoom;
+    this._pinchContentY = (wrap.scrollTop  + fyRel - padT) / this._pinchStartZoom;
+    this._pinchPadL = padL;
+    this._pinchPadT = padT;
     this._pinchActive = true;
 
     clearTimeout(this._tapTimer);
@@ -22161,11 +22154,11 @@ stage.ontouchmove = (e) => {
     let z = this._pinchStartZoom * (d / this._pinchStartDist);
     z = Math.max(1, Math.min(3, z));
 
-    const stageRect = stage.getBoundingClientRect();
+    const wrapRect = wrap.getBoundingClientRect();
     const mx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
     const my = (e.touches[0].clientY + e.touches[1].clientY) / 2;
-    const fxRel = mx - stageRect.left;
-    const fyRel = my - stageRect.top;
+    const fxRel = mx - wrapRect.left;
+    const fyRel = my - wrapRect.top;
 
     this._zoom = z;
     this._applyZoomTransform(z);
@@ -22173,8 +22166,8 @@ stage.ontouchmove = (e) => {
 
     const maxSL = wrap.scrollWidth - wrap.clientWidth;
     const maxST = wrap.scrollHeight - wrap.clientHeight;
-    wrap.scrollLeft = Math.max(0, Math.min(maxSL, this._pinchContentX * z - fxRel));
-    wrap.scrollTop  = Math.max(0, Math.min(maxST, this._pinchContentY * z - fyRel));
+    wrap.scrollLeft = Math.max(0, Math.min(maxSL, this._pinchContentX * z + this._pinchPadL - fxRel));
+    wrap.scrollTop  = Math.max(0, Math.min(maxST, this._pinchContentY * z + this._pinchPadT - fyRel));
     return;
   }
 
@@ -22190,13 +22183,12 @@ stage.ontouchend = (e) => {
   if (this._pinchActive && e.touches.length < 2) {
     this._pinchActive = false;
 
+    // Мягкий снап к 1, если отдалили почти до конца
     if (this._zoom < 1.1 && this._zoom > 1.001) {
       const stageRect = stage.getBoundingClientRect();
-      const fxRel = stageRect.width / 2;
-      const fyRel = stageRect.height / 2;
-      const contentX = (wrap.scrollLeft + fxRel) / this._zoom;
-      const contentY = (wrap.scrollTop  + fyRel) / this._zoom;
-      this._animateZoomTo(1, contentX, contentY, fxRel, fyRel, 200);
+      const fxRel = (stageRect.left + stageRect.width / 2);
+      const fyRel = (stageRect.top + stageRect.height / 2);
+      this._animateZoomTo(1, fxRel, fyRel, 200);
     }
 
     clearTimeout(this._tapTimer);
