@@ -10273,14 +10273,18 @@ function openCategorySettings(){
         if (!isOpen) setTimeout(() => vkInput.focus(), 50);
       };
       vkSave.onclick = () => {
-        const val = vkInput.value.trim();
-        if (!val) { toast('Вставьте токен', 'warn'); return; }
-        localStorage.setItem('vk_token', val);
-        vkBtn.textContent = 'Обновить токен';
-        vkForm.style.display = 'none';
-        vkInput.value = '';
-        toast('Токен сохранён', 'success');
-      };
+  const val = vkInput.value.trim();
+  if (!val) { toast('Вставьте токен', 'warn'); return; }
+  localStorage.setItem('vk_token', val);
+  // Синхронизируем в облако, если залогинена
+  if (Cloud.isReady()) {
+    saveTokensToCloud({ vk_token: val });
+  }
+  vkBtn.textContent = 'Обновить токен';
+  vkForm.style.display = 'none';
+  vkInput.value = '';
+  toast('Токен сохранён', 'success');
+};
     } else {
       vkSection.style.display = 'none';
     }
@@ -12349,13 +12353,20 @@ async function getSlashlibToken(forceLogin, onStatus) {
       if (onStatus) onStatus(realToken ? 'Проверяю вход…' : 'Токен не найден');
 
       if (realToken) {
-        try {
-          localStorage.setItem('slashlib_token', realToken);
-          localStorage.setItem('slashlib_token_valid', '1');
-        } catch (e) {}
-        resolve(realToken);
-      } else {
-        resolve(null);
+  try {
+    localStorage.setItem('slashlib_token', realToken);
+    localStorage.setItem('slashlib_token_valid', '1');
+  } catch (e) {}
+  // Синхронизируем в облако, если залогинена
+  if (typeof Cloud !== 'undefined' && Cloud.isReady()) {
+    saveTokensToCloud({
+      slashlib_token: realToken,
+      slashlib_token_valid: '1'
+    });
+  }
+  resolve(realToken);
+} else {
+  resolve(null);
       }
     };
 
@@ -15747,6 +15758,50 @@ async function saveProfile(patch, silent){
     return false;
   }
 }
+
+async function saveTokensToCloud(patch) {
+  const c = cloudGet();
+  if (!c || !c.user_id) return false;
+  const row = Object.assign({ id: c.user_id }, patch);
+  try {
+    const { error } = await sb.from('profiles').upsert(row);
+    if (error) throw error;
+    return true;
+  } catch (e) {
+    console.error('[tokens] save failed:', e);
+    return false;
+  }
+}
+
+async function loadTokensFromCloud() {
+  const c = cloudGet();
+  if (!c || !c.user_id) return null;
+  try {
+    const { data, error } = await sb
+      .from('profiles')
+      .select('vk_token, slashlib_token, slashlib_token_valid')
+      .eq('id', c.user_id)
+      .single();
+    if (error || !data) return null;
+
+    if (data.vk_token) {
+      localStorage.setItem('vk_token', data.vk_token);
+    }
+    if (data.slashlib_token) {
+      localStorage.setItem('slashlib_token', data.slashlib_token);
+    }
+    if (data.slashlib_token_valid) {
+      localStorage.setItem('slashlib_token_valid', data.slashlib_token_valid);
+    } else {
+      localStorage.setItem('slashlib_token_valid', '1');
+    }
+    return data;
+  } catch (e) {
+    console.warn('[tokens] load failed:', e);
+    return null;
+  }
+}
+  
 /*MERGE_START*/
 function normalizeItem(it){
   if(!it) return it;
@@ -16599,6 +16654,12 @@ const signUpRes = await sb.auth.signUp({ email: email, password: pass });
     this.updateButton();
     statusEl.textContent = 'Готово!';
     Cloud.smartSyncAfterLogin();
+    // Подтягиваем токены из облака (если на этом устройстве их нет)
+loadTokensFromCloud().then((data) => {
+  if (data && data.slashlib_token) {
+    console.log('[tokens] synced from cloud');
+  }
+});
 
     setTimeout(() => {
       document.getElementById('cloudModal').classList.remove('on');
@@ -16661,6 +16722,8 @@ try{
     saveProfile({ display_name: dispName, avatar: serverAv || localAv }, true);
   }
   setTimeout(() => Cloud.sync(false), 1200);
+      // Токены с другого устройства
+loadTokensFromCloud();
     } else if (!sessErr && cloudGet() && cloudGet().user_id) {
       // Вход был по-старому (до закрытой базы): в приложении «залогинена», а сессии в Supabase нет —
       // из-за этого каждый бэкап падал с «Нет сессии». Сбрасываем и просим войти заново.
