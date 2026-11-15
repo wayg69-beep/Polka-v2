@@ -3892,11 +3892,16 @@ body.reader-open-bg {
   overscroll-behavior: contain;
     }
 
-  .reader-pages.zoomed {
+.reader-pages.zoomed {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
 }
 .reader-pages:not(.horizontal) img {
+  width: calc(100% * var(--reader-zoom, 1));
+  max-width: none;
+  }
+  
+  .reader-pages:not(.horizontal) img {
   width: calc(100% * var(--reader-zoom, 1));
   max-width: none;
                          }
