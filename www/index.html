@@ -3358,6 +3358,22 @@ animation:none !important;
     -webkit-backdrop-filter: none !important;
     background: rgba(0,0,0,.25);
   }
+  /* Свечения на мобиле: вместо 3-4 слоёв оставляем по одному.
+   Baseline переключения вкладок: 253 мс → ~120-150 мс (прогноз). */
+.card-status-dot {
+  box-shadow: 0 0 5px var(--dot-c) !important;
+}
+.card-status-line {
+  filter: none !important;
+  box-shadow: 0 0 4px currentColor !important;
+}
+.rate {
+  box-shadow: none !important;
+  text-shadow: 0 0 3px color-mix(in srgb, var(--rate-bright, #fff) 60%, transparent) !important;
+}
+.bl-corner span {
+  text-shadow: 0 0 3px rgba(140,210,255,.6) !important;
+  }
   /* filter:drop-shadow у флажка избранного — тоже отдельный слой на каждой
      карточке. На мобиле убираем свечение, цвет остаётся. */
   .card-fav-flag{
@@ -7856,9 +7872,9 @@ const statusDot = `<div class="card-status-dot" style="--dot-c:${sCol}"></div>`;
 const readyUrl = IS_MOBILE ? '' : getCachedCoverUrl(coverKey, it.cover);
 let cover;
 if(it.cover && readyUrl){
-  cover = `<img class="cover-img" src="${esc(readyUrl)}" loading="lazy" alt="">`;
+  cover = `<img class="cover-img" src="${esc(readyUrl)}" loading="lazy" decoding="async" alt="">`;
 } else if(it.cover){
-  cover = `<img class="cover-img" data-cover-key="${esc(coverKey)}" data-cover-url="${esc(it.cover)}" data-cover-width="${coverWidthFor('card')}" alt="" style="display:none"><span class="cover-fallback">${T.icon}</span>`;
+cover = `<img class="cover-img" data-cover-key="${esc(coverKey)}" data-cover-url="${esc(it.cover)}" data-cover-width="${coverWidthFor('card')}" alt="" decoding="async" style="display:none"><span class="cover-fallback">${T.icon}</span>`;
 } else {
   cover = `<span class="cover-fallback">${T.icon}</span>`;
 }
@@ -8650,7 +8666,7 @@ function openView(id){
 const viewReadyUrl = getCachedCoverUrl(viewCoverKey, it.cover);
 let coverImg;
 if(it.cover && viewReadyUrl){
-  coverImg = `<img class="view-cover-img" src="${esc(viewReadyUrl)}" alt="">`;
+  coverImg = `<img class="view-cover-img" src="${esc(viewReadyUrl)}" alt="" decoding="async">`;
 } else if(it.cover && !/image\.tmdb\.org|s4\.anilist\.co/.test(it.cover)){
   // Ручная обложка: сразу ставим src, без асинхронной подмены — иначе картинка мигает
   coverImg = `<img class="view-cover-img" src="${esc(it.cover)}" alt="" style="display:none"><span class="view-cover-fallback">${T.icon}</span>`;
@@ -8963,9 +8979,10 @@ ${isMobile
     requestAnimationFrame(checkBottom);
     // высота содержимого меняется (раскрытие описания/заметок, добавление меток) — пересчитываем
     if(window.ResizeObserver){
-      const ro = new ResizeObserver(checkBottom);
-      ro.observe(viewBody);
-      Array.from(viewBody.children).forEach(c => ro.observe(c));
+  if(panel._ro){ try{ panel._ro.disconnect(); }catch(e){} }
+  panel._ro = new ResizeObserver(checkBottom);
+  panel._ro.observe(viewBody);
+  Array.from(viewBody.children).forEach(c => panel._ro.observe(c));
     }
   }
 
