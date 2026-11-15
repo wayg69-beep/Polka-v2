@@ -15736,6 +15736,103 @@ function describeCloudError(e){
     return 'нет связи с облаком (' + m + ')';
   return m;
 }
+
+  const DiscHashesCloud = {
+  _pushTimer: null,
+  _busy: false,
+
+  _localSet() {
+    try {
+      const raw = localStorage.getItem('polka_reader_disc_hashes');
+      if (!raw) return new Set();
+      const arr = JSON.parse(raw);
+      if (!Array.isArray(arr)) return new Set();
+      return new Set(arr.filter(h => typeof h === 'string' && h));
+    } catch(e) { return new Set(); }
+  },
+
+  _saveLocal(set) {
+    try {
+      const arr = Array.from(set).slice(-300);
+      localStorage.setItem('polka_reader_disc_hashes', JSON.stringify(arr));
+    } catch(e) {}
+  },
+
+  async pullAndMerge() {
+    if (this._busy) return;
+    this._busy = true;
+    try {
+      const { data: { session } } = await sb.auth.getSession();
+      if (!session) return;
+
+      const { data, error } = await sb
+        .from('profiles')
+        .select('disc_hashes')
+        .eq('id', session.user.id)
+        .maybeSingle();
+      if (error) throw error;
+
+      const cloudArr = (data && Array.isArray(data.disc_hashes)) ? data.disc_hashes : [];
+      const localSet = this._localSet();
+      const before = localSet.size;
+
+      cloudArr.forEach(h => {
+        if (typeof h === 'string' && h) localSet.add(h);
+      });
+
+      if (localSet.size !== before) {
+        this._saveLocal(localSet);
+        console.log('[disc_hashes] merged from cloud:', cloudArr.length, '→ local total:', localSet.size);
+      }
+
+      if (localSet.size > cloudArr.length) {
+        this._pushNow();
+      }
+    } catch(e) {
+      console.warn('[disc_hashes] pull failed:', e.message);
+    } finally {
+      this._busy = false;
+    }
+  },
+
+  pushDebounced() {
+    clearTimeout(this._pushTimer);
+    this._pushTimer = setTimeout(() => this._pushNow(), 3000);
+  },
+
+  async _pushNow() {
+    try {
+      const { data: { session } } = await sb.auth.getSession();
+      if (!session) return;
+
+      const arr = Array.from(this._localSet()).slice(-300);
+
+      const { data, error } = await sb
+        .from('profiles')
+        .update({ disc_hashes: arr })
+        .eq('id', session.user.id)
+        .select('id');
+
+      if (error) throw error;
+
+      if (!data || !data.length) {
+        const c = (typeof cloudGet === 'function' ? cloudGet() : null) || {};
+        const displayName = c.display_name || 'User';
+        await sb.from('profiles').insert([{
+          id: session.user.id,
+          display_name: displayName,
+          disc_hashes: arr
+        }]);
+      }
+
+      console.log('[disc_hashes] pushed:', arr.length);
+    } catch(e) {
+      console.warn('[disc_hashes] push failed:', e.message);
+    }
+  }
+};
+
+  
 // Записывает профиль (имя/аватарку) в таблицу profiles. upsert — чтобы строка создалась, если её нет.
 // Результат проверяется: раньше запись шла «вслепую», и если база её отклоняла, аватарка жила только на телефоне.
 async function saveProfile(patch, silent){
