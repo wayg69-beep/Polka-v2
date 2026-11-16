@@ -9143,18 +9143,12 @@ if (btnReadSlashlib) {
     btnReadSlashlib.innerHTML = 'Загружаю...';
 
     try {
-      // ═══ ВЫБОР ИСТОЧНИКА ПО ЯЗЫКУ ═══
-      // _settings.language — из настроек ридера ('ru' | 'en')
-      const lang = SlashLibReader._settings?.language || 'ru';
-
-      // Английский → Comizy, если есть. Иначе — SlashLib.
-      // Русский → SlashLib, если есть. Иначе — Comizy.
-      let useComizy = false;
-      if (lang === 'en') {
-        useComizy = hasComizy;
-      } else {
-        useComizy = !hasSlashlib && hasComizy;
-      }
+      // ═══ ВЫБОР ПО ЯЗЫКУ ═══
+// ru → SlashLib, en → Comizy. Fallback на то что есть.
+const lang = SlashLibReader._settings?.language || 'ru';
+let useComizy;
+if (lang === 'en') useComizy = hasComizy;
+else useComizy = !hasSlashlib && hasComizy;
 
       // ═══ COMIZY ═══
       if (useComizy) {
@@ -20630,13 +20624,16 @@ if (rsBrightness) {
 
 this._bindBrightnessSwipe();
   const rsLang = el('rsLanguage');
-  if (rsLang) rsLang.onclick = (e) => {
-    const b = e.target.closest('button[data-v]'); if(!b) return;
-    this._settings.language = b.dataset.v;
-    this.saveSettings();
-    this.updateSettingsUI();
-    toast('Скоро появится', 'warn');
-  };
+if (rsLang) rsLang.onclick = (e) => {
+  const b = e.target.closest('button[data-v]'); if(!b) return;
+  const newLang = b.dataset.v;
+  if (newLang === this._settings.language) return;
+  this._settings.language = newLang;
+  this.saveSettings();
+  this.updateSettingsUI();
+  // Если ридер открыт и у карточки есть оба источника — переключаем
+  if (this._fullSlug) this._switchSourceForLang(newLang);
+};
 
   // Клик по фону модалки = закрыть модалку + спрятать весь UI
   const sModal = el('readerSettingsModal');
@@ -20811,6 +20808,122 @@ _fitReaderTitle() {
   });
 },
 
+_updateSourceBtn() {
+  const btn = document.getElementById('readerSourceBtn');
+  const label = document.getElementById('readerSourceLabel');
+  if (!btn) return;
+
+  const item = this._itemId ? items.find(x => x.id === this._itemId) : null;
+  if (!item) { btn.style.display = 'none'; return; }
+
+  const hasSlash = item.link && item.link.includes('shlib.life');
+  const hasComizy = item.link_comizy && item.link_comizy.includes('comizy.io');
+
+  if (!hasSlash || !hasComizy) { btn.style.display = 'none'; return; }
+
+  btn.style.display = '';
+  if (label) label.textContent = this._source === 'comizy' ? 'EN' : 'RU';
+  btn.title = this._source === 'comizy' ? 'Переключить на SlashLib' : 'Переключить на Comizy';
+},
+
+async _switchSourceForLang(lang) {
+  const item = this._itemId ? items.find(x => x.id === this._itemId) : null;
+  if (!item) return;
+
+  const hasSlash = item.link && item.link.includes('shlib.life');
+  const hasComizy = item.link_comizy && item.link_comizy.includes('comizy.io');
+  if (!hasSlash || !hasComizy) return;
+
+  // Уже на нужном источнике?
+  if (lang === 'en' && this._source === 'comizy') return;
+  if (lang === 'ru' && this._source === 'slashlib') return;
+
+  const bounds = this.getCurrentChapterBounds();
+  const targetNumber = bounds ? bounds.number : 1;
+  const targetPage = bounds ? bounds.pageInChapter - 1 : 0;
+
+  this.saveProgress();
+  toast('Переключаю на ' + (lang === 'en' ? 'Comizy' : 'SlashLib') + '...', 'success');
+
+  try {
+    if (lang === 'en') {
+      await this._openComizyAt(item, targetNumber, targetPage);
+    } else {
+      await this._openSlashlibAt(item, targetNumber, targetPage);
+    }
+  } catch(e) {
+    console.error('[switchSourceForLang]', e);
+    toast('Ошибка: ' + e.message, 'error');
+  }
+},
+  
+async _openComizyAt(item, chapterNumber, pageIdx) {
+  const slug = (item.link_comizy.match(/comizy\.io\/([^\/?#]+)/) || [])[1];
+  if (!slug) throw new Error('Нет slug Comizy');
+
+  const details = await ComizyParser.getMangaDetails(slug);
+  if (!details || !details.hid) throw new Error('Не удалось получить данные манги');
+
+  const chapters = await ComizyParser.getChapters(details.hid);
+  if (!chapters || !chapters.length) throw new Error('Нет глав');
+  chapters.sort((a, b) => a.number - b.number);
+
+  const target = chapters.find(c => parseFloat(c.number) === parseFloat(chapterNumber)) || chapters[0];
+
+  const rawPages = await ComizyParser.getChapterPages(slug, target.slug);
+  if (!rawPages || !rawPages.length) throw new Error('Нет страниц');
+
+  const filtered = rawPages.filter(p => !(p.width && p.height && p.width / p.height > 1.2));
+
+  const pages = filtered.map(p => ({
+    image: '', url: p.url, chapterId: target.id, volume: 1, number: target.number
+  }));
+
+  const chaptersList = chapters.map(c => ({
+    id: c.id, volume: 1, number: c.number, name: c.name, slug: c.slug
+  }));
+
+  const fullSlug = 'comizy:' + slug;
+  const progress = { page: pageIdx, offset: 0 };
+
+  this.open(fullSlug, target.id, 1, target.number, pages,
+    details.title + ' - Chapter ' + target.number,
+    progress, chaptersList, item.id, 'comizy');
+},
+
+async _openSlashlibAt(item, chapterNumber, pageIdx) {
+  const token = localStorage.getItem('slashlib_token');
+  if (!token) throw new Error('Нужен вход в SlashLib');
+
+  const fullSlug = (item.link.match(/\/manga\/([^\/?#]+)/) || [])[1];
+  if (!fullSlug) throw new Error('Нет slug SlashLib');
+
+  const listRes = await nativeFetch(`https://api.cdnlibs.org/api/manga/${fullSlug}/chapters`, {
+    'Authorization': 'Bearer ' + token, 'Site-Id': '2',
+    'Origin': 'https://v2.shlib.life', 'Referer': 'https://v2.shlib.life/'
+  });
+  const listJson = await listRes.json();
+  const chaptersList = listJson.data || [];
+  if (!chaptersList.length) throw new Error('Нет глав');
+
+  const target = chaptersList.find(c => parseFloat(c.number) === parseFloat(chapterNumber)) || chaptersList[0];
+
+  const chapRes = await nativeFetch(`https://api.cdnlibs.org/api/manga/${fullSlug}/chapter?volume=${target.volume}&number=${target.number}`, {
+    'Authorization': 'Bearer ' + token, 'Site-Id': '2',
+    'Origin': 'https://v2.shlib.life', 'Referer': 'https://v2.shlib.life/'
+  });
+  const chapJson = await chapRes.json();
+  const chapData = chapJson.data;
+
+  if (!chapData || !chapData.pages || !chapData.pages.length) throw new Error('Нет страниц');
+
+  const title = item.title + ' - Том ' + chapData.volume + ' Глава ' + chapData.number;
+  const progress = { page: pageIdx, offset: 0 };
+
+  this.open(fullSlug, chapData.id, chapData.volume, chapData.number, chapData.pages,
+    title, progress, chaptersList, item.id, 'slashlib');
+},
+  
 _resetZoom() {
   if (this._zoomAnimFrame) {
     cancelAnimationFrame(this._zoomAnimFrame);
