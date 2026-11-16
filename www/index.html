@@ -572,6 +572,17 @@ touch-action: pan-y; /* <--- Главный фикс задержки */
 body.sidebar-open .grid{
   transform:none;
 }
+body.sections-mode .main{
+  margin-left:var(--sb-closed) !important;
+  transition:transform .25s ease;
+  will-change:transform;
+}
+body.sections-mode.sidebar-open .main{
+  transform:translateX(calc(var(--sb-open) - var(--sb-closed)));
+}
+body.sections-mode .grid{
+  transform:none !important;
+}
   
 .grid.sections-mode{ display:block }
 
@@ -8547,6 +8558,24 @@ html += `
   requestAnimationFrame(() => hydrateCardCovers(grid));
 }
 
+function syncSidebarMode(){
+  const main = document.querySelector('.main');
+  const isSections = state.category === 'all';
+  const wasSections = document.body.classList.contains('sections-mode');
+  if(wasSections === isSections) return;
+
+  // Отключаем transition на момент смены режима, чтобы не было скачка
+  if(main){
+    const prevTrans = main.style.transition;
+    main.style.transition = 'none';
+    document.body.classList.toggle('sections-mode', isSections);
+    void main.offsetHeight;
+    main.style.transition = prevTrans;
+  } else {
+    document.body.classList.toggle('sections-mode', isSections);
+  }
+}
+
 function render(){
   renderActiveFilters();
   updateRainbowProgress();
@@ -8554,8 +8583,10 @@ function render(){
   updateBlToggle();
   updateFavToggle();
   renderStatusTabs();
+  syncSidebarMode();
   renderGrid();
 }
+  
   /* ============ ПРОСМОТР ============ */
 function goToFilter(opts){
   const vm = document.getElementById('viewModal');
@@ -14620,81 +14651,101 @@ document.getElementById('viewModal').onclick = e => {
 
 /* ============ SIDEBAR ============ */
 (() => {
+  const burger = document.getElementById('burger');
+  if(!burger) return;
+
   const main = document.querySelector('.main');
-  const grid = document.querySelector('.grid');
+  const grid = document.getElementById('grid');
   let animating = false;
 
-  const burger = document.getElementById('burger');
   burger.onclick = (e) => {
     e.stopPropagation();
-    if (animating) return;
-    animating = true;
+    if(animating) return;
 
     const wasOpen = document.body.classList.contains('sidebar-open');
-    const sections = grid && grid.classList.contains('sections-mode');
-    const vpH = innerHeight, vpW = innerWidth;
-    const flip = grid && !sections;
 
-    let visible = [], firstRects = [], futureRects = [];
-
-    if (flip) {
-      grid.querySelectorAll('.card').forEach(card => {
-        const r = card.getBoundingClientRect();
-        if (r.bottom > 0 && r.top < vpH && r.right > 0 && r.left < vpW) {
-          visible.push(card);
-          firstRects.push({ left: r.left, top: r.top });
-        }
-      });
-
-      // предрасчёт финальных позиций
-      const oldM = main.style.marginLeft;
-      main.style.transition = 'none';
-      main.style.marginLeft = (wasOpen ? 64 : 224) + 'px';
+    // ═══ SECTIONS («Всё»): чистый CSS transform на main ═══
+    if(document.body.classList.contains('sections-mode')){
+      animating = true;
       document.body.classList.toggle('sidebar-open', !wasOpen);
-      void main.offsetHeight;
-      futureRects = visible.map(c => {
-        const r = c.getBoundingClientRect();
-        return { left: r.left, top: r.top };
-      });
-      main.style.marginLeft = oldM || '';
-      document.body.classList.toggle('sidebar-open', wasOpen);
-      void main.offsetHeight;
 
-      // заморозка grid
-      grid.style.width = grid.clientWidth + 'px';
-      grid.style.gridTemplateColumns = getComputedStyle(grid).gridTemplateColumns;
-      grid.style.justifyContent = 'start';
-
-      // INVERT
-      const deltaMargin = wasOpen ? -160 : 160;
-      visible.forEach((card, i) => {
-        const dx = (futureRects[i].left - firstRects[i].left) - deltaMargin;
-        const dy = futureRects[i].top - firstRects[i].top;
-        card.style.willChange = 'transform';
-        card.style.transition = 'transform .25s ease';
-        card.style.transform = `translate3d(${dx}px, ${dy}px, 0)`;
-      });
+      let done = false;
+      const finish = () => {
+        if(done) return;
+        done = true;
+        if(main) main.removeEventListener('transitionend', onEnd);
+        clearTimeout(fb);
+        animating = false;
+      };
+      const onEnd = (ev) => {
+        if(ev.target === main && ev.propertyName === 'transform') finish();
+      };
+      if(main) main.addEventListener('transitionend', onEnd);
+      const fb = setTimeout(finish, 400);
+      return;
     }
 
-    // ── cleanup ──
+    // ═══ GRID: FLIP ═══
+    if(!grid) return;
+
+    const vpH = innerHeight, vpW = innerWidth;
+    const visible = [], firstRects = [], futureRects = [];
+
+    grid.querySelectorAll('.card').forEach(card => {
+      const r = card.getBoundingClientRect();
+      if(r.bottom > 0 && r.top < vpH && r.right > 0 && r.left < vpW){
+        visible.push(card);
+        firstRects.push({ left: r.left, top: r.top });
+      }
+    });
+
+    // Предрасчёт финальных позиций: временно применяем margin, меряем, откатываем
+    const oldM = main.style.marginLeft;
+    main.style.transition = 'none';
+    main.style.marginLeft = (wasOpen ? 64 : 224) + 'px';
+    document.body.classList.toggle('sidebar-open', !wasOpen);
+    void main.offsetHeight;
+    visible.forEach(card => {
+      const r = card.getBoundingClientRect();
+      futureRects.push({ left: r.left, top: r.top });
+    });
+    main.style.marginLeft = oldM || '';
+    document.body.classList.toggle('sidebar-open', wasOpen);
+    void main.offsetHeight;
+
+    // Заморозка grid — не пересчитывает колонки во время анимации
+    grid.style.width = grid.clientWidth + 'px';
+    grid.style.gridTemplateColumns = getComputedStyle(grid).gridTemplateColumns;
+    grid.style.justifyContent = 'start';
+
+    // INVERT: ставим transform на карточки до старта margin
+    const deltaMargin = wasOpen ? -160 : 160;
+    visible.forEach((card, i) => {
+      const dx = (futureRects[i].left - firstRects[i].left) - deltaMargin;
+      const dy = futureRects[i].top - firstRects[i].top;
+      card.style.willChange = 'transform';
+      card.style.transition = 'transform .25s ease';
+      card.style.transform = `translate3d(${dx}px, ${dy}px, 0)`;
+    });
+
+    // Запуск margin-анимации
+    animating = true;
     let finished = false;
     const finish = () => {
-      if (finished) return;
+      if(finished) return;
       finished = true;
       main.removeEventListener('transitionend', onEnd);
-      clearTimeout(fallback);
+      clearTimeout(fb);
 
-      // всё в одном флаше, без transition на карточках
+      // Cleanup в одном флаше — карточки мгновенно на финальных позициях
       visible.forEach(c => {
         c.style.transition = 'none';
         c.style.transform = '';
         c.style.willChange = '';
       });
-      if (flip) {
-        grid.style.width = '';
-        grid.style.gridTemplateColumns = '';
-        grid.style.justifyContent = '';
-      }
+      grid.style.width = '';
+      grid.style.gridTemplateColumns = '';
+      grid.style.justifyContent = '';
       main.style.transition = '';
       main.style.marginLeft = '';
 
@@ -14703,18 +14754,17 @@ document.getElementById('viewModal').onclick = e => {
       animating = false;
     };
     const onEnd = (ev) => {
-      if (ev.target === main && ev.propertyName === 'margin-left') finish();
+      if(ev.target === main && ev.propertyName === 'margin-left') finish();
     };
     main.addEventListener('transitionend', onEnd);
-    const fallback = setTimeout(finish, 450);
+    const fb = setTimeout(finish, 450);
 
-    // ── старт: margin и transform в одном кадре ──
     main.style.transition = 'margin-left .25s ease';
     main.style.marginLeft = (wasOpen ? 64 : 224) + 'px';
     document.body.classList.toggle('sidebar-open', !wasOpen);
   };
 })();
-document.getElementById('sidebarBackdrop').onclick = () => {
+  document.getElementById('sidebarBackdrop').onclick = () => {
   document.body.classList.remove('sidebar-open');
 };
 document.addEventListener('click', (e) => {
