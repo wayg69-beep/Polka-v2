@@ -20334,6 +20334,7 @@ const BRIGHTNESS_SWIPE_SENSITIVITY = 0.45; // свайп на 45% высоты �
    ========================================= */
 const SlashLibReader = {
   _fullSlug: '', _shortSlug: '',
+_source: 'slashlib',
   _pagesList: [],       // [{ image, chapterId, volume, number }]
   _blobUrls: {},
   _currentIndex: 0,
@@ -21526,9 +21527,10 @@ _closeChaptersList() {
   if (modal) modal.classList.remove('on');
 },
   
-  async open(fullSlug, chapterId, volume, number, pagesList, title, progress, chaptersList, itemId) {
-    if (this._opening) return;
-    this._opening = true;
+async open(fullSlug, chapterId, volume, number, pagesList, title, progress, chaptersList, itemId, source) {
+  if (this._opening) return;
+this._opening = true;
+this._source = source || 'slashlib';
   
     try {
       // Новая сессия — все loadPage из прошлого открытия (если ещё работают)
@@ -22242,7 +22244,7 @@ updateChapterNav() {
     }
   },
 
-    async loadPage(idx) {
+async loadPage(idx) {
   if (this._blobUrls[idx]) return;
   const wrap = document.getElementById('readerPages');
   if (!wrap) return;
@@ -22253,95 +22255,125 @@ updateChapterNav() {
   const pageInfo = this._pagesList[idx];
   if (!pageInfo) return;
 
-  // Запоминаем сессию — если она сменится, пока грузим из сети,
-  // значит пользователь закрыл/переоткрыл читалку
   const mySession = this._sessionId;
-    
-      // Приоритет — канонический path из API (pageInfo.url):
-      //   //manga/{slug}/chapters/{vol}-{num}/{image}
-      // Фолбэк — старая склейка через chapterId.
-      let path;
-      const rawUrl = String(pageInfo.url || '').trim();
-      if (rawUrl) {
-        if (/^https?:\/\//i.test(rawUrl)) {
-          path = rawUrl;
-        } else {
-          path = rawUrl.replace(/^\/+/, '');
-        }
-      } else {
-        const raw = String(pageInfo.image || '').replace(/^\/+/, '');
-        path = `manga/${this._shortSlug}/chapters/${pageInfo.chapterId}/${raw}`;
-      }
-    
-      const domains = [
-        'https://img3.hentaicdn.org',
-        'https://img3.cdnlibs.link',
-        'https://img3.cdnlibs.org'
-      ];
-    
-      const token = localStorage.getItem('slashlib_token');
-      const headers = {
-        'Authorization': 'Bearer ' + token,
-        'Origin': 'https://v2.shlib.life',
-        'Referer': 'https://v2.shlib.life/',
-        'Site-Id': '2',
-        'Accept': 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8'
-      };
-    
-      const CHttp = window.Capacitor?.Plugins?.CapacitorHttp;
-      if (!CHttp) {
-        console.warn('[loadPage] Нет CapacitorHttp');
-        return;
-      }
-    
-      let blob = null;
-    
-      for (const base of domains) {
-  if (this._sessionId !== mySession) return;
-  const tryUrl = path.startsWith('http') ? path : `${base}/${path}`;
-  try {
-    const r = await CHttp.get({ url: tryUrl, headers, responseType: 'arraybuffer' });
-    if (this._sessionId !== mySession) return;
-    if (r.status === 200 && r.data) {
-            let b64 = r.data;
-            if (b64.startsWith('data:image')) b64 = b64.split(',')[1];
-            const bin = atob(b64);
-            const bytes = new Uint8Array(bin.length);
-            for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-            blob = new Blob([bytes], { type: 'image/png' });
-            break;
-          }
-          console.warn('[loadPage]', tryUrl, 'HTTP', r.status, '— пробую следующее зеркало');
-        } catch(e) {
-          console.warn('[loadPage]', tryUrl, 'ERR', e.message, '— пробую следующее зеркало');
-        }
-      }
-    
-      if (!blob) {
-        if (img) {
-          img.alt = 'Не удалось загрузить страницу';
-          img.style.opacity = '0.3';
-        }
-        return;
-      }
-    
-        const blobUrl = URL.createObjectURL(blob);
-
-  const currentImgs = wrap.querySelectorAll('img');
-  const currentImg = currentImgs[idx];
-  if (!currentImg) {
-    // Читалку закрыли/переоткрыли, пока страница грузилась — этот URL никому не нужен
-    URL.revokeObjectURL(blobUrl);
+  const CHttp = window.Capacitor?.Plugins?.CapacitorHttp;
+  if (!CHttp) {
+    console.warn('[loadPage] Нет CapacitorHttp');
     return;
   }
+
+  // ═══ COMIZY ═══
+  if (this._source === 'comizy') {
+    const url = String(pageInfo.url || '').trim();
+    if (!url) return;
+
+    const headers = {
+      'Referer': 'https://comizy.io/',
+      'Origin': 'https://comizy.io',
+      'User-Agent': 'Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36',
+      'Accept': 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8'
+    };
+
+    let blob = null;
+    try {
+      const r = await CHttp.get({ url, headers, responseType: 'arraybuffer' });
+      if (this._sessionId !== mySession) return;
+      if (r.status === 200 && r.data) {
+        let b64 = r.data;
+        if (b64.startsWith('data:image')) b64 = b64.split(',')[1];
+        const bin = atob(b64);
+        const bytes = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+        blob = new Blob([bytes], { type: 'image/webp' });
+      } else {
+        console.warn('[loadPage comizy]', url, 'HTTP', r.status);
+      }
+    } catch(e) {
+      console.warn('[loadPage comizy]', url, 'ERR', e.message);
+    }
+
+    if (!blob) {
+      const cur = wrap.querySelectorAll('img')[idx];
+      if (cur) { cur.alt = 'Не удалось загрузить страницу'; cur.style.opacity = '0.3'; }
+      return;
+    }
+
+    const blobUrl = URL.createObjectURL(blob);
+    const currentImgs = wrap.querySelectorAll('img');
+    const currentImg = currentImgs[idx];
+    if (!currentImg) { URL.revokeObjectURL(blobUrl); return; }
+
     this._blobUrls[idx] = blobUrl;
+    currentImg.src = blobUrl;
+    currentImg.style.opacity = '1';
+    currentImg.style.aspectRatio = '';
+    currentImg.style.width = '';
+    void wrap.scrollHeight;
+    return;
+  }
+
+  // ═══ SLASHLIB (как было) ═══
+  let path;
+  const rawUrl = String(pageInfo.url || '').trim();
+  if (rawUrl) {
+    if (/^https?:\/\//i.test(rawUrl)) path = rawUrl;
+    else path = rawUrl.replace(/^\/+/, '');
+  } else {
+    const raw = String(pageInfo.image || '').replace(/^\/+/, '');
+    path = `manga/${this._shortSlug}/chapters/${pageInfo.chapterId}/${raw}`;
+  }
+
+  const domains = [
+    'https://img3.hentaicdn.org',
+    'https://img3.cdnlibs.link',
+    'https://img3.cdnlibs.org'
+  ];
+
+  const token = localStorage.getItem('slashlib_token');
+  const headers = {
+    'Authorization': 'Bearer ' + token,
+    'Origin': 'https://v2.shlib.life',
+    'Referer': 'https://v2.shlib.life/',
+    'Site-Id': '2',
+    'Accept': 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8'
+  };
+
+  let blob = null;
+  for (const base of domains) {
+    if (this._sessionId !== mySession) return;
+    const tryUrl = path.startsWith('http') ? path : `${base}/${path}`;
+    try {
+      const r = await CHttp.get({ url: tryUrl, headers, responseType: 'arraybuffer' });
+      if (this._sessionId !== mySession) return;
+      if (r.status === 200 && r.data) {
+        let b64 = r.data;
+        if (b64.startsWith('data:image')) b64 = b64.split(',')[1];
+        const bin = atob(b64);
+        const bytes = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+        blob = new Blob([bytes], { type: 'image/png' });
+        break;
+      }
+      console.warn('[loadPage]', tryUrl, 'HTTP', r.status, '— пробую следующее зеркало');
+    } catch(e) {
+      console.warn('[loadPage]', tryUrl, 'ERR', e.message, '— пробую следующее зеркало');
+    }
+  }
+
+  if (!blob) {
+    if (img) { img.alt = 'Не удалось загрузить страницу'; img.style.opacity = '0.3'; }
+    return;
+  }
+
+  const blobUrl = URL.createObjectURL(blob);
+  const currentImgs = wrap.querySelectorAll('img');
+  const currentImg = currentImgs[idx];
+  if (!currentImg) { URL.revokeObjectURL(blobUrl); return; }
+  this._blobUrls[idx] = blobUrl;
   currentImg.src = blobUrl;
   currentImg.style.opacity = '1';
   currentImg.style.aspectRatio = '';
   currentImg.style.width = '';
-  // Форс reflow: после снятия aspect-ratio layout вырос, но scrollHeight
-  // в JS кэшируется — native рендерит новую высоту, а JS видит старую.
-  // Пустое чтение scrollHeight форсит пересчёт, пороги по stTop начинают работать.
   void wrap.scrollHeight;
 },
   
