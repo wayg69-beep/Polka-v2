@@ -8964,8 +8964,10 @@ const notesBlock = (it.notes && String(it.notes).trim())
   const isSquare = (group === 'music');
   const viewLeftClass = 'view-left' + (isSquare ? ' square' : '');
   const coverHClass = 'view-cover-h' + (isSquare ? ' square' : '') + (hasCover ? ' tappable' : '');
-const showReadBtn = group === 'comic' && it.link && it.link.includes('shlib.life');
-const showComizyReadBtn = group === 'comic' && it.link_comizy && it.link_comizy.includes('comizy.io');
+const hasSlashlib = group === 'comic' && it.link && it.link.includes('shlib.life');
+const hasComizy = group === 'comic' && it.link_comizy && it.link_comizy.includes('comizy.io');
+const showReadBtn = hasSlashlib || hasComizy;
+  const showComizyReadBtn = group === 'comic' && it.link_comizy && it.link_comizy.includes('comizy.io');
   
     panel.innerHTML = `
     <div class="view-body">
@@ -9004,16 +9006,10 @@ ${isMobile
     </div>
         <div class="view-footer">
   <div class="actions">
-${(showReadBtn || showComizyReadBtn) ? `<div class="read-btns">
-  ${showReadBtn ? `<button class="btn btn-read-manga" id="btnReadSlashlib" title="Читать в приложении">
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
-    Читать
-  </button>` : ''}
-  ${showComizyReadBtn ? `<button class="btn btn-read-comizy" id="btnReadComizy" title="Читать (EN)">
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
-    EN
-  </button>` : ''}
-</div>` : ''}
+${showReadBtn ? `<button class="btn btn-read-manga" id="btnReadSlashlib" title="Читать в приложении">
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+  Читать
+</button>` : ''}
     <button class="btn primary refresh-btn" id="viewRefresh" title="Обновить данные">
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7"/><polyline points="21 4 21 10 15 10"/></svg>
 </button>
@@ -9141,21 +9137,97 @@ const btnReadSlashlib = panel.querySelector('#btnReadSlashlib');
 if (btnReadSlashlib) {
   btnReadSlashlib.onclick = async (e) => {
     e.stopPropagation();
-    const token = localStorage.getItem('slashlib_token');
-    if (!token) { toast('Нужно войти в SlashLib', 'error'); return; }
-    
-    const fullSlug = (it.link.match(/\/manga\/([^\/?#]+)/) || [])[1];
-    if (!fullSlug) { toast('Не удалось определить slug', 'error'); return; }
 
-    const btnReadSlashlibOriginalHTML = btnReadSlashlib.innerHTML;
+    const origHTML = btnReadSlashlib.innerHTML;
     btnReadSlashlib.disabled = true;
     btnReadSlashlib.innerHTML = 'Загружаю...';
-    
+
     try {
+      // ═══ ВЫБОР ИСТОЧНИКА ПО ЯЗЫКУ ═══
+      // _settings.language — из настроек ридера ('ru' | 'en')
+      const lang = SlashLibReader._settings?.language || 'ru';
+
+      // Английский → Comizy, если есть. Иначе — SlashLib.
+      // Русский → SlashLib, если есть. Иначе — Comizy.
+      let useComizy = false;
+      if (lang === 'en') {
+        useComizy = hasComizy;
+      } else {
+        useComizy = !hasSlashlib && hasComizy;
+      }
+
+      // ═══ COMIZY ═══
+      if (useComizy) {
+        const slug = (it.link_comizy.match(/comizy\.io\/([^\/?#]+)/) || [])[1];
+        if (!slug) throw new Error('Нет slug в ссылке Comizy');
+
+        const details = await ComizyParser.getMangaDetails(slug);
+        if (!details || !details.hid) throw new Error('Не удалось получить данные манги');
+
+        const chapters = await ComizyParser.getChapters(details.hid);
+        if (!chapters || !chapters.length) throw new Error('Нет глав');
+        chapters.sort((a, b) => a.number - b.number);
+
+        const fullSlug = 'comizy:' + slug;
+
+        let progress = null;
+        try {
+          const p = JSON.parse(localStorage.getItem('polka_reader_progress') || '{}')[fullSlug];
+          if (p && p.chapterId) progress = p;
+        } catch(err) {}
+
+        let target = progress ? chapters.find(c => c.id === progress.chapterId) : null;
+        if (!target) target = chapters[0];
+
+        const rawPages = await ComizyParser.getChapterPages(slug, target.slug);
+        if (!rawPages || !rawPages.length) throw new Error('Нет страниц в главе');
+
+        const filtered = rawPages.filter(p => !(p.width && p.height && p.width / p.height > 1.2));
+        if (!filtered.length) throw new Error('Все страницы отфильтрованы');
+
+        const pages = filtered.map(p => ({
+          image: '',
+          url: p.url,
+          chapterId: target.id,
+          volume: 1,
+          number: target.number
+        }));
+
+        const chaptersList = chapters.map(c => ({
+          id: c.id,
+          volume: 1,
+          number: c.number,
+          name: c.name,
+          slug: c.slug
+        }));
+
+        SlashLibReader.open(
+          fullSlug,
+          target.id,
+          1,
+          target.number,
+          pages,
+          details.title + ' - Chapter ' + target.number,
+          progress,
+          chaptersList,
+          it.id,
+          'comizy'
+        );
+
+        document.getElementById('viewModal').classList.remove('on');
+        return;
+      }
+
+      // ═══ SLASHLIB ═══
+      const token = localStorage.getItem('slashlib_token');
+      if (!token) { toast('Нужно войти в SlashLib', 'error'); return; }
+
+      const fullSlug = (it.link.match(/\/manga\/([^\/?#]+)/) || [])[1];
+      if (!fullSlug) { toast('Не удалось определить slug', 'error'); return; }
+
       let progress = {};
       try { progress = JSON.parse(localStorage.getItem('polka_reader_progress') || '{}')[fullSlug] || null; } catch(err){}
 
-      // 1. Получаем весь список глав манги
       const listRes = await nativeFetch(`https://api.cdnlibs.org/api/manga/${fullSlug}/chapters`, {
         'Authorization': 'Bearer ' + token, 'Site-Id': '2',
         'Origin': 'https://v2.shlib.life', 'Referer': 'https://v2.shlib.life/'
@@ -9164,14 +9236,12 @@ if (btnReadSlashlib) {
       const chaptersList = listJson.data || [];
       if (!chaptersList.length) { toast('Глав не найдено', 'warn'); return; }
 
-      // 2. Определяем нужную главу
       let targetChapter = null;
       if (progress && progress.chapterId) {
         targetChapter = chaptersList.find(c => c.id === progress.chapterId);
       }
-      if (!targetChapter) targetChapter = chaptersList[0]; // Если прогресса нет, берем первую
-      
-      // 3. Запрашиваем страницы
+      if (!targetChapter) targetChapter = chaptersList[0];
+
       const chapRes = await nativeFetch(`https://api.cdnlibs.org/api/manga/${fullSlug}/chapter?volume=${targetChapter.volume}&number=${targetChapter.number}`, {
         'Authorization': 'Bearer ' + token, 'Site-Id': '2',
         'Origin': 'https://v2.shlib.life', 'Referer': 'https://v2.shlib.life/'
@@ -9185,18 +9255,16 @@ if (btnReadSlashlib) {
       }
 
       const title = `${it.title} - Том ${chapData.volume} Глава ${chapData.number}`;
-      
-      // Сначала открываем читалку (она z-index 600, перекроет viewModal с 500),
-      // затем закрываем viewModal — между ними не будет кадра с серым body.
-      SlashLibReader.open(fullSlug, chapData.id, chapData.volume, chapData.number, chapData.pages, title, progress, chaptersList, it.id);
+
+      SlashLibReader.open(fullSlug, chapData.id, chapData.volume, chapData.number, chapData.pages, title, progress, chaptersList, it.id, 'slashlib');
       document.getElementById('viewModal').classList.remove('on');
 
-      
     } catch(err) {
+      console.error('[Read]', err);
       toast('Ошибка: ' + err.message, 'error');
     } finally {
-  btnReadSlashlib.disabled = false;
-  btnReadSlashlib.innerHTML = btnReadSlashlibOriginalHTML;
+      btnReadSlashlib.disabled = false;
+      btnReadSlashlib.innerHTML = origHTML;
     }
   };
 }
