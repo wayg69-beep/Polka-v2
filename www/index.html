@@ -22647,6 +22647,68 @@ async checkAutoLoad() {
   if (this._autoLoading) return;
   if (!this._pagesList.length) return;
 
+  // ═══ COMIZY ═══
+  if (this._source === 'comizy') {
+    const bounds = this.getCurrentChapterBounds();
+    if (!bounds) return;
+    const remaining = bounds.endIdx - this._currentIndex;
+    if (remaining > 2) return;
+    if (this._pagesList.length > bounds.endIdx + 1) return;
+
+    this._autoLoading = true;
+    try {
+      const mangaSlug = this._fullSlug.replace(/^comizy:/, '');
+      const rawPages = await ComizyParser.getChapterPages(mangaSlug, this._nextChapter.slug);
+      if (!rawPages || !rawPages.length) return;
+      const filtered = rawPages.filter(p => !(p.width && p.height && p.width / p.height > 1.2));
+      if (!filtered.length) return;
+
+      const wrap = document.getElementById('readerPages');
+      const nextBlock = document.getElementById('readerNextBlock');
+      if (!wrap) return;
+
+      const startIdx = this._pagesList.length;
+      filtered.forEach((page, i) => {
+        const img = document.createElement('img');
+        img.alt = 'Страница ' + (startIdx + i + 1);
+        img.style.opacity = '0';
+        img.style.transition = 'opacity 0.3s ease';
+        img.style.aspectRatio = '2 / 3';
+        img.style.width = '100%';
+        if (nextBlock) wrap.insertBefore(img, nextBlock);
+        else wrap.appendChild(img);
+
+        this._pagesList.push({
+          image: '',
+          url: page.url,
+          chapterId: this._nextChapter.id,
+          volume: 1,
+          number: this._nextChapter.number
+        });
+      });
+
+      this._reindexReaderImgs();
+
+      const currIdx = this._chaptersList.findIndex(c => c.id === this._nextChapter.id);
+      this._nextChapter = (currIdx !== -1 && currIdx < this._chaptersList.length - 1)
+        ? this._chaptersList[currIdx + 1] : null;
+      this._prevChapter = (currIdx > 0) ? this._chaptersList[currIdx - 1] : null;
+
+      this.updateChapterNav();
+      this.updateNextBlock();
+      this.updateReaderTitle();
+
+      for (let i = 0; i < Math.min(3, filtered.length); i++) {
+        try { await this.loadPage(startIdx + i); } catch(e){}
+      }
+    } catch(e) {
+      console.warn('[Comizy AutoLoad]', e);
+    } finally {
+      this._autoLoading = false;
+    }
+    return;
+  }
+
   const bounds = this.getCurrentChapterBounds();
   if (!bounds) return;
 
@@ -22728,21 +22790,102 @@ async checkPrevLoad() {
 
   const bounds = this.getCurrentChapterBounds();
   if (!bounds) return;
-  // Не грузим "предыдущую", если её номер не меньше текущей (защита от кривого _prevChapter)
-if (this._prevChapter && this._prevChapter.number != null && bounds.number != null) {
-  if (parseFloat(this._prevChapter.number) >= parseFloat(bounds.number)) {
-    this._prevChapter = null;
-    this.updateChapterNav();
-    return;
+  if (this._prevChapter && this._prevChapter.number != null && bounds.number != null) {
+    if (parseFloat(this._prevChapter.number) >= parseFloat(bounds.number)) {
+      this._prevChapter = null;
+      this.updateChapterNav();
+      return;
+    }
   }
-}
   if (this._pagesList[0].chapterId !== bounds.chapterId) return;
 
-  // Тянем предыдущую главу только когда близко к началу текущей —
-// в auto тоже. Иначе при открытии на середине глава-предыдущая
-// вставится в начало и пользователя отбросит назад
-const remaining = this._currentIndex - bounds.startIdx;
-if (remaining > 2) return;
+  const remaining = this._currentIndex - bounds.startIdx;
+  if (remaining > 2) return;
+
+  // ═══ COMIZY ═══
+  if (this._source === 'comizy') {
+    this._prevLoading = true;
+    try {
+      const mangaSlug = this._fullSlug.replace(/^comizy:/, '');
+      const rawPages = await ComizyParser.getChapterPages(mangaSlug, this._prevChapter.slug);
+      if (!rawPages || !rawPages.length) return;
+      const filtered = rawPages.filter(p => !(p.width && p.height && p.width / p.height > 1.2));
+      if (!filtered.length) return;
+
+      const wrap = document.getElementById('readerPages');
+      if (!wrap) return;
+
+      const imgsBefore = wrap.querySelectorAll('img');
+      const curImgBefore = imgsBefore[this._currentIndex];
+      const oldScroll = wrap.scrollTop;
+      const relOffset = curImgBefore ? (oldScroll - curImgBefore.offsetTop) : 0;
+
+      const addedCount = filtered.length;
+      const firstChild = wrap.firstChild;
+
+      this._restoring = true;
+
+      for (let i = addedCount - 1; i >= 0; i--) {
+        const img = document.createElement('img');
+        img.alt = 'Страница ' + (i + 1);
+        img.style.opacity = '0';
+        img.style.transition = 'opacity 0.3s ease';
+        img.style.aspectRatio = '2 / 3';
+        img.style.width = '100%';
+        if (firstChild) wrap.insertBefore(img, firstChild);
+        else wrap.appendChild(img);
+
+        this._pagesList.unshift({
+          image: '',
+          url: filtered[i].url,
+          chapterId: this._prevChapter.id,
+          volume: 1,
+          number: this._prevChapter.number
+        });
+      }
+
+      this._reindexReaderImgs();
+      this._currentIndex += addedCount;
+      this.updateReaderTitle();
+
+      const shiftedBlobs = {};
+      for (const [key, url] of Object.entries(this._blobUrls)) {
+        shiftedBlobs[parseInt(key, 10) + addedCount] = url;
+      }
+      this._blobUrls = shiftedBlobs;
+
+      const currIdx = this._chaptersList.findIndex(c => c.id === this._prevChapter.id);
+      this._prevChapter = (currIdx > 0) ? this._chaptersList[currIdx - 1] : null;
+      this.updateChapterNav();
+      this.updateCounter();
+
+      const indices = Array.from({ length: addedCount }, (_, i) => i);
+      await this.loadPagesBatch(indices, 4);
+
+      const allImgs = wrap.querySelectorAll('img');
+      for (let i = 0; i < addedCount; i++) {
+        if (allImgs[i]) {
+          allImgs[i].style.aspectRatio = '';
+          allImgs[i].style.width = '';
+        }
+      }
+
+      const imgsAfter = wrap.querySelectorAll('img');
+      const curImgAfter = imgsAfter[this._currentIndex];
+      if (curImgAfter) {
+        wrap.scrollTop = curImgAfter.offsetTop + relOffset;
+      }
+
+      this._reindexReaderImgs();
+      setTimeout(() => { this._restoring = false; }, 200);
+    } catch(e) {
+      console.warn('[Comizy PrevLoad]', e);
+      this._restoring = false;
+    } finally {
+      this._prevLoading = false;
+    }
+    return;
+  }
 
   this._prevLoading = true;
   try {
@@ -22845,6 +22988,38 @@ setTimeout(() => { this._restoring = false; }, 200);
   
 async loadChapter(volume, number, chapterId, progress) {
   toast('Загружаю главу...', 'success');
+
+  // ═══ COMIZY ═══
+  if (this._source === 'comizy') {
+    const mangaSlug = this._fullSlug.replace(/^comizy:/, '');
+    const chapters = this._chaptersList || [];
+    const target = chapters.find(c => c.id === chapterId) || chapters.find(c => c.number === number);
+    if (!target) { toast('Глава не найдена', 'error'); return; }
+
+    try {
+      const rawPages = await ComizyParser.getChapterPages(mangaSlug, target.slug);
+      if (!rawPages || !rawPages.length) { toast('Нет страниц', 'warn'); return; }
+
+      const filtered = rawPages.filter(p => !(p.width && p.height && p.width / p.height > 1.2));
+      const pages = filtered.map(p => ({
+        image: '',
+        url: p.url,
+        chapterId: target.id,
+        volume: 1,
+        number: target.number
+      }));
+
+      const baseTitle = (this._baseTitle || '').trim();
+      const title = baseTitle + ' - Chapter ' + target.number;
+      this.open(this._fullSlug, target.id, 1, target.number, pages, title, progress || null, chapters, this._itemId, 'comizy');
+    } catch(e) {
+      console.error('[Comizy loadChapter]', e);
+      toast('Ошибка загрузки главы', 'error');
+    }
+    return;
+  }
+
+  // ═══ SLASHLIB ═══
   const token = localStorage.getItem('slashlib_token');
   try {
     const chapRes = await nativeFetch(
@@ -22861,7 +23036,7 @@ async loadChapter(volume, number, chapterId, progress) {
       const baseTitle = (this._baseTitle || '').trim();
       const title = baseTitle + ` - Том ${chapData.volume} Глава ${chapData.number}`;
       this.open(this._fullSlug, chapData.id, chapData.volume, chapData.number,
-        chapData.pages, title, progress || null, this._chaptersList, this._itemId);
+        chapData.pages, title, progress || null, this._chaptersList, this._itemId, 'slashlib');
     } else {
       toast('Не удалось загрузить главу', 'warn');
     }
