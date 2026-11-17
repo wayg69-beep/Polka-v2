@@ -21123,7 +21123,12 @@ async _filterDisclaimers(pages, depth, silent) {
     toast('Глава может содержать дисклеймеры', 'warn');
   };
 
-  const isDiscBySize = d => d && d.w > 0 && d.h > 0 && (d.h / d.w) < 2;
+const isDiscBySize = d => d && d.w > 0 && d.h > 0 && (d.h / d.w) < 2;
+// Используем размеры из API если есть — не скачиваем картинку
+const getSize = async (page) => {
+  if (page.width && page.height) return { w: page.width, h: page.height, hash: null };
+  return await this._probeImageInfoCached(page);
+};
   const knownHashes = this._getDiscHashes();
   const beforeCount = pages.length;
 
@@ -21131,7 +21136,7 @@ async _filterDisclaimers(pages, depth, silent) {
   const discard = new Set();
   if (knownHashes.size > 0) {
     for (let i = 0; i < pages.length; i++) {
-      const info = await this._probeImageInfoCached(pages[i]);
+      const info = await getSize(pages[i]);
       if (info && knownHashes.has(info.hash)) discard.add(i);
     }
   }
@@ -21889,6 +21894,8 @@ if (progress && typeof progress.page === 'number' && filterResult.removedFromSta
 this._pagesList = pagesList.map(p => ({
   image: p.image,
   url: p.url || '',
+  width: p.width || 0,
+  height: p.height || 0,
   chapterId: chapterId,
   volume: volume,
   number: number
@@ -21916,14 +21923,18 @@ this._pagesList = pagesList.map(p => ({
         wrap.className = 'reader-pages';
         if (this._settings.mode === 'LEFT_TO_RIGHT') wrap.classList.add('horizontal');
     
-        this._pagesList.forEach((page, i) => {
+                this._pagesList.forEach((page, i) => {
   const img = document.createElement('img');
   img.alt = 'Страница ' + (i + 1);
   img.dataset.index = i;
   img.style.opacity = '0';
   img.style.transition = 'opacity 0.3s ease';
   if (this._settings.mode === 'WEBTOON') {
-    img.style.aspectRatio = '2 / 3';
+    if (page.width && page.height) {
+      img.style.aspectRatio = `${page.width} / ${page.height}`;
+    } else {
+      img.style.aspectRatio = '2 / 3';
+    }
     img.style.width = '100%';
   }
   wrap.appendChild(img);
@@ -21964,42 +21975,51 @@ this._updateMusicBtnState();
           stage.appendChild(overlay);
         }
     
-        const prevIdx = [];
-        for (let i = 0; i < this._currentIndex; i++) prevIdx.push(i);
-    
-        const afterIdx = [];
-        for (let i = this._currentIndex + 1; i < this._pagesList.length; i++) afterIdx.push(i);
-    
-        (async () => {
-          try {
-            if (prevIdx.length) await this.loadPagesBatch(prevIdx, 6);
-            await this.loadPage(this._currentIndex);
-    
-            await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
-    
-            this._restoring = true;
-            this.restoreScroll(progress && typeof progress.offset === 'number' ? progress.offset : 0);
-    
-            wrap.style.visibility = 'visible';
-const ov = document.getElementById('readerLoadingOverlay');
-if (ov) ov.remove();
+        // Ленивая загрузка: current + близкие, остальные — по скроллу
+const PRELOAD_BEFORE = 2;
+const PRELOAD_AFTER = 3;
 
-// Форсированный фит: после того как читалка видна и layout пересчитан.
-// Двойной rAF гарантирует, что clientWidth у title актуален.
-requestAnimationFrame(() => requestAnimationFrame(() => this._fitReaderTitle()));
-    
-            this.loadPagesBatch(afterIdx, 4);
-    
-            setTimeout(() => { this._restoring = false; }, 200);
-    
-          } catch(e) {
-            console.error('[Reader open]', e);
-            this._restoring = false;
-            wrap.style.visibility = 'visible';
-            const ov = document.getElementById('readerLoadingOverlay');
-            if (ov) ov.remove();
-          }
-        })();
+const nearBefore = [];
+for (let i = Math.max(0, this._currentIndex - PRELOAD_BEFORE); i < this._currentIndex; i++) nearBefore.push(i);
+
+const nearAfter = [];
+for (let i = this._currentIndex + 1; i < Math.min(this._pagesList.length, this._currentIndex + 1 + PRELOAD_AFTER); i++) nearAfter.push(i);
+
+(async () => {
+  try {
+    // Placeholder'ы уже с правильными размерами → layout готов,
+    // скролл на нужную позицию мгновенный, без ожидания картинок
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+
+    this._restoring = true;
+    this.restoreScroll(progress && typeof progress.offset === 'number' ? progress.offset : 0);
+
+    wrap.style.visibility = 'visible';
+    requestAnimationFrame(() => requestAnimationFrame(() => this._fitReaderTitle()));
+
+    // current (приоритет) + близкие — параллельно
+    const currentPromise = this.loadPage(this._currentIndex);
+    const beforePromise = nearBefore.length ? this.loadPagesBatch(nearBefore, 3) : Promise.resolve();
+    const afterPromise  = nearAfter.length  ? this.loadPagesBatch(nearAfter, 3)  : Promise.resolve();
+
+    // Оверлей скрываем как только current загрузилась
+    await currentPromise;
+    const ov = document.getElementById('readerLoadingOverlay');
+    if (ov) ov.remove();
+
+    setTimeout(() => { this._restoring = false; }, 200);
+
+    // Остальные — в фоне
+    Promise.all([beforePromise, afterPromise]).catch(() => {});
+
+  } catch(e) {
+    console.error('[Reader open]', e);
+    this._restoring = false;
+    wrap.style.visibility = 'visible';
+    const ov = document.getElementById('readerLoadingOverlay');
+    if (ov) ov.remove();
+  }
+})();
     
         } catch (outerErr) {
     // Если что-то упало до создания wrap-логики — убрать оверлей и читалку,
@@ -22739,13 +22759,15 @@ bindGestures() {
     if (!found) idx = this._currentIndex;
 
     if (idx !== this._currentIndex) {
-      this._currentIndex = idx;
-      this.updateCounter();
-      this.updateChapterNav();
-      this.updateReaderTitle();
-      this.loadPage(idx);
-      if (idx + 1 < this._pagesList.length) this.loadPage(idx + 1);
-      this.checkNextChapterUI();
+  this._currentIndex = idx;
+  this.updateCounter();
+  this.updateChapterNav();
+  this.updateReaderTitle();
+  // Предзагрузка ± 2 — loadPage внутри проверяет _blobUrls и не грузит повторно
+  for (let i = Math.max(0, idx - 2); i < Math.min(this._pagesList.length, idx + 3); i++) {
+    if (!this._blobUrls[i]) this.loadPage(i);
+  }
+  this.checkNextChapterUI();
     }
     this.checkAutoLoad();
     this.checkPrevLoad();
@@ -23037,12 +23059,14 @@ const filterResult = await this._filterDisclaimers(chapData.pages, 0, true);
       else wrap.appendChild(img);
 
       this._pagesList.push({
-        image: page.image,
-        url: page.url || '',
-        chapterId: chapData.id,
-        volume: chapData.volume,
-        number: chapData.number
-      });
+  image: page.image,
+  url: page.url || '',
+  width: page.width || 0,
+  height: page.height || 0,
+  chapterId: chapData.id,
+  volume: chapData.volume,
+  number: chapData.number
+});
     });
 
     // Пересчитать индексы у всех img
@@ -23217,12 +23241,14 @@ for (let i = addedCount - 1; i >= 0; i--) {
   else wrap.appendChild(img);
 
   this._pagesList.unshift({
-    image: filteredPages[i].image,
-    url: filteredPages[i].url || '',
-    chapterId: chapData.id,
-    volume: chapData.volume,
-    number: chapData.number
-  });
+  image: filteredPages[i].image,
+  url: filteredPages[i].url || '',
+  width: filteredPages[i].width || 0,
+  height: filteredPages[i].height || 0,
+  chapterId: chapData.id,
+  volume: chapData.volume,
+  number: chapData.number
+});
 }
 
     // КРИТИЧНО: пересчитать dataset.index у всех img, чтобы старые индексы были валидны
