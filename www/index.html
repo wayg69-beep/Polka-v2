@@ -9144,20 +9144,95 @@ if (btnReadSlashlib) {
 
     try {
       // ═══ ВЫБОР ПО ЯЗЫКУ ═══
-// ru → SlashLib, en → Comizy. Fallback на то что есть.
+// ru → SlashLib, en → Comizy. Если выбранный источник недоступен — fallback.
 const lang = SlashLibReader._settings?.language || 'ru';
 let useComizy;
 if (lang === 'en') useComizy = hasComizy;
 else useComizy = !hasSlashlib && hasComizy;
 
       // ═══ COMIZY ═══
-      if (useComizy) {
-        const slug = (it.link_comizy.match(/comizy\.io\/([^\/?#]+)/) || [])[1];
-        if (!slug) throw new Error('Нет slug в ссылке Comizy');
+if (useComizy) {
+  const slug = (it.link_comizy.match(/comizy\.io\/([^\/?#]+)/) || [])[1];
+  if (!slug) throw new Error('Нет slug в ссылке Comizy');
 
-        const details = await ComizyParser.getMangaDetails(slug);
-        if (!details || !details.hid) throw new Error('Не удалось получить данные манги');
+  let details = null;
+  try {
+    details = await ComizyParser.getMangaDetails(slug);
+  } catch(e) {
+    console.warn('[Comizy] getMangaDetails failed:', e.message);
+  }
 
+  if (!details || !details.hid) {
+    // Fallback на SlashLib, если Comizy недоступен
+    if (hasSlashlib) {
+      console.warn('[Comizy] недоступен, fallback на SlashLib');
+      btnReadSlashlib.disabled = false;
+      btnReadSlashlib.innerHTML = origHTML;
+      // Переключаем на SlashLib принудительно
+      toast('Comizy недоступен, открываю SlashLib', 'warn');
+      useComizy = false;
+    } else {
+      throw new Error('Comizy недоступен (502). Попробуй позже.');
+    }
+  }
+
+  if (useComizy) {
+    const chapters = await ComizyParser.getChapters(details.hid);
+    if (!chapters || !chapters.length) throw new Error('Нет глав');
+    chapters.sort((a, b) => a.number - b.number);
+
+    const fullSlug = 'comizy:' + slug;
+
+    let progress = null;
+    try {
+      const p = JSON.parse(localStorage.getItem('polka_reader_progress') || '{}')[fullSlug];
+      if (p && p.chapterId) progress = p;
+    } catch(err) {}
+
+    let target = progress ? chapters.find(c => c.id === progress.chapterId) : null;
+    if (!target) target = chapters[0];
+
+    const rawPages = await ComizyParser.getChapterPages(slug, target.slug);
+    if (!rawPages || !rawPages.length) throw new Error('Нет страниц в главе');
+
+    const filtered = rawPages.filter(p => !(p.width && p.height && p.width / p.height > 1.2));
+    if (!filtered.length) throw new Error('Все страницы отфильтрованы');
+
+    const pages = filtered.map(p => ({
+      image: '',
+      url: p.url,
+      width: p.width,
+      height: p.height,
+      chapterId: target.id,
+      volume: 1,
+      number: target.number
+    }));
+
+    const chaptersList = chapters.map(c => ({
+      id: c.id,
+      volume: 1,
+      number: c.number,
+      name: c.name,
+      slug: c.slug
+    }));
+
+    SlashLibReader.open(
+      fullSlug,
+      target.id,
+      1,
+      target.number,
+      pages,
+      details.title + ' - Chapter ' + target.number,
+      progress,
+      chaptersList,
+      it.id,
+      'comizy'
+    );
+
+    document.getElementById('viewModal').classList.remove('on');
+    return;
+  }
+}
         const chapters = await ComizyParser.getChapters(details.hid);
         if (!chapters || !chapters.length) throw new Error('Нет глав');
         chapters.sort((a, b) => a.number - b.number);
@@ -20861,9 +20936,17 @@ async _openComizyAt(item, chapterNumber, pageIdx) {
   const slug = (item.link_comizy.match(/comizy\.io\/([^\/?#]+)/) || [])[1];
   if (!slug) throw new Error('Нет slug Comizy');
 
-  const details = await ComizyParser.getMangaDetails(slug);
-  if (!details || !details.hid) throw new Error('Не удалось получить данные манги');
-
+  let details = null;
+try {
+  details = await ComizyParser.getMangaDetails(slug);
+} catch(e) {
+  console.warn('[Comizy] getMangaDetails failed:', e.message);
+}
+if (!details || !details.hid) {
+  toast('Comizy недоступен. Остаюсь на SlashLib.', 'warn');
+  throw new Error('Comizy недоступен');
+}
+  
   const chapters = await ComizyParser.getChapters(details.hid);
   if (!chapters || !chapters.length) throw new Error('Нет глав');
   chapters.sort((a, b) => a.number - b.number);
