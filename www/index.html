@@ -21284,56 +21284,59 @@ const getSizeFast = async (page) => {
   return null; // Нужно качать
 };
   const knownHashes = this._getDiscHashes();
-  const beforeCount = pages.length;
+const beforeCount = pages.length;
 
-  // === ШАГ 1: обычный фильтр (known hashes + размеры) ===
-  const discard = new Set();
-  
-  // Сначала проверяем ВСЕ страницы по размеру (быстро, без скачивания)
-  const sizeCandidates = [];
+// === ШАГ 1: хэш + размер (независимо друг от друга) ===
+const discard = new Set();
+
+// --- 1A. Проверяем хэш для ВСЕХ страниц (быстро, без скачивания) ---
+// Хэш-фильтр работает независимо от размера: даже вертикальная страница
+// с известным хэшем дисклеймера должна быть удалена.
+if (knownHashes.size > 0) {
   for (let i = 0; i < pages.length; i++) {
-    const sizeInfo = await getSizeFast(pages[i]);
-    if (sizeInfo && !isDiscBySize(sizeInfo)) {
-      // Точно не дисклеймер по размеру, пропускаем
-      continue;
+    // Пробуем достать хэш из кэша (без скачивания)
+    const path = String(pages[i].url || pages[i].image || '').replace(/^\/+/, '');
+    if (!path) continue;
+    let cache = {};
+    try { cache = JSON.parse(localStorage.getItem('polka_reader_img_cache') || '{}'); } catch(e){}
+    const cached = cache[path];
+    if (cached && cached.hash && knownHashes.has(cached.hash)) {
+      discard.add(i);
     }
-    // Кандидат: либо размер похож на дисклеймер, либо мы не знаем размер
-    sizeCandidates.push({ i, sizeInfo });
   }
+}
 
-  // Теперь для кандидатов проверяем хэш (если он уже есть - отлично, если нет - качаем)
-  if (knownHashes.size > 0) {
-    for (const { i, sizeInfo } of sizeCandidates) {
-      let hash = sizeInfo && sizeInfo.hash;
-      if (!hash) {
-        const fullInfo = await this._probeImageInfoCached(pages[i]);
-        hash = fullInfo ? fullInfo.hash : null;
-      }
-      if (hash && knownHashes.has(hash)) {
-        discard.add(i);
-      }
-    }
+// --- 1B. Проверяем размер для всех страниц (быстро, из API или кэша) ---
+for (let i = 0; i < pages.length; i++) {
+  if (discard.has(i)) continue;
+  const sizeInfo = await getSizeFast(pages[i]);
+  if (sizeInfo && isDiscBySize(sizeInfo)) {
+    // Похож на дисклеймер по размеру, но хэш неизвестен — нужен probe
+    // probe делаем только для первых/последних 2 (см. ниже)
+    // для остальных — просто помечаем как кандидата
   }
-  
-  // Первые/последние 2 страницы — проверяем по размеру (скачиваем только если нужно)
-  for (let i = 0; i < Math.min(2, pages.length); i++) {
-    if (discard.has(i)) continue;
-    const sizeInfo = await getSizeFast(pages[i]);
-    if (sizeInfo && !isDiscBySize(sizeInfo)) continue; // Точно не дисклеймер
-    
-    // Размер похож на дисклеймер (или не знаем) — проверяем хэш или просто размер
-    const d = sizeInfo && sizeInfo.hash ? sizeInfo : await this._probeImageInfoCached(pages[i]);
-    if (isDiscBySize(d)) discard.add(i);
-    else break;
+}
+
+// --- 1C. Первые/последние 2 страницы: скачиваем если нужно ---
+for (let i = 0; i < Math.min(2, pages.length); i++) {
+  if (discard.has(i)) continue;
+  const d = await this._probeImageInfoCached(pages[i]);
+  if (!d) break; // скачивание не удалось — стоп
+  if (knownHashes.has(d.hash) || isDiscBySize(d)) {
+    discard.add(i);
+  } else {
+    break; // не дисклеймер — следующие в начале главы тоже не проверяем
   }
-  for (let i = pages.length - 1; i >= Math.max(0, pages.length - 2); i--) {
-    if (i < 0 || discard.has(i)) continue;
-    const sizeInfo = await getSizeFast(pages[i]);
-    if (sizeInfo && !isDiscBySize(sizeInfo)) continue;
-    
-    const d = sizeInfo && sizeInfo.hash ? sizeInfo : await this._probeImageInfoCached(pages[i]);
-    if (isDiscBySize(d)) discard.add(i);
-    else break;
+}
+for (let i = pages.length - 1; i >= Math.max(0, pages.length - 2); i--) {
+  if (i < 0 || discard.has(i)) continue;
+  const d = await this._probeImageInfoCached(pages[i]);
+  if (!d) break;
+  if (knownHashes.has(d.hash) || isDiscBySize(d)) {
+    discard.add(i);
+  } else {
+    break;
+  }
   }
 
   if (!discard.size) {
