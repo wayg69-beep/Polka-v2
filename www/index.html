@@ -22303,19 +22303,31 @@ for (let i = this._currentIndex + 1; i < Math.min(this._pagesList.length, this._
   }
 },
   
-  restoreScroll(offset) {
+restoreScroll(offset) {
     const wrap = document.getElementById('readerPages');
     if (!wrap) return;
     const imgs = wrap.querySelectorAll('img');
     const img = imgs[this._currentIndex];
     if (!img) return;
-    if (this._settings.mode === 'WEBTOON') {
-      wrap.scrollTop = Math.max(0, img.offsetTop + (offset || 0));
-    } else {
-      wrap.scrollLeft = Math.max(0, img.offsetLeft + (offset || 0));
+    
+    // Масштабируем offset: API отдаёт оригинальные размеры (width/height),
+    // а DOM рендерит картинку под ширину контейнера — высота пропорционально меньше.
+    // Если передать offset из API-пикселей в DOM-пиксели, скролл улетит за пределы страницы.
+    const page = this._pagesList[this._currentIndex];
+    const apiH = page ? (page.height || 0) : 0;
+    const domH = img.offsetHeight || apiH;
+    let adjustedOffset = offset || 0;
+    if (apiH > 100 && domH > 100 && Math.abs(domH - apiH) > 50) {
+        adjustedOffset = offset * (domH / apiH);
     }
-  },
-
+    
+    if (this._settings.mode === 'WEBTOON') {
+        wrap.scrollTop = Math.max(0, img.offsetTop + adjustedOffset);
+    } else {
+        wrap.scrollLeft = Math.max(0, img.offsetLeft + adjustedOffset);
+    }
+},
+  
   async loadPagesBatch(indices, limit) {
     if (!indices.length) return;
     let cursor = 0;
