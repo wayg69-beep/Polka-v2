@@ -20954,7 +20954,6 @@ async _switchSourceForLang(lang) {
     const wrap = document.getElementById('readerPages');
     const allImgs = wrap ? Array.from(wrap.querySelectorAll('img')) : [];
     
-    // ═══ СЧИТАЕМ ПРОГРЕСС ПО СТРАНИЦАМ, А НЕ ПО ПИКСЕЛЯМ ═══
     const currentPageIdx = this._currentIndex - bounds.startIdx;
     const totalPages = bounds.totalInChapter;
     
@@ -20968,8 +20967,6 @@ async _switchSourceForLang(lang) {
             : Math.max(0, wrap.scrollLeft - curImg.offsetLeft);
     }
     
-    // Относительный прогресс внутри главы (0.0 .. 1.0)
-    // pageRatio = (номер страницы + доля внутри страницы) / всего страниц
     const pageRatio = totalPages > 0 ? (currentPageIdx + (intraPageOffset / currentPageHeight)) / totalPages : 0;
 
     this.saveProgress();
@@ -21015,16 +21012,14 @@ async _openComizyAt(item, chapterNumber, pageRatio) {
     const filtered = rawPages.filter(p => !(p.width && p.height && p.width / p.height > 1.2));
     if (!filtered.length) throw new Error('Все страницы отфильтрованы');
     
-    // ═══ МАППИНГ ПРОГРЕССА ПО СТРАНИЦАМ ═══
     const newTotalPages = filtered.length;
     const targetPageFloat = pageRatio * newTotalPages;
     let foundPageIdx = Math.floor(targetPageFloat);
     if (foundPageIdx >= newTotalPages) foundPageIdx = newTotalPages - 1;
     if (foundPageIdx < 0) foundPageIdx = 0;
     
+    // КЛЮЧЕВОЕ: передаём долю внутри страницы, а не пиксели!
     const intraPageRatio = targetPageFloat - foundPageIdx;
-    const targetPageHeight = filtered[foundPageIdx]?.height || 1400;
-    const foundOffset = intraPageRatio * targetPageHeight;
 
     const pages = filtered.map(p => ({
         image: '', url: p.url, width: p.width || 0, height: p.height || 0,
@@ -21034,7 +21029,7 @@ async _openComizyAt(item, chapterNumber, pageRatio) {
         id: c.id, volume: 1, number: c.number, name: c.name, slug: c.slug
     }));
     const fullSlug = 'comizy:' + slug;
-    const progress = { page: foundPageIdx, offset: foundOffset };
+    const progress = { page: foundPageIdx, intraPageRatio: intraPageRatio };
     this.open(fullSlug, target.id, 1, target.number, pages,
         details.title + ' - Chapter ' + target.number,
         progress, chaptersList, item.id, 'comizy');
@@ -21098,19 +21093,17 @@ async _openSlashlibAt(item, chapterNumber, pageRatio) {
     const chapData = chapJson.data;
     if (!chapData || !chapData.pages || !chapData.pages.length) throw new Error('Нет страниц');
     
-    // ═══ МАППИНГ ПРОГРЕССА ПО СТРАНИЦАМ ═══
     const newTotalPages = chapData.pages.length;
     const targetPageFloat = pageRatio * newTotalPages;
     let foundPageIdx = Math.floor(targetPageFloat);
     if (foundPageIdx >= newTotalPages) foundPageIdx = newTotalPages - 1;
     if (foundPageIdx < 0) foundPageIdx = 0;
     
+    // КЛЮЧЕВОЕ: передаём долю внутри страницы, а не пиксели!
     const intraPageRatio = targetPageFloat - foundPageIdx;
-    const targetPageHeight = chapData.pages[foundPageIdx]?.height || 1400;
-    const foundOffset = intraPageRatio * targetPageHeight;
 
     const title = item.title + ' - Том ' + chapData.volume + ' Глава ' + chapData.number;
-    const progress = { page: foundPageIdx, offset: foundOffset };
+    const progress = { page: foundPageIdx, intraPageRatio: intraPageRatio };
     this.open(fullSlug, chapData.id, chapData.volume, chapData.number, chapData.pages,
         title, progress, chaptersList, item.id, 'slashlib');
 },
@@ -22303,28 +22296,57 @@ for (let i = this._currentIndex + 1; i < Math.min(this._pagesList.length, this._
   }
 },
   
-restoreScroll(offset) {
+restoreScroll(progress) {
     const wrap = document.getElementById('readerPages');
     if (!wrap) return;
     const imgs = wrap.querySelectorAll('img');
     const img = imgs[this._currentIndex];
     if (!img) return;
-    
-    // Масштабируем offset: API отдаёт оригинальные размеры (width/height),
-    // а DOM рендерит картинку под ширину контейнера — высота пропорционально меньше.
-    // Если передать offset из API-пикселей в DOM-пиксели, скролл улетит за пределы страницы.
-    const page = this._pagesList[this._currentIndex];
-    const apiH = page ? (page.height || 0) : 0;
-    const domH = img.offsetHeight || apiH;
-    let adjustedOffset = offset || 0;
-    if (apiH > 100 && domH > 100 && Math.abs(domH - apiH) > 50) {
-        adjustedOffset = offset * (domH / apiH);
+
+    // Поддержка обоих форматов: новый {intraPageRatio} и старый {offset}
+    let intraPageRatio = 0;
+    if (progress && typeof progress.intraPageRatio === 'number') {
+        intraPageRatio = Math.max(0, Math.min(1, progress.intraPageRatio));
+    } else if (progress && typeof progress.offset === 'number') {
+        // Старый формат: offset в пикселях. Пытаемся масштабировать.
+        const page = this._pagesList[this._currentIndex];
+        const apiH = page ? (page.height || 0) : 0;
+        const domH = img.offsetHeight || 0;
+        if (apiH > 100 && domH > 100) {
+            intraPageRatio = (progress.offset * (domH / apiH)) / domH;
+        } else {
+            intraPageRatio = 0;
+        }
     }
-    
-    if (this._settings.mode === 'WEBTOON') {
-        wrap.scrollTop = Math.max(0, img.offsetTop + adjustedOffset);
+
+    const applyScroll = () => {
+        const domH = img.offsetHeight || 0;
+        if (domH < 10) return false; // ещё не загрузилась
+        const offset = intraPageRatio * domH;
+        if (this._settings.mode === 'WEBTOON') {
+            wrap.scrollTop = Math.max(0, img.offsetTop + offset);
+        } else {
+            wrap.scrollLeft = Math.max(0, img.offsetLeft + offset);
+        }
+        return true;
+    };
+
+    // Пробуем сразу
+    if (applyScroll()) return;
+
+    // Картинка ещё не загрузилась — ждём через ResizeObserver
+    if (window.ResizeObserver) {
+        const ro = new ResizeObserver(() => {
+            if (applyScroll()) {
+                ro.disconnect();
+            }
+        });
+        ro.observe(img);
+        // Страховка: отключаем через 3 секунды
+        setTimeout(() => { try { ro.disconnect(); } catch(e){} }, 3000);
     } else {
-        wrap.scrollLeft = Math.max(0, img.offsetLeft + adjustedOffset);
+        // Фолбэк: пробуем через 500мс
+        setTimeout(() => applyScroll(), 500);
     }
 },
   
