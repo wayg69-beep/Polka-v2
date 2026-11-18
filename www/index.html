@@ -21207,31 +21207,67 @@ async _filterDisclaimers(pages, depth, silent) {
   };
 
 const isDiscBySize = d => d && d.w > 0 && d.h > 0 && (d.h / d.w) < 2;
-// Используем размеры из API если есть — не скачиваем картинку
-const getSize = async (page) => {
+const isDiscBySize = d => d && d.w > 0 && d.h > 0 && (d.h / d.w) < 2;
+
+// Быстрое получение размеров: из API, из кэша, или null (если нужно качать)
+const getSizeFast = async (page) => {
   if (page.width && page.height) return { w: page.width, h: page.height, hash: null };
-  return await this._probeImageInfoCached(page);
+  const path = String(page.url || page.image || '').replace(/^\/+/, '');
+  if (!path) return null;
+  let cache = {};
+  try { cache = JSON.parse(localStorage.getItem('polka_reader_img_cache') || '{}'); } catch(e){}
+  if (cache[path]) return { w: cache[path].w, h: cache[path].h, hash: cache[path].hash };
+  return null; // Нужно качать
 };
   const knownHashes = this._getDiscHashes();
   const beforeCount = pages.length;
 
   // === ШАГ 1: обычный фильтр (known hashes + размеры) ===
   const discard = new Set();
+  
+  // Сначала проверяем ВСЕ страницы по размеру (быстро, без скачивания)
+  const sizeCandidates = [];
+  for (let i = 0; i < pages.length; i++) {
+    const sizeInfo = await getSizeFast(pages[i]);
+    if (sizeInfo && !isDiscBySize(sizeInfo)) {
+      // Точно не дисклеймер по размеру, пропускаем
+      continue;
+    }
+    // Кандидат: либо размер похож на дисклеймер, либо мы не знаем размер
+    sizeCandidates.push({ i, sizeInfo });
+  }
+
+  // Теперь для кандидатов проверяем хэш (если он уже есть - отлично, если нет - качаем)
   if (knownHashes.size > 0) {
-    for (let i = 0; i < pages.length; i++) {
-      const info = await getSize(pages[i]);
-      if (info && knownHashes.has(info.hash)) discard.add(i);
+    for (const { i, sizeInfo } of sizeCandidates) {
+      let hash = sizeInfo && sizeInfo.hash;
+      if (!hash) {
+        const fullInfo = await this._probeImageInfoCached(pages[i]);
+        hash = fullInfo ? fullInfo.hash : null;
+      }
+      if (hash && knownHashes.has(hash)) {
+        discard.add(i);
+      }
     }
   }
+  
+  // Первые/последние 2 страницы — проверяем по размеру (скачиваем только если нужно)
   for (let i = 0; i < Math.min(2, pages.length); i++) {
     if (discard.has(i)) continue;
-    const d = await this._probeImageInfoCached(pages[i]);
+    const sizeInfo = await getSizeFast(pages[i]);
+    if (sizeInfo && !isDiscBySize(sizeInfo)) continue; // Точно не дисклеймер
+    
+    // Размер похож на дисклеймер (или не знаем) — проверяем хэш или просто размер
+    const d = sizeInfo && sizeInfo.hash ? sizeInfo : await this._probeImageInfoCached(pages[i]);
     if (isDiscBySize(d)) discard.add(i);
     else break;
   }
   for (let i = pages.length - 1; i >= Math.max(0, pages.length - 2); i--) {
     if (i < 0 || discard.has(i)) continue;
-    const d = await this._probeImageInfoCached(pages[i]);
+    const sizeInfo = await getSizeFast(pages[i]);
+    if (sizeInfo && !isDiscBySize(sizeInfo)) continue;
+    
+    const d = sizeInfo && sizeInfo.hash ? sizeInfo : await this._probeImageInfoCached(pages[i]);
     if (isDiscBySize(d)) discard.add(i);
     else break;
   }
