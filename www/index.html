@@ -9255,12 +9255,14 @@ if (useComizy) {
         if (!filtered.length) throw new Error('Все страницы отфильтрованы');
 
         const pages = filtered.map(p => ({
-          image: '',
-          url: p.url,
-          chapterId: target.id,
-          volume: 1,
-          number: target.number
-        }));
+  image: '',
+  url: p.url,
+  width: p.width || 0,
+  height: p.height || 0,
+  chapterId: target.id,
+  volume: 1,
+  number: target.number
+}));
 
         const chaptersList = chapters.map(c => ({
           id: c.id,
@@ -20995,8 +20997,10 @@ if (!details || !details.hid) {
   const filtered = rawPages.filter(p => !(p.width && p.height && p.width / p.height > 1.2));
 
   const pages = filtered.map(p => ({
-    image: '', url: p.url, chapterId: target.id, volume: 1, number: target.number
-  }));
+  image: '', url: p.url,
+  width: p.width || 0, height: p.height || 0,
+  chapterId: target.id, volume: 1, number: target.number
+}));
 
   const chaptersList = chapters.map(c => ({
     id: c.id, volume: 1, number: c.number, name: c.name, slug: c.slug
@@ -21164,43 +21168,44 @@ _handleDoubleTap(clientX, clientY) {
 async _probeImageInfo(page) {
   const path = String(page.url || page.image || '').replace(/^\/+/, '');
   if (!path) return null;
-  const domains = ['https://img3.cdnlibs.org', 'https://img3.cdnlibs.link', 'https://img3.hentaicdn.org'];
-  const token = localStorage.getItem('slashlib_token');
-  const headers = {
-    'Authorization': 'Bearer ' + token,
-    'Origin': 'https://v2.shlib.life',
-    'Referer': 'https://v2.shlib.life/',
-    'Site-Id': '2',
-    'Accept': 'image/*'
-  };
+  // Comizy URL — скачиваем напрямую, без SlashLib CDN
+if (/^https?:\/\/.*(?:cmzcdn|comizy)/i.test(path)) {
+  const url = path.startsWith('http') ? path : 'https://' + path;
   const CHttp = window.Capacitor?.Plugins?.CapacitorHttp;
   if (!CHttp) return null;
-  for (const base of domains) {
-    try {
-      const url = path.startsWith('http') ? path : `${base}/${path}`;
-      const r = await CHttp.get({ url, headers, responseType: 'arraybuffer' });
-      if (r.status !== 200 || !r.data) continue;
-      let b64 = r.data;
-      if (b64.startsWith('data:image')) b64 = b64.split(',')[1];
-      const bin = atob(b64);
-      const bytes = new Uint8Array(bin.length);
-      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-      // Хэш всего файла — по нему узнаём «этот дисклеймер уже видели»
-      const hashBuf = await crypto.subtle.digest('SHA-256', bytes);
-      const hash = Array.from(new Uint8Array(hashBuf)).slice(0, 8).map(x => x.toString(16).padStart(2, '0')).join('');
-      const blob = new Blob([bytes]);
-      const dims = await new Promise(res => {
-        const u = URL.createObjectURL(blob);
-        const im = new Image();
-        im.onload = () => { URL.revokeObjectURL(u); res({ w: im.naturalWidth, h: im.naturalHeight }); };
-        im.onerror = () => { URL.revokeObjectURL(u); res(null); };
-        im.src = u;
-      });
-      if (!dims) return null;
-      return { w: dims.w, h: dims.h, hash };
-    } catch(e) {}
+  try {
+    const headers = {
+      'Referer': 'https://comizy.io/',
+      'Origin': 'https://comizy.io',
+      'User-Agent': 'Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36',
+      'Accept': 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8'
+    };
+    const r = await CHttp.get({ url, headers, responseType: 'arraybuffer' });
+    if (r.status !== 200 || !r.data) return null;
+    let b64 = r.data;
+    if (b64.startsWith('data:image')) b64 = b64.split(',')[1];
+    const bin = atob(b64);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    const hashBuf = await crypto.subtle.digest('SHA-256', bytes);
+    const hash = Array.from(new Uint8Array(hashBuf)).slice(0, 8).map(x => x.toString(16).padStart(2, '0')).join('');
+    const blob = new Blob([bytes]);
+    const dims = await new Promise(res => {
+      const u = URL.createObjectURL(blob);
+      const im = new Image();
+      im.onload = () => { URL.revokeObjectURL(u); res({ w: im.naturalWidth, h: im.naturalHeight }); };
+      im.onerror = () => { URL.revokeObjectURL(u); res(null); };
+      im.src = u;
+    });
+    if (!dims) return null;
+    return { w: dims.w, h: dims.h, hash };
+  } catch(e) {
+    console.warn('[probeImageInfo comizy]', url, e.message);
+    return null;
   }
-  return null;
+}
+
+const domains = ['https://img3.cdnlibs.org', 'https://img3.cdnlibs.link', 'https://img3.hentaicdn.org'];
 },
 
 async _probeImageInfoCached(page) {
@@ -23172,12 +23177,14 @@ async checkAutoLoad() {
         else wrap.appendChild(img);
 
         this._pagesList.push({
-          image: '',
-          url: page.url,
-          chapterId: this._nextChapter.id,
-          volume: 1,
-          number: this._nextChapter.number
-        });
+  image: '',
+  url: page.url,
+  width: page.width || 0,
+  height: page.height || 0,
+  chapterId: this._nextChapter.id,
+  volume: 1,
+  number: this._nextChapter.number
+});
       });
 
       this._reindexReaderImgs();
@@ -23331,12 +23338,14 @@ async checkPrevLoad() {
         else wrap.appendChild(img);
 
         this._pagesList.unshift({
-          image: '',
-          url: filtered[i].url,
-          chapterId: this._prevChapter.id,
-          volume: 1,
-          number: this._prevChapter.number
-        });
+  image: '',
+  url: filtered[i].url,
+  width: filtered[i].width || 0,
+  height: filtered[i].height || 0,
+  chapterId: this._prevChapter.id,
+  volume: 1,
+  number: this._prevChapter.number
+});
       }
 
       this._reindexReaderImgs();
@@ -23499,12 +23508,14 @@ async loadChapter(volume, number, chapterId, progress) {
 
       const filtered = rawPages.filter(p => !(p.width && p.height && p.width / p.height > 1.2));
       const pages = filtered.map(p => ({
-        image: '',
-        url: p.url,
-        chapterId: target.id,
-        volume: 1,
-        number: target.number
-      }));
+  image: '',
+  url: p.url,
+  width: p.width || 0,
+  height: p.height || 0,
+  chapterId: target.id,
+  volume: 1,
+  number: target.number
+}));
 
       const baseTitle = (this._baseTitle || '').trim();
       const title = baseTitle + ' - Chapter ' + target.number;
