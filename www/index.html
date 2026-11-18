@@ -20953,52 +20953,33 @@ async _switchSourceForLang(lang) {
 
     const wrap = document.getElementById('readerPages');
     const allImgs = wrap ? Array.from(wrap.querySelectorAll('img')) : [];
-
-    let currentChapterHeight = 0;
-    let readHeight = 0;
-
-    for (let i = bounds.startIdx; i <= bounds.endIdx; i++) {
-        const page = this._pagesList[i];
-        const img = allImgs[i];
-
-        // Приоритет: реальная DOM-высота → API height → кэш → дефолт
-        let h = 0;
-        if (img && img.offsetHeight > 0) {
-            h = img.offsetHeight;
-        } else if (page.height > 0) {
-            h = page.height;
-        } else {
-            const path = String(page.url || page.image || '').replace(/^\/+/, '');
-            let cache = {};
-            try { cache = JSON.parse(localStorage.getItem('polka_reader_img_cache') || '{}'); } catch(e){}
-            if (cache[path] && cache[path].h) h = cache[path].h;
-            else h = 1400;
-        }
-
-        if (i < this._currentIndex) {
-            readHeight += h;
-        } else if (i === this._currentIndex) {
-            if (wrap && img) {
-                const offset = this._settings.mode === 'WEBTOON'
-                    ? Math.max(0, wrap.scrollTop - img.offsetTop)
-                    : Math.max(0, wrap.scrollLeft - img.offsetLeft);
-                readHeight += offset;
-            }
-        }
-        currentChapterHeight += h;
+    
+    // ═══ СЧИТАЕМ ПРОГРЕСС ПО СТРАНИЦАМ, А НЕ ПО ПИКСЕЛЯМ ═══
+    const currentPageIdx = this._currentIndex - bounds.startIdx;
+    const totalPages = bounds.totalInChapter;
+    
+    const curImg = allImgs[this._currentIndex];
+    const currentPageHeight = (curImg && curImg.offsetHeight > 0) ? curImg.offsetHeight : 1400;
+    
+    let intraPageOffset = 0;
+    if (wrap && curImg) {
+        intraPageOffset = this._settings.mode === 'WEBTOON'
+            ? Math.max(0, wrap.scrollTop - curImg.offsetTop)
+            : Math.max(0, wrap.scrollLeft - curImg.offsetLeft);
     }
-
-    const progressRatio = currentChapterHeight > 0 ? readHeight / currentChapterHeight : 0;
-    const targetChapterNumber = bounds.number;
+    
+    // Относительный прогресс внутри главы (0.0 .. 1.0)
+    // pageRatio = (номер страницы + доля внутри страницы) / всего страниц
+    const pageRatio = totalPages > 0 ? (currentPageIdx + (intraPageOffset / currentPageHeight)) / totalPages : 0;
 
     this.saveProgress();
     toast('Переключаю на ' + (lang === 'en' ? 'Comizy' : 'SlashLib') + '...', 'success');
 
     try {
         if (lang === 'en') {
-            await this._openComizyAt(item, targetChapterNumber, progressRatio);
+            await this._openComizyAt(item, bounds.number, pageRatio);
         } else {
-            await this._openSlashlibAt(item, targetChapterNumber, progressRatio);
+            await this._openSlashlibAt(item, bounds.number, pageRatio);
         }
     } catch(e) {
         console.error('[switchSourceForLang]', e);
@@ -21006,154 +20987,132 @@ async _switchSourceForLang(lang) {
     }
 },
   
-async _openComizyAt(item, chapterNumber, progressRatio) {
-  const slug = (item.link_comizy.match(/comizy\.io\/([^\/?#]+)/) || [])[1];
-  if (!slug) throw new Error('Нет slug Comizy');
-  let details = null;
-  try {
-    details = await ComizyParser.getMangaDetails(slug);
-  } catch(e) {
-    console.warn('[Comizy] getMangaDetails failed:', e.message);
-  }
-  if (!details || !details.hid) {
-    toast('Comizy недоступен. Остаюсь на SlashLib.', 'warn');
-    throw new Error('Comizy недоступен');
-  }
-  const chapters = await ComizyParser.getChapters(details.hid);
-  if (!chapters || !chapters.length) throw new Error('Нет глав');
-  chapters.sort((a, b) => a.number - b.number);
-  
-  // Ищем главу. Если автоподгрузка увела нас в N+1, а в Comizy её ещё нет — берем последнюю доступную
-  let target = chapters.find(c => parseFloat(c.number) === parseFloat(chapterNumber));
-  if (!target) {
-    target = chapters.find(c => parseFloat(c.number) <= parseFloat(chapterNumber)) || chapters[chapters.length - 1] || chapters[0];
-    progressRatio = 0; // Сбрасываем прогресс, так как глава физически другая
-  }
-
-  const rawPages = await ComizyParser.getChapterPages(slug, target.slug);
-  if (!rawPages || !rawPages.length) throw new Error('Нет страниц');
-  const filtered = rawPages.filter(p => !(p.width && p.height && p.width / p.height > 1.2));
-  
-  // ═══ СЧИТАЕМ ВЫСОТЫ И ИЩЕМ ЦЕЛЕВУЮ СТРАНИЦУ ═══
-  let totalHeight = 0;
-  const heights = filtered.map(p => {
-    const h = p.height || 1400;
-    totalHeight += h;
-    return h;
-  });
-  
-  const targetHeight = totalHeight * (progressRatio || 0);
-  let accumulated = 0;
-  let foundPageIdx = 0;
-  let foundOffset = 0;
-  
-  for (let i = 0; i < heights.length; i++) {
-    if (accumulated + heights[i] >= targetHeight) {
-      foundPageIdx = i;
-      foundOffset = targetHeight - accumulated;
-      break;
+async _openComizyAt(item, chapterNumber, pageRatio) {
+    const slug = (item.link_comizy.match(/comizy\.io\/([^\/?#]+)/) || [])[1];
+    if (!slug) throw new Error('Нет slug Comizy');
+    let details = null;
+    try {
+        details = await ComizyParser.getMangaDetails(slug);
+    } catch(e) {
+        console.warn('[Comizy] getMangaDetails failed:', e.message);
     }
-    accumulated += heights[i];
-  }
+    if (!details || !details.hid) {
+        toast('Comizy недоступен. Остаюсь на SlashLib.', 'warn');
+        throw new Error('Comizy недоступен');
+    }
+    const chapters = await ComizyParser.getChapters(details.hid);
+    if (!chapters || !chapters.length) throw new Error('Нет глав');
+    chapters.sort((a, b) => a.number - b.number);
+    
+    let target = chapters.find(c => parseFloat(c.number) === parseFloat(chapterNumber));
+    if (!target) {
+        target = chapters.find(c => parseFloat(c.number) <= parseFloat(chapterNumber)) || chapters[chapters.length - 1] || chapters[0];
+        pageRatio = 0;
+    }
 
-  const pages = filtered.map(p => ({
-    image: '', url: p.url, width: p.width || 0, height: p.height || 0,
-    chapterId: target.id, volume: 1, number: target.number
-  }));
-  const chaptersList = chapters.map(c => ({
-    id: c.id, volume: 1, number: c.number, name: c.name, slug: c.slug
-  }));
-  const fullSlug = 'comizy:' + slug;
-  const progress = { page: foundPageIdx, offset: foundOffset };
-  this.open(fullSlug, target.id, 1, target.number, pages,
-    details.title + ' - Chapter ' + target.number,
-    progress, chaptersList, item.id, 'comizy');
+    const rawPages = await ComizyParser.getChapterPages(slug, target.slug);
+    if (!rawPages || !rawPages.length) throw new Error('Нет страниц');
+    const filtered = rawPages.filter(p => !(p.width && p.height && p.width / p.height > 1.2));
+    if (!filtered.length) throw new Error('Все страницы отфильтрованы');
+    
+    // ═══ МАППИНГ ПРОГРЕССА ПО СТРАНИЦАМ ═══
+    const newTotalPages = filtered.length;
+    const targetPageFloat = pageRatio * newTotalPages;
+    let foundPageIdx = Math.floor(targetPageFloat);
+    if (foundPageIdx >= newTotalPages) foundPageIdx = newTotalPages - 1;
+    if (foundPageIdx < 0) foundPageIdx = 0;
+    
+    const intraPageRatio = targetPageFloat - foundPageIdx;
+    const targetPageHeight = filtered[foundPageIdx]?.height || 1400;
+    const foundOffset = intraPageRatio * targetPageHeight;
+
+    const pages = filtered.map(p => ({
+        image: '', url: p.url, width: p.width || 0, height: p.height || 0,
+        chapterId: target.id, volume: 1, number: target.number
+    }));
+    const chaptersList = chapters.map(c => ({
+        id: c.id, volume: 1, number: c.number, name: c.name, slug: c.slug
+    }));
+    const fullSlug = 'comizy:' + slug;
+    const progress = { page: foundPageIdx, offset: foundOffset };
+    this.open(fullSlug, target.id, 1, target.number, pages,
+        details.title + ' - Chapter ' + target.number,
+        progress, chaptersList, item.id, 'comizy');
 },
   
-async _openSlashlibAt(item, chapterNumber, progressRatio) {
-  const token = localStorage.getItem('slashlib_token');
-  if (!token) throw new Error('Нужен вход в SlashLib');
-  const fullSlug = (item.link.match(/\/manga\/([^\/?#]+)/) || [])[1];
-  if (!fullSlug) throw new Error('Нет slug SlashLib');
-  
-  const listRes = await nativeFetch(`https://api.cdnlibs.org/api/manga/${fullSlug}/chapters`, {
-    'Authorization': 'Bearer ' + token, 'Site-Id': '2',
-    'Origin': 'https://v2.shlib.life', 'Referer': 'https://v2.shlib.life/'
-  });
-  if (!listRes.ok) {
-    if (listRes.status === 401 || listRes.status === 403) {
-      try {
-        localStorage.removeItem('slashlib_token');
-        localStorage.removeItem('slashlib_token_valid');
-      } catch(e) {}
-      throw new Error('Токен SlashLib истёк. Войди заново');
+async _openSlashlibAt(item, chapterNumber, pageRatio) {
+    const token = localStorage.getItem('slashlib_token');
+    if (!token) throw new Error('Нужен вход в SlashLib');
+    const fullSlug = (item.link.match(/\/manga\/([^\/?#]+)/) || [])[1];
+    if (!fullSlug) throw new Error('Нет slug SlashLib');
+    
+    const listRes = await nativeFetch(`https://api.cdnlibs.org/api/manga/${fullSlug}/chapters`, {
+        'Authorization': 'Bearer ' + token, 'Site-Id': '2',
+        'Origin': 'https://v2.shlib.life', 'Referer': 'https://v2.shlib.life/'
+    });
+    if (!listRes.ok) {
+        if (listRes.status === 401 || listRes.status === 403) {
+            try {
+                localStorage.removeItem('slashlib_token');
+                localStorage.removeItem('slashlib_token_valid');
+            } catch(e) {}
+            throw new Error('Токен SlashLib истёк. Войди заново');
+        }
+        throw new Error('Ошибка API SlashLib: ' + listRes.status);
     }
-    throw new Error('Ошибка API SlashLib: ' + listRes.status);
-  }
-  let listJson;
-  try {
-    listJson = await listRes.json();
-  } catch(e) {
-    throw new Error('SlashLib вернул не JSON. Попробуй войти заново');
-  }
-  const chaptersList = listJson.data || [];
-  if (!chaptersList.length) throw new Error('Нет глав');
-  
-  let target = chaptersList.find(c => parseFloat(c.number) === parseFloat(chapterNumber));
-  if (!target) {
-    target = chaptersList.find(c => parseFloat(c.number) <= parseFloat(chapterNumber)) || chaptersList[chaptersList.length - 1] || chaptersList[0];
-    progressRatio = 0;
-  }
+    let listJson;
+    try {
+        listJson = await listRes.json();
+    } catch(e) {
+        throw new Error('SlashLib вернул не JSON. Попробуй войти заново');
+    }
+    const chaptersList = listJson.data || [];
+    if (!chaptersList.length) throw new Error('Нет глав');
+    
+    let target = chaptersList.find(c => parseFloat(c.number) === parseFloat(chapterNumber));
+    if (!target) {
+        target = chaptersList.find(c => parseFloat(c.number) <= parseFloat(chapterNumber)) || chaptersList[chaptersList.length - 1] || chaptersList[0];
+        pageRatio = 0;
+    }
 
-  const chapRes = await nativeFetch(`https://api.cdnlibs.org/api/manga/${fullSlug}/chapter?volume=${target.volume}&number=${target.number}`, {
-    'Authorization': 'Bearer ' + token, 'Site-Id': '2',
-    'Origin': 'https://v2.shlib.life', 'Referer': 'https://v2.shlib.life/'
-  });
-  if (!chapRes.ok) {
-    if (chapRes.status === 401 || chapRes.status === 403) {
-      try {
-        localStorage.removeItem('slashlib_token');
-        localStorage.removeItem('slashlib_token_valid');
-      } catch(e) {}
-      throw new Error('Токен SlashLib истёк. Войди заново');
+    const chapRes = await nativeFetch(`https://api.cdnlibs.org/api/manga/${fullSlug}/chapter?volume=${target.volume}&number=${target.number}`, {
+        'Authorization': 'Bearer ' + token, 'Site-Id': '2',
+        'Origin': 'https://v2.shlib.life', 'Referer': 'https://v2.shlib.life/'
+    });
+    if (!chapRes.ok) {
+        if (chapRes.status === 401 || chapRes.status === 403) {
+            try {
+                localStorage.removeItem('slashlib_token');
+                localStorage.removeItem('slashlib_token_valid');
+            } catch(e) {}
+            throw new Error('Токен SlashLib истёк. Войди заново');
+        }
+        throw new Error('Ошибка загрузки главы: ' + chapRes.status);
     }
-    throw new Error('Ошибка загрузки главы: ' + chapRes.status);
-  }
-  let chapJson;
-  try {
-    chapJson = await chapRes.json();
-  } catch(e) {
-    throw new Error('SlashLib вернул не JSON. Попробуй войти заново');
-  }
-  const chapData = chapJson.data;
-  if (!chapData || !chapData.pages || !chapData.pages.length) throw new Error('Нет страниц');
-  
-  // ═══ СЧИТАЕМ ВЫСОТЫ И ИЩЕМ ЦЕЛЕВУЮ СТРАНИЦУ ═══
-  let totalHeight = 0;
-  const heights = chapData.pages.map(p => {
-    const h = p.height || 1400;
-    totalHeight += h;
-    return h;
-  });
-  
-  const targetHeight = totalHeight * (progressRatio || 0);
-  let accumulated = 0;
-  let foundPageIdx = 0;
-  let foundOffset = 0;
-  
-  for (let i = 0; i < heights.length; i++) {
-    if (accumulated + heights[i] >= targetHeight) {
-      foundPageIdx = i;
-      foundOffset = targetHeight - accumulated;
-      break;
+    let chapJson;
+    try {
+        chapJson = await chapRes.json();
+    } catch(e) {
+        throw new Error('SlashLib вернул не JSON. Попробуй войти заново');
     }
-    accumulated += heights[i];
-  }
+    const chapData = chapJson.data;
+    if (!chapData || !chapData.pages || !chapData.pages.length) throw new Error('Нет страниц');
+    
+    // ═══ МАППИНГ ПРОГРЕССА ПО СТРАНИЦАМ ═══
+    const newTotalPages = chapData.pages.length;
+    const targetPageFloat = pageRatio * newTotalPages;
+    let foundPageIdx = Math.floor(targetPageFloat);
+    if (foundPageIdx >= newTotalPages) foundPageIdx = newTotalPages - 1;
+    if (foundPageIdx < 0) foundPageIdx = 0;
+    
+    const intraPageRatio = targetPageFloat - foundPageIdx;
+    const targetPageHeight = chapData.pages[foundPageIdx]?.height || 1400;
+    const foundOffset = intraPageRatio * targetPageHeight;
 
-  const title = item.title + ' - Том ' + chapData.volume + ' Глава ' + chapData.number;
-  const progress = { page: foundPageIdx, offset: foundOffset };
-  this.open(fullSlug, chapData.id, chapData.volume, chapData.number, chapData.pages,
-    title, progress, chaptersList, item.id, 'slashlib');
+    const title = item.title + ' - Том ' + chapData.volume + ' Глава ' + chapData.number;
+    const progress = { page: foundPageIdx, offset: foundOffset };
+    this.open(fullSlug, chapData.id, chapData.volume, chapData.number, chapData.pages,
+        title, progress, chaptersList, item.id, 'slashlib');
 },
   
 _resetZoom() {
