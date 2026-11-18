@@ -20940,64 +20940,70 @@ _updateSourceBtn() {
 },
 
 async _switchSourceForLang(lang) {
-  const item = this._itemId ? items.find(x => x.id === this._itemId) : null;
-  if (!item) return;
-  const hasSlash = item.link && item.link.includes('shlib.life');
-  const hasComizy = item.link_comizy && item.link_comizy.includes('comizy.io');
-  if (!hasSlash || !hasComizy) return;
+    const item = this._itemId ? items.find(x => x.id === this._itemId) : null;
+    if (!item) return;
+    const hasSlash = item.link && item.link.includes('shlib.life');
+    const hasComizy = item.link_comizy && item.link_comizy.includes('comizy.io');
+    if (!hasSlash || !hasComizy) return;
+    if (lang === 'en' && this._source === 'comizy') return;
+    if (lang === 'ru' && this._source === 'slashlib') return;
 
-  if (lang === 'en' && this._source === 'comizy') return;
-  if (lang === 'ru' && this._source === 'slashlib') return;
+    const bounds = this.getCurrentChapterBounds();
+    if (!bounds) return;
 
-  const bounds = this.getCurrentChapterBounds();
-  if (!bounds) return;
+    const wrap = document.getElementById('readerPages');
+    const allImgs = wrap ? Array.from(wrap.querySelectorAll('img')) : [];
 
-  // ═══ ВЫЧИСЛЯЕМ ГЛОБАЛЬНЫЙ ПРОГРЕСС ВНУТРИ ТЕКУЩЕЙ ГЛАВЫ ═══
-  const wrap = document.getElementById('readerPages');
-  const imgs = wrap ? wrap.querySelectorAll('img') : [];
-  
-  let currentChapterHeight = 0;
-  let readHeight = 0;
-  
-  for (let i = bounds.startIdx; i <= bounds.endIdx; i++) {
-    const page = this._pagesList[i];
-    let h = page.height || 1400; // Дефолт, если API не отдал высоту
-    if (!page.height) {
-      const path = String(page.url || page.image || '').replace(/^\/+/, '');
-      let cache = {};
-      try { cache = JSON.parse(localStorage.getItem('polka_reader_img_cache') || '{}'); } catch(e){}
-      if (cache[path] && cache[path].h) h = cache[path].h;
+    let currentChapterHeight = 0;
+    let readHeight = 0;
+
+    for (let i = bounds.startIdx; i <= bounds.endIdx; i++) {
+        const page = this._pagesList[i];
+        const img = allImgs[i];
+
+        // Приоритет: реальная DOM-высота → API height → кэш → дефолт
+        let h = 0;
+        if (img && img.offsetHeight > 0) {
+            h = img.offsetHeight;
+        } else if (page.height > 0) {
+            h = page.height;
+        } else {
+            const path = String(page.url || page.image || '').replace(/^\/+/, '');
+            let cache = {};
+            try { cache = JSON.parse(localStorage.getItem('polka_reader_img_cache') || '{}'); } catch(e){}
+            if (cache[path] && cache[path].h) h = cache[path].h;
+            else h = 1400;
+        }
+
+        if (i < this._currentIndex) {
+            readHeight += h;
+        } else if (i === this._currentIndex) {
+            if (wrap && img) {
+                const offset = this._settings.mode === 'WEBTOON'
+                    ? Math.max(0, wrap.scrollTop - img.offsetTop)
+                    : Math.max(0, wrap.scrollLeft - img.offsetLeft);
+                readHeight += offset;
+            }
+        }
+        currentChapterHeight += h;
     }
-    
-    if (i < this._currentIndex) {
-      readHeight += h;
-    } else if (i === this._currentIndex) {
-      if (wrap && imgs[i]) {
-        const offset = this._settings.mode === 'WEBTOON' 
-          ? Math.max(0, wrap.scrollTop - imgs[i].offsetTop)
-          : Math.max(0, wrap.scrollLeft - imgs[i].offsetLeft);
-        readHeight += offset;
-      }
-    }
-    currentChapterHeight += h;
-  }
-  
-  const progressRatio = currentChapterHeight > 0 ? readHeight / currentChapterHeight : 0;
-  const targetChapterNumber = bounds.number;
 
-  this.saveProgress();
-  toast('Переключаю на ' + (lang === 'en' ? 'Comizy' : 'SlashLib') + '...', 'success');
+    const progressRatio = currentChapterHeight > 0 ? readHeight / currentChapterHeight : 0;
+    const targetChapterNumber = bounds.number;
 
-  try {
-    if (lang === 'en') {
-      await this._openComizyAt(item, targetChapterNumber, progressRatio);
-    } else {
-      await this._openSlashlibAt(item, targetChapterNumber, progressRatio);
+    this.saveProgress();
+    toast('Переключаю на ' + (lang === 'en' ? 'Comizy' : 'SlashLib') + '...', 'success');
+
+    try {
+        if (lang === 'en') {
+            await this._openComizyAt(item, targetChapterNumber, progressRatio);
+        } else {
+            await this._openSlashlibAt(item, targetChapterNumber, progressRatio);
+        }
+    } catch(e) {
+        console.error('[switchSourceForLang]', e);
+        toast('Ошибка: ' + e.message, 'error');
     }
-  } catch(e) {
-    console.error('[switchSourceForLang]', e);
-    toast('Ошибка: ' + e.message, 'error');
-  }
 },
   
 async _openComizyAt(item, chapterNumber, progressRatio) {
