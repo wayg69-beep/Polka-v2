@@ -9301,7 +9301,25 @@ if (useComizy) {
         'Authorization': 'Bearer ' + token, 'Site-Id': '2',
         'Origin': 'https://v2.shlib.life', 'Referer': 'https://v2.shlib.life/'
       });
-      const listJson = await listRes.json();
+      if (!listRes.ok) {
+        if (listRes.status === 401 || listRes.status === 403) {
+          toast('Токен SlashLib истёк. Войди заново', 'error');
+          try {
+            localStorage.removeItem('slashlib_token');
+            localStorage.removeItem('slashlib_token_valid');
+          } catch(e) {}
+        } else {
+          toast('Ошибка API SlashLib: ' + listRes.status, 'error');
+        }
+        return;
+      }
+      let listJson;
+      try {
+        listJson = await listRes.json();
+      } catch(e) {
+        toast('SlashLib вернул не JSON. Попробуй войти заново', 'error');
+        return;
+      }
       const chaptersList = listJson.data || [];
       if (!chaptersList.length) { toast('Глав не найдено', 'warn'); return; }
 
@@ -9315,7 +9333,25 @@ if (useComizy) {
         'Authorization': 'Bearer ' + token, 'Site-Id': '2',
         'Origin': 'https://v2.shlib.life', 'Referer': 'https://v2.shlib.life/'
       });
-      const chapJson = await chapRes.json();
+      if (!chapRes.ok) {
+        if (chapRes.status === 401 || chapRes.status === 403) {
+          toast('Токен SlashLib истёк. Войди заново', 'error');
+          try {
+            localStorage.removeItem('slashlib_token');
+            localStorage.removeItem('slashlib_token_valid');
+          } catch(e) {}
+        } else {
+          toast('Ошибка загрузки главы: ' + chapRes.status, 'error');
+        }
+        return;
+      }
+      let chapJson;
+      try {
+        chapJson = await chapRes.json();
+      } catch(e) {
+        toast('SlashLib вернул не JSON. Попробуй войти заново', 'error');
+        return;
+      }
       const chapData = chapJson.data;
 
       if (!chapData || !chapData.pages || !chapData.pages.length) {
@@ -20985,7 +21021,22 @@ async _openSlashlibAt(item, chapterNumber, pageIdx) {
     'Authorization': 'Bearer ' + token, 'Site-Id': '2',
     'Origin': 'https://v2.shlib.life', 'Referer': 'https://v2.shlib.life/'
   });
-  const listJson = await listRes.json();
+  if (!listRes.ok) {
+    if (listRes.status === 401 || listRes.status === 403) {
+      try {
+        localStorage.removeItem('slashlib_token');
+        localStorage.removeItem('slashlib_token_valid');
+      } catch(e) {}
+      throw new Error('Токен SlashLib истёк. Войди заново');
+    }
+    throw new Error('Ошибка API SlashLib: ' + listRes.status);
+  }
+  let listJson;
+  try {
+    listJson = await listRes.json();
+  } catch(e) {
+    throw new Error('SlashLib вернул не JSON. Попробуй войти заново');
+  }
   const chaptersList = listJson.data || [];
   if (!chaptersList.length) throw new Error('Нет глав');
 
@@ -20995,11 +21046,25 @@ async _openSlashlibAt(item, chapterNumber, pageIdx) {
     'Authorization': 'Bearer ' + token, 'Site-Id': '2',
     'Origin': 'https://v2.shlib.life', 'Referer': 'https://v2.shlib.life/'
   });
-  const chapJson = await chapRes.json();
+  if (!chapRes.ok) {
+    if (chapRes.status === 401 || chapRes.status === 403) {
+      try {
+        localStorage.removeItem('slashlib_token');
+        localStorage.removeItem('slashlib_token_valid');
+      } catch(e) {}
+      throw new Error('Токен SlashLib истёк. Войди заново');
+    }
+    throw new Error('Ошибка загрузки главы: ' + chapRes.status);
+  }
+  let chapJson;
+  try {
+    chapJson = await chapRes.json();
+  } catch(e) {
+    throw new Error('SlashLib вернул не JSON. Попробуй войти заново');
+  }
   const chapData = chapJson.data;
 
   if (!chapData || !chapData.pages || !chapData.pages.length) throw new Error('Нет страниц');
-
   const title = item.title + ' - Том ' + chapData.volume + ' Глава ' + chapData.number;
   const progress = { page: pageIdx, offset: 0 };
 
