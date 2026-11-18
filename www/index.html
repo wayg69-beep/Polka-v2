@@ -9232,7 +9232,7 @@ if (useComizy) {
     document.getElementById('viewModal').classList.remove('on');
     return;
   }
-}
+
         const chapters = await ComizyParser.getChapters(details.hid);
         if (!chapters || !chapters.length) throw new Error('Нет глав');
         chapters.sort((a, b) => a.number - b.number);
@@ -21206,7 +21206,6 @@ async _filterDisclaimers(pages, depth, silent) {
     toast('Глава может содержать дисклеймеры', 'warn');
   };
 
-const isDiscBySize = d => d && d.w > 0 && d.h > 0 && (d.h / d.w) < 2;
 const isDiscBySize = d => d && d.w > 0 && d.h > 0 && (d.h / d.w) < 2;
 
 // Быстрое получение размеров: из API, из кэша, или null (если нужно качать)
