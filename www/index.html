@@ -21021,15 +21021,12 @@ async _switchSourceForLang(lang) {
     if (!hasSlash || !hasComizy) return;
     if (lang === 'en' && this._source === 'comizy') return;
     if (lang === 'ru' && this._source === 'slashlib') return;
-
     const bounds = this.getCurrentChapterBounds();
     if (!bounds) return;
-
+    // Индекс главы в текущем списке — переживает сдвиг нумерации
+    const chapterIdx = this._chaptersList.findIndex(c => c.id === bounds.chapterId);
     const wrap = document.getElementById('readerPages');
     const allImgs = wrap ? Array.from(wrap.querySelectorAll('img')) : [];
-    
-    // Позиция = доля ВЫСОТЫ главы (нормализованной по ширине), а не номер кадра.
-    // Так разная нарезка (19 vs 43 кадра) и разные пропорции дают одну и ту же точку.
     const weightOf = (idx) => {
         const p = this._pagesList[idx];
         if (p && p.width > 0 && p.height > 0) return p.height / p.width;
@@ -21057,15 +21054,13 @@ async _switchSourceForLang(lang) {
         total += w;
     }
     const pageRatio = total > 0 ? Math.max(0, Math.min(1, before / total)) : 0;
-
     this.saveProgress();
     toast('Переключаю на ' + (lang === 'en' ? 'Comizy' : 'SlashLib') + '...', 'success');
-
     try {
         if (lang === 'en') {
-            await this._openComizyAt(item, bounds.number, pageRatio);
+            await this._openComizyAt(item, bounds.number, pageRatio, chapterIdx);
         } else {
-            await this._openSlashlibAt(item, bounds.number, pageRatio);
+            await this._openSlashlibAt(item, bounds.number, pageRatio, chapterIdx);
         }
     } catch(e) {
         console.error('[switchSourceForLang]', e);
@@ -21073,7 +21068,7 @@ async _switchSourceForLang(lang) {
     }
 },
   
-async _openComizyAt(item, chapterNumber, pageRatio) {
+async _openComizyAt(item, chapterNumber, pageRatio, chapterIdx) {
     const slug = (item.link_comizy.match(/comizy\.io\/([^\/?#]+)/) || [])[1];
     if (!slug) throw new Error('Нет slug Comizy');
     let details = null;
@@ -21087,21 +21082,26 @@ async _openComizyAt(item, chapterNumber, pageRatio) {
         throw new Error('Comizy недоступен');
     }
     const keepChapter0 = await ComizyParser.checkSlashlibHasChapter0(item.link);
-const chapters = await ComizyParser.getChapters(details.hid, { keepChapter0 });
+    const chapters = await ComizyParser.getChapters(details.hid, { keepChapter0 });
     if (!chapters || !chapters.length) throw new Error('Нет глав');
     chapters.sort((a, b) => a.number - b.number);
-    
-    let target = chapters.find(c => parseFloat(c.number) === parseFloat(chapterNumber));
+    let target = null;
+    // Сначала по индексу — позиции в списке совпадают между источниками
+    if (typeof chapterIdx === 'number' && chapterIdx >= 0 && chapterIdx < chapters.length) {
+        target = chapters[chapterIdx];
+    }
+    // Фолбэк по номеру
+    if (!target) {
+        target = chapters.find(c => parseFloat(c.number) === parseFloat(chapterNumber));
+    }
     if (!target) {
         target = chapters.find(c => parseFloat(c.number) <= parseFloat(chapterNumber)) || chapters[chapters.length - 1] || chapters[0];
         pageRatio = 0;
     }
-
     const rawPages = await ComizyParser.getChapterPages(slug, target.slug);
     if (!rawPages || !rawPages.length) throw new Error('Нет страниц');
     const filtered = rawPages.filter(p => !(p.width && p.height && p.width / p.height > 1.2));
     if (!filtered.length) throw new Error('Все страницы отфильтрованы');
-    
     const pages = filtered.map(p => ({
         image: '', url: p.url, width: p.width || 0, height: p.height || 0,
         chapterId: target.id, volume: 1, number: target.number
@@ -21116,12 +21116,11 @@ const chapters = await ComizyParser.getChapters(details.hid, { keepChapter0 });
         progress, chaptersList, item.id, 'comizy');
 },
   
-async _openSlashlibAt(item, chapterNumber, pageRatio) {
+async _openSlashlibAt(item, chapterNumber, pageRatio, chapterIdx) {
     const token = localStorage.getItem('slashlib_token');
     if (!token) throw new Error('Нужен вход в SlashLib');
     const fullSlug = (item.link.match(/\/manga\/([^\/?#]+)/) || [])[1];
     if (!fullSlug) throw new Error('Нет slug SlashLib');
-    
     const listRes = await nativeFetch(`https://api.cdnlibs.org/api/manga/${fullSlug}/chapters`, {
         'Authorization': 'Bearer ' + token, 'Site-Id': '2',
         'Origin': 'https://v2.shlib.life', 'Referer': 'https://v2.shlib.life/'
@@ -21144,13 +21143,19 @@ async _openSlashlibAt(item, chapterNumber, pageRatio) {
     }
     const chaptersList = listJson.data || [];
     if (!chaptersList.length) throw new Error('Нет глав');
-    
-    let target = chaptersList.find(c => parseFloat(c.number) === parseFloat(chapterNumber));
+    let target = null;
+    // Сначала по индексу — переживает сдвиг нумерации (0 на SlashLib = 1 на Comizy)
+    if (typeof chapterIdx === 'number' && chapterIdx >= 0 && chapterIdx < chaptersList.length) {
+        target = chaptersList[chapterIdx];
+    }
+    // Фолбэк по номеру
+    if (!target) {
+        target = chaptersList.find(c => parseFloat(c.number) === parseFloat(chapterNumber));
+    }
     if (!target) {
         target = chaptersList.find(c => parseFloat(c.number) <= parseFloat(chapterNumber)) || chaptersList[chaptersList.length - 1] || chaptersList[0];
         pageRatio = 0;
     }
-
     const chapRes = await nativeFetch(`https://api.cdnlibs.org/api/manga/${fullSlug}/chapter?volume=${target.volume}&number=${target.number}`, {
         'Authorization': 'Bearer ' + token, 'Site-Id': '2',
         'Origin': 'https://v2.shlib.life', 'Referer': 'https://v2.shlib.life/'
@@ -21173,7 +21178,6 @@ async _openSlashlibAt(item, chapterNumber, pageRatio) {
     }
     const chapData = chapJson.data;
     if (!chapData || !chapData.pages || !chapData.pages.length) throw new Error('Нет страниц');
-    
     const title = item.title + ' - Том ' + chapData.volume + ' Глава ' + chapData.number;
     const progress = { chapterRatio: pageRatio };
     this.open(fullSlug, chapData.id, chapData.volume, chapData.number, chapData.pages,
