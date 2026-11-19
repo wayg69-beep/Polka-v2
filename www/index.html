@@ -6658,7 +6658,6 @@ _extractChapterNumber(name) {
             _origNum: String(ch.number || '')
         }));
 
-        // Группируем подглавы по базе: "1.1","1.2"..."1.7" → база "1"
         const groups = {};
         parsed.forEach(ch => {
             if (!ch._parsed) return;
@@ -6670,17 +6669,15 @@ _extractChapterNumber(name) {
             }
         });
 
-        // Базы с 3+ подглавами = нарезки (1.1..1.7, 14.1..14.5)
         const junkBases = new Set();
         for (const [base, items] of Object.entries(groups)) {
             if (items.length >= 3) junkBases.add(base);
         }
 
         return parsed.filter(ch => {
-            if (!ch._parsed) return false;           // без номера — мусор
-            // Глава 0 НЕ убирается автоматически — пользователь сам решает
-            // через долгий тап в режиме прицела (реклама или введение)
-            if (/^\d+-\d+$/.test(ch._parsed)) return false; // 1-13, 14-26
+            if (!ch._parsed) return false;
+            // Глава 0 НЕ убирается — пользователь сам пометит через прицел
+            if (/^\d+-\d+$/.test(ch._parsed)) return false;
             const baseMatch = ch._parsed.match(/^(\d+)[.\-]/);
             if (baseMatch && junkBases.has(baseMatch[1])) return false;
             return true;
@@ -6695,8 +6692,6 @@ _extractChapterNumber(name) {
             const json = await res.json();
             const chapters = json.data?.chapters || json.chapters || [];
             const mapped = chapters.map(c => {
-                // Берём номер из имени главы, а не из API-индекса.
-                // "Chapter 2" → number: 2, а не 11 (API-индекс).
                 const parsedNum = this._extractChapterNumber(c.name);
                 return {
                     id: c.id,
