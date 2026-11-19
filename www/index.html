@@ -6642,26 +6642,72 @@ const ComizyParser = {
     }
   },
 
-  async getChapters(hid) {
-    try {
-      const url = `${this.API}/titles/${hid}/chapters`;
-      const res = await nativeFetch(url, { 'Accept': 'application/json' });
-      if (!res.ok) return [];
-      const json = await res.json();
-      const chapters = json.data?.chapters || json.chapters || [];
-      return chapters.map(c => ({
-        id: c.id,
-        name: c.name,
-        slug: c.slug,
-        url: this.BASE + c.url,
-        number: c.number
-      })).sort((a, b) => a.number - b.number);
-    } catch (e) {
-      console.warn('Comizy chapters error:', e);
-      return [];
-    }
-  },
+_extractChapterNumber(name) {
+        if (!name) return null;
+        const s = String(name).trim();
+        const m = s.match(/(?:chapter|гл(?:ава)?\.?|ch\.?)\s*([\d]+(?:[.\-]\d+)*)/i);
+        return m ? m[1] : null;
+    },
 
+    filterJunkChapters(chapters) {
+        if (!Array.isArray(chapters) || !chapters.length) return [];
+
+        const parsed = chapters.map(ch => ({
+            ...ch,
+            _parsed: this._extractChapterNumber(ch.name || ''),
+            _origNum: String(ch.number || '')
+        }));
+
+        // Группируем подглавы по базе: "1.1","1.2"..."1.7" → база "1"
+        const groups = {};
+        parsed.forEach(ch => {
+            if (!ch._parsed) return;
+            const m = ch._parsed.match(/^(\d+)[.\-]/);
+            const base = m ? m[1] : null;
+            if (base) {
+                if (!groups[base]) groups[base] = [];
+                groups[base].push(ch);
+            }
+        });
+
+        // Базы с 3+ подглавами = нарезки (1.1..1.7, 14.1..14.5)
+        const junkBases = new Set();
+        for (const [base, items] of Object.entries(groups)) {
+            if (items.length >= 3) junkBases.add(base);
+        }
+
+        return parsed.filter(ch => {
+            if (!ch._parsed) return false;           // без номера — мусор
+            if (ch._parsed === '0') return false;     // Chapter 0 = реклама
+            if (/^\d+-\d+$/.test(ch._parsed)) return false; // 1-13, 14-26
+            const baseMatch = ch._parsed.match(/^(\d+)[.\-]/);
+            if (baseMatch && junkBases.has(baseMatch[1])) return false;
+            return true;
+        });
+    },
+
+    async getChapters(hid) {
+        try {
+            const url = `${this.API}/titles/${hid}/chapters`;
+            const res = await nativeFetch(url, { 'Accept': 'application/json' });
+            if (!res.ok) return [];
+            const json = await res.json();
+            const chapters = json.data?.chapters || json.chapters || [];
+            const mapped = chapters.map(c => ({
+                id: c.id,
+                name: c.name,
+                slug: c.slug,
+                url: this.BASE + c.url,
+                number: c.number
+            })).sort((a, b) => a.number - b.number);
+
+            return this.filterJunkChapters(mapped);
+        } catch (e) {
+            console.warn('Comizy chapters error:', e);
+            return [];
+        }
+    },
+  
   async getChapterPages(mangaSlug, chapterSlug) {
     try {
       const url = `${this.BASE}/${mangaSlug}/${chapterSlug}`;
