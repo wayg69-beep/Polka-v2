@@ -20635,7 +20635,9 @@ _scrollDir: 'down',
 _tapTimer: null,
 _zoomAnimFrame: null,
   _chaptersList: [],
-  _nextChapter: null,
+_numberMapping: null,   // Map<czNumberStr, slNumberStr> — для отображения бонусов по SL
+_slNumbers: null,       // Set номеров SL для быстрой проверки
+_nextChapter: null,
   _prevChapter: null,
   _settings: {},
   _autoLoading: false,
@@ -20921,6 +20923,141 @@ _fitReaderTitle() {
     bar.classList.add('wide');
   });
 },
+
+/**
+     * Извлекает числовую часть из имени главы Comizy ("Chapter 18.5" → "18.5")
+     */
+    _extractCzNumber(name) {
+        if (!name) return null;
+        const m = String(name).match(/(?:chapter|гл(?:ава)?\.?|ch\.?)\s*([\d]+(?:[.\-]\d+)*)/i);
+        return m ? m[1] : null;
+    },
+
+    /**
+     * Строит маппинг CZ-номеров → SL-номера для бонусов/экстр.
+     * Целые главы совпадают 1:1. Дробные между одинаковыми целыми — одна и та же экстра,
+     * даже если номера отличаются (CZ 101.5 ↔ SL 101.1).
+     */
+    async _buildNumberMapping() {
+        this._numberMapping = null;
+        this._slNumbers = null;
+
+        if (this._source !== 'comizy') return;
+        if (!this._itemId) return;
+
+        const it = items.find(x => x.id === this._itemId);
+        if (!it || !it.link || !it.link.includes('shlib.life')) return;
+
+        const token = localStorage.getItem('slashlib_token');
+        if (!token) return;
+
+        const slSlugMatch = it.link.match(/\/manga\/([^\/?#]+)/);
+        if (!slSlugMatch) return;
+        const slSlug = slSlugMatch[1];
+
+        try {
+            const res = await nativeFetch(
+                `https://api.cdnlibs.org/api/manga/${slSlug}/chapters?limit=500`,
+                {
+                    'Authorization': 'Bearer ' + token,
+                    'Site-Id': '2',
+                    'Accept': 'application/json',
+                    'Origin': 'https://v2.shlib.life',
+                    'Referer': 'https://v2.shlib.life/'
+                }
+            );
+            if (!res.ok) return;
+
+            const json = await res.json();
+            const slChapters = json.data || [];
+            if (!slChapters.length) return;
+
+            // Убираем главу 0 (введение — его нет на Comizy)
+            const slSorted = slChapters
+                .filter(c => String(c.number) !== '0')
+                .slice()
+                .sort((a, b) => parseFloat(a.number) - parseFloat(b.number));
+
+            const slNumSet = new Set(slSorted.map(c => String(c.number)));
+            this._slNumbers = slNumSet;
+
+            // Группируем дробные SL по базе: "18.5" → база "18"
+            const slFractionsByBase = {};
+            slSorted.forEach(c => {
+                const n = String(c.number);
+                const m = n.match(/^(\d+)\./);
+                if (m) {
+                    const base = m[1];
+                    if (!slFractionsByBase[base]) slFractionsByBase[base] = [];
+                    slFractionsByBase[base].push(n);
+                }
+            });
+
+            // Строим маппинг для наших CZ-глав
+            const mapping = new Map();
+            const czChapters = this._chaptersList || [];
+
+            czChapters.forEach(ch => {
+                const czParsed = this._extractCzNumber(ch.name);
+                if (!czParsed) {
+                    // Без номера — оставляем как есть
+                    return;
+                }
+
+                // Если номер точно есть в SL — маппинг 1:1
+                if (slNumSet.has(czParsed)) {
+                    mapping.set(czParsed, czParsed);
+                    return;
+                }
+
+                // Дробная — ищем SL-дробную с той же базой
+                const baseMatch = czParsed.match(/^(\d+)\./);
+                if (baseMatch) {
+                    const base = baseMatch[1];
+                    const slFractions = slFractionsByBase[base];
+                    if (slFractions && slFractions.length > 0) {
+                        // Берём первую по порядку (если их несколько — по позиции)
+                        // Определяем индекс CZ-дробной среди всех дробных с этой базой
+                        const czSiblings = czChapters
+                            .map(c => this._extractCzNumber(c.name))
+                            .filter(n => n && n.startsWith(base + '.'));
+                        const czIdx = czSiblings.indexOf(czParsed);
+                        const slIdx = Math.min(czIdx >= 0 ? czIdx : 0, slFractions.length - 1);
+                        mapping.set(czParsed, slFractions[slIdx]);
+                        return;
+                    }
+                }
+
+                // Нет в SL — оставляем CZ-номер
+                mapping.set(czParsed, czParsed);
+            });
+
+            this._numberMapping = mapping;
+            console.log('[reader] number mapping built:', Object.fromEntries(mapping));
+        } catch (e) {
+            console.warn('[reader] buildNumberMapping failed:', e.message);
+        }
+    },
+
+    /**
+     * Возвращает номер для отображения (SL-номер если есть в маппинге, иначе CZ-номер).
+     * Для имён типа "Chapter 18.5" возвращает "18.5" (или SL-эквивалент).
+     */
+    _displayNumber(chapterObj) {
+        if (!chapterObj) return '?';
+        const rawNum = String(chapterObj.number || '');
+        if (!this._numberMapping) return rawNum;
+        // Ищем по распарсенному имени (из "Chapter X.Y")
+        const parsed = this._extractCzNumber(chapterObj.name || rawNum);
+        if (parsed && this._numberMapping.has(parsed)) {
+            return this._numberMapping.get(parsed);
+        }
+        // Fallback: пробуем по number из API
+        if (this._numberMapping.has(rawNum)) {
+            return this._numberMapping.get(rawNum);
+        }
+        return rawNum;
+    },
 
 _updateSourceBtn() {
   const btn = document.getElementById('readerSourceBtn');
@@ -22004,17 +22141,17 @@ _openChaptersList() {
   if (!chapters.length) {
     list.innerHTML = '<div style="padding:20px;text-align:center;color:var(--fg2);font-size:13px;">Глав не найдено</div>';
   } else {
-    const current = this.getCurrentChapterBounds();
-    const currentId = current ? current.chapterId : null;
-    const sorted = chapters.slice().sort((a, b) => (a.number || 0) - (b.number || 0));
-
-    list.innerHTML = sorted.map(c => {
-      const isCurrent = c.id === currentId;
-      return '<button type="button" class="rc-item' + (isCurrent ? ' current' : '') + '" data-id="' + esc(c.id) + '" data-vol="' + (c.volume || 0) + '" data-num="' + (c.number || 0) + '">' +
-        '<span class="rc-item-vol">Том ' + (c.volume || 0) + '</span>' +
-        '<span class="rc-item-title">Глава ' + (c.number || 0) + '</span>' +
-        '</button>';
-    }).join('');
+            const current = this.getCurrentChapterBounds();
+            const currentId = current ? current.chapterId : null;
+            const sorted = chapters.slice().sort((a, b) => (a.number || 0) - (b.number || 0));
+            list.innerHTML = sorted.map(c => {
+                const isCurrent = c.id === currentId;
+                const displayNum = this._displayNumber(c);
+                return '<button type="button" class="rc-item' + (isCurrent ? ' current' : '') + '" data-id="' + esc(c.id) + '" data-vol="' + (c.volume || 0) + '" data-num="' + (c.number || 0) + '">' +
+                '<span class="rc-item-vol">Том ' + (c.volume || 0) + '</span>' +
+                '<span class="rc-item-title">Глава ' + esc(displayNum) + '</span>' +
+                '</button>';
+            }).join('');
 
     list.querySelectorAll('.rc-item').forEach(btn => {
       btn.onclick = () => {
@@ -22092,6 +22229,8 @@ this._source = source || 'slashlib';
       this._fullSlug = fullSlug;
 this._shortSlug = fullSlug.split('--').pop();
 this._chaptersList = chaptersList || [];
+// Строим маппинг номеров для Comizy (асинхронно, не блокируем открытие)
+this._buildNumberMapping();
 this._itemId = itemId || this._itemId || null;
 this._blobUrls = {};
 
@@ -22394,10 +22533,12 @@ this.saveProgress();
     document.body.classList.remove('modal-open');
     Object.values(this._blobUrls).forEach(url => { try { URL.revokeObjectURL(url); } catch(e){} });
     this._pagesList = [];
-    this._blobUrls = {};
-    this._nextChapter = null;
-    this._prevChapter = null;
-    this._chaptersList = [];
+        this._blobUrls = {};
+        this._nextChapter = null;
+        this._prevChapter = null;
+        this._chaptersList = [];
+        this._numberMapping = null;
+        this._slNumbers = null;
     this._currentIndex = 0;
     // Сброс всех флагов «в процессе» — иначе после повторного открытия
     // checkPrevLoad/checkAutoLoad навсегда заблокированы
@@ -22809,8 +22950,11 @@ updateCounter() {
   }
 
   if (volEl) volEl.textContent = 'Том ' + bounds.volume;
-  if (posEl) posEl.textContent = 'Глава ' + bounds.number + ' • Фрейм ' +
-    bounds.pageInChapter + '/' + bounds.totalInChapter;
+  // Показываем SL-номер если есть маппинг (актуально для Comizy-бонусов)
+        const currentChapter = (this._chaptersList || []).find(c => c.id === bounds.chapterId);
+        const displayNum = currentChapter ? this._displayNumber(currentChapter) : bounds.number;
+        if (posEl) posEl.textContent = 'Глава ' + displayNum + ' • Фрейм ' +
+            bounds.pageInChapter + '/' + bounds.totalInChapter;
 
   if (fill) {
     if (bounds.totalInChapter > 1) {
