@@ -6642,20 +6642,39 @@ const ComizyParser = {
     }
   },
 
-_extractChapterNumber(name) {
+checkSlashlibHasChapter0(itemLink) {
+        return (async () => {
+            if (!itemLink || !itemLink.includes('shlib.life')) return true;
+            const token = localStorage.getItem('slashlib_token');
+            if (!token) return true;
+            const slSlug = (itemLink.match(/\/manga\/([^\/?#]+)/) || [])[1];
+            if (!slSlug) return true;
+            try {
+                const res = await nativeFetch(`https://api.cdnlibs.org/api/manga/${slSlug}/chapters?limit=5`, {
+                    'Authorization': 'Bearer ' + token, 'Site-Id': '2'
+                });
+                if (!res.ok) return true;
+                const json = await res.json();
+                const chapters = json.data || [];
+                return chapters.some(c => String(c.number) === '0');
+            } catch(e) { return true; }
+        })();
+    },
+
+    _extractChapterNumber(name) {
         if (!name) return null;
         const s = String(name).trim();
         const m = s.match(/(?:chapter|гл(?:ава)?\.?|ch\.?)\s*([\d]+(?:[.\-]\d+)*)/i);
         return m ? m[1] : null;
     },
 
-    filterJunkChapters(chapters) {
+    filterJunkChapters(chapters, options) {
         if (!Array.isArray(chapters) || !chapters.length) return [];
+        options = options || {};
 
         const parsed = chapters.map(ch => ({
             ...ch,
-            _parsed: this._extractChapterNumber(ch.name || ''),
-            _origNum: String(ch.number || '')
+            _parsed: this._extractChapterNumber(ch.name || '')
         }));
 
         const groups = {};
@@ -6676,7 +6695,7 @@ _extractChapterNumber(name) {
 
         return parsed.filter(ch => {
             if (!ch._parsed) return false;
-            // Глава 0 НЕ убирается — пользователь сам пометит через прицел
+            if (ch._parsed === '0' && options.keepChapter0 === false) return false;
             if (/^\d+-\d+$/.test(ch._parsed)) return false;
             const baseMatch = ch._parsed.match(/^(\d+)[.\-]/);
             if (baseMatch && junkBases.has(baseMatch[1])) return false;
@@ -6684,7 +6703,7 @@ _extractChapterNumber(name) {
         });
     },
 
-    async getChapters(hid) {
+    async getChapters(hid, options) {
         try {
             const url = `${this.API}/titles/${hid}/chapters`;
             const res = await nativeFetch(url, { 'Accept': 'application/json' });
@@ -6702,7 +6721,7 @@ _extractChapterNumber(name) {
                 };
             }).sort((a, b) => parseFloat(a.number) - parseFloat(b.number));
 
-            return this.filterJunkChapters(mapped);
+            return this.filterJunkChapters(mapped, options);
         } catch (e) {
             console.warn('Comizy chapters error:', e);
             return [];
@@ -9225,7 +9244,8 @@ if (useComizy) {
   }
 
   if (useComizy) {
-    const chapters = await ComizyParser.getChapters(details.hid);
+    const keepChapter0 = await ComizyParser.checkSlashlibHasChapter0(it.link);
+const chapters = await ComizyParser.getChapters(details.hid, { keepChapter0 });
     if (!chapters || !chapters.length) throw new Error('Нет глав');
     chapters.sort((a, b) => a.number - b.number);
 
@@ -9281,7 +9301,8 @@ if (useComizy) {
     return;
   }
 
-        const chapters = await ComizyParser.getChapters(details.hid);
+        const keepChapter0 = await ComizyParser.checkSlashlibHasChapter0(it.link);
+const chapters = await ComizyParser.getChapters(details.hid, { keepChapter0 });
         if (!chapters || !chapters.length) throw new Error('Нет глав');
         chapters.sort((a, b) => a.number - b.number);
 
@@ -11079,7 +11100,8 @@ if (isComizyCard && isSlashlibCard) {
     const slug = it.link_comizy.split('/').pop();
     const cDetails = await ComizyParser.getMangaDetails(slug);
     if (cDetails) {
-      it.comizyChapters = await ComizyParser.getChapters(cDetails.hid);
+      const keepChapter0 = await ComizyParser.checkSlashlibHasChapter0(it.link);
+it.comizyChapters = await ComizyParser.getChapters(cDetails.hid, { keepChapter0 });
     }
   } catch(e) {
     console.warn('Comizy chapters refresh failed:', e);
@@ -11098,7 +11120,8 @@ if (it.link_comizy) {
   const slug = it.link_comizy.split('/').pop();
   const details = await ComizyParser.getMangaDetails(slug);
   if (details) {
-    const chapters = await ComizyParser.getChapters(details.hid);
+    const keepChapter0 = await ComizyParser.checkSlashlibHasChapter0(it.link);
+const chapters = await ComizyParser.getChapters(details.hid, { keepChapter0 });
     it.title = details.title;
     it.title_en = details.altName || it.title_en;
     it.year = details.year || it.year;
@@ -13183,7 +13206,8 @@ try {
   const match = await ComizyParser.searchAndMatchByNames(allSlashNames, it.year);
   if (match) {
     it.link_comizy = match.url;
-    it.comizyChapters = await ComizyParser.getChapters(match.hid);
+    const keepChapter0 = await ComizyParser.checkSlashlibHasChapter0(it.link);
+it.comizyChapters = await ComizyParser.getChapters(match.hid, { keepChapter0 });
   }
 } catch(e) { console.warn('Comizy auto-search error', e); }
     
@@ -21062,7 +21086,8 @@ async _openComizyAt(item, chapterNumber, pageRatio) {
         toast('Comizy недоступен. Остаюсь на SlashLib.', 'warn');
         throw new Error('Comizy недоступен');
     }
-    const chapters = await ComizyParser.getChapters(details.hid);
+    const keepChapter0 = await ComizyParser.checkSlashlibHasChapter0(item.link);
+const chapters = await ComizyParser.getChapters(details.hid, { keepChapter0 });
     if (!chapters || !chapters.length) throw new Error('Нет глав');
     chapters.sort((a, b) => a.number - b.number);
     
