@@ -23506,13 +23506,16 @@ const filterResult = await this._filterDisclaimers(chapData.pages, 0, true);
 },
   
 async checkPrevLoad() {
-  if (!this._prevChapter) return;
-  if (this._prevLoading) return;
-  if (this._restoring) return;
-  if (!this._pagesList.length) return;
-
-  const bounds = this.getCurrentChapterBounds();
-  if (!bounds) return;
+    if (!this._prevChapter) return;
+    if (this._prevLoading) return;
+    if (this._restoring) return;
+    if (!this._pagesList.length) return;
+    // Глава 0 на Comizy = реклама/введение. Не подгружаем автоматически
+    // при скролле, чтобы не сдвигать _currentIndex и bounds.number.
+    // Пользователь может открыть её вручную через список глав.
+    if (this._source === 'comizy' && String(this._prevChapter.number) === '0') return;
+    const bounds = this.getCurrentChapterBounds();
+    if (!bounds) return;
   if (this._prevChapter && this._prevChapter.number != null && bounds.number != null) {
     if (parseFloat(this._prevChapter.number) >= parseFloat(bounds.number)) {
       this._prevChapter = null;
