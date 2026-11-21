@@ -1,0 +1,855 @@
+<!DOCTYPE html>
+<html lang="ru" style="color-scheme: light dark;">
+<head>
+<meta charset="UTF-8">
+<meta name="color-scheme" content="light dark">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Полка</title>
+<link rel="stylesheet" href="css/01-base.css">
+<link rel="stylesheet" href="css/02-layout.css">
+<link rel="stylesheet" href="css/03-components.css">
+<link rel="stylesheet" href="css/04-forms.css">
+<link rel="stylesheet" href="css/05-modals.css">
+<link rel="stylesheet" href="css/06-view.css">
+<link rel="stylesheet" href="css/07-player.css">
+<link rel="stylesheet" href="css/08-reader.css">
+<link rel="stylesheet" href="css/09-screens.css">
+<link rel="stylesheet" href="css/10-cloud.css">
+<link rel="stylesheet" href="css/11-responsive.css">
+</head>
+<body>
+<svg style="position:absolute;width:0;height:0;overflow:hidden" aria-hidden="true">
+  <filter id="ambient" color-interpolation-filters="sRGB">
+    <feComponentTransfer>
+      <feFuncR type="gamma" amplitude="1" exponent="0.55" offset="0.18"/>
+      <feFuncG type="gamma" amplitude="1" exponent="0.55" offset="0.18"/>
+      <feFuncB type="gamma" amplitude="1" exponent="0.55" offset="0.18"/>
+    </feComponentTransfer>
+    <feComponentTransfer>
+      <feFuncR type="linear" slope="0.75" intercept="0"/>
+      <feFuncG type="linear" slope="0.75" intercept="0"/>
+      <feFuncB type="linear" slope="0.75" intercept="0"/>
+    </feComponentTransfer>
+  </filter>
+</svg>
+<aside class="sidebar" id="sidebar">
+  <button class="burger" id="burger" aria-label="Меню">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+      <line x1="3" y1="7" x2="21" y2="7"/>
+      <line x1="3" y1="12" x2="21" y2="12"/>
+      <line x1="3" y1="17" x2="21" y2="17"/>
+    </svg>
+  </button>
+  <nav class="nav-list" id="navList"></nav>
+  <div class="sidebar-bottom">
+    <button class="side-action" id="btnExport" title="Экспорт">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 3v14"/>
+        <path d="M5 12l7 7 7-7"/>
+        <line x1="5" y1="21" x2="19" y2="21"/>
+      </svg>
+      <span class="side-action-label">Экспорт</span>
+    </button>
+    <button class="side-action" id="btnImport" title="Импорт">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 21V7"/>
+        <path d="M5 12l7-7 7 7"/>
+        <line x1="5" y1="3" x2="19" y2="3"/>
+      </svg>
+      <span class="side-action-label">Импорт</span>
+    </button>
+    <button class="side-action" id="btnTrash" title="Корзина">
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <polyline points="3 6 5 6 21 6"></polyline>
+    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+  </svg>
+  <span class="side-action-label">Корзина</span>
+    </button>
+    <button class="side-action" id="btnMangaLib" title="Скриншоты">
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="3" y="3" width="18" height="18" rx="2"/>
+    <circle cx="8.5" cy="8.5" r="1.5"/>
+    <path d="M21 15l-5-5L5 21"/>
+  </svg>
+  <span class="side-action-label">Скриншоты</span>
+    </button>
+  </div>
+</aside>
+
+<div class="sidebar-backdrop" id="sidebarBackdrop"></div>
+
+<div class="main">
+  <header>
+    <div class="top">
+      <h1 class="brand"><span class="brand-text">Полка<span class="brand-dot">.</span></span></h1>
+      <div class="search-wrap">
+        <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <circle cx="11" cy="11" r="7"/>
+          <line x1="16" y1="16" x2="21" y2="21"/>
+        </svg>
+        <input class="search" id="search" placeholder="Поиск…">
+        <button type="button" class="search-clear" id="searchClear" aria-label="Очистить">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+            <line x1="6" y1="6" x2="18" y2="18"/>
+            <line x1="18" y1="6" x2="6" y2="18"/>
+          </svg>
+        </button>
+      </div>
+      <button class="iconbtn" id="btnCategorySettings" title="Настройки категории">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+        </svg>
+      </button>
+      <button class="iconbtn" id="btnCloud" title="Облако">
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/>
+  </svg>
+      </button>
+    </div>
+    <div class="progress-chandelier" id="progressChandelier" aria-hidden="true">
+  <div class="progress-chandelier-glow" id="progressChandelierGlow"></div>
+  <div class="progress-chandelier-fill" id="progressChandelierFill"></div>
+    </div>
+  </header>
+  <div class="rainbow-progress-wrap" id="rainbowProgress">
+  <div class="rainbow-progress-head">
+    <span class="rainbow-progress-title">Прогресс</span>
+    <span class="rainbow-progress-stat" id="progressStat">0 / 0 · 0%</span>
+  </div>
+  <div class="rainbow-progress" id="progressWrap">
+    <div class="rainbow-progress-glow" id="progressGlow"></div>
+    <div class="rainbow-progress-fill" id="progressFill"></div>
+  </div>
+</div>
+<main class="content">
+    <div class="active-filters" id="activeFilters"></div>
+    
+    <div class="status-tabs-row">
+      <div class="status-tabs-wrap" id="statusTabsWrap">
+        <div class="status-tabs" id="statusTabs"></div>
+        <div class="status-tabs-indicator" id="statusIndicator"></div>
+      </div>
+      <button type="button" class="fav-btn" id="favToggle" aria-label="Только избранное">
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
+  </svg>
+</button>
+<button type="button" class="bl-toggle" id="blToggle" aria-label="Показать только BL">
+  <span class="bl-toggle-label">BL</span>
+  <span class="bl-toggle-track"><span class="bl-toggle-thumb"></span></span>
+</button>
+    </div>
+    <div class="grid" id="grid"></div>
+    <div class="empty" id="empty" style="display:none">
+      <div class="big">🪹</div>
+      <p><b>Пусто</b></p>
+      <p>Жми «+» внизу справа, чтобы добавить</p>
+    </div>
+  </main>
+</div>
+
+<button class="fab" id="fab">+</button>
+  <nav class="bottom-nav" id="bottomNav"></nav>
+<button class="fab-emergency" id="fabEmergency" title="Скрыть BL">
+  <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+    <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+  </svg>
+</button>
+
+<div class="sheet" id="sheet"><div class="panel" id="panel"></div></div>
+<div class="modal view-modal" id="viewModal">
+  <div class="view-modal-wrap">
+    <button type="button" class="view-nav-btn view-nav-left hidden" id="viewNavLeft" aria-label="Предыдущий сезон">‹</button>
+    <div class="view-modal-stage" id="viewStage">
+      <div class="view-modal-panel" id="viewPanel"></div>
+    </div>
+    <button type="button" class="view-nav-btn view-nav-right hidden" id="viewNavRight" aria-label="Следующий сезон">›</button>
+  </div>
+</div>
+<div class="url-modal" id="coverUrlModal">
+  <div class="url-panel">
+    <input type="text" id="coverUrlInput" placeholder="https://…" autocomplete="off">
+    <button type="button" class="iconbtn" id="coverUrlOk" title="Подгрузить">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="20 6 9 17 4 12"/>
+      </svg>
+    </button>
+  </div>
+</div>
+
+<div class="notes-modal" id="notesModal">
+  <div class="notes-panel">
+    <div class="notes-head">
+      <h3>Заметки</h3>
+<button type="button" class="iconbtn" id="notesClose"><svg width="1.2em" height="1.2em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-0.2em;"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="notes-body">
+      <textarea id="notesTextarea" placeholder="Личные мысли, впечатления…"></textarea>
+    </div>
+    <div class="notes-foot">
+      <button type="button" class="btn ghost" id="notesCancel">Отмена</button>
+      <button type="button" class="btn primary" id="notesSave">Сохранить</button>
+    </div>
+  </div>
+</div>
+
+<div class="cover-view-modal" id="coverViewModal"><img id="coverViewImg" src="" alt=""></div>
+
+<div class="modal" id="catSettingsModal">
+  <div class="modal-panel">
+    <h2>Настройки: <span id="catSettingsName"></span></h2>
+    <div class="cat-settings-help">Какие вкладка и сортировка должны открываться при входе в эту категорию.</div>
+    
+    <!-- БЛОК ТОКЕНА VK (скрыт по умолчанию, JS сам покажет на вкладке Музыка) -->
+    <div class="filter-section" id="vkTokenSection" style="display:none;">
+      <label>Токен VK</label>
+      <button type="button" class="btn ghost" id="vkTokenBtn" style="width:100%;">Добавить токен</button>
+      <div id="vkTokenForm" style="display:none; margin-top:10px;">
+        <input type="password" id="vkTokenInput" placeholder="Вставьте токен VK..." autocomplete="off" style="width:100%;">
+        <div class="cat-settings-help" style="margin-top:6px;">Токен хранится только на этом устройстве.</div>
+        <button type="button" class="btn primary" id="vkTokenSave" style="width:100%; margin-top:8px;">Сохранить</button>
+      </div>
+    </div>
+    <!-- КОНЕЦ БЛОКА ТОКЕНА VK -->
+    
+
+    <div class="filter-section cat-filters-mobile">
+      <label>Фильтры</label>
+      <div class="seg" id="catSetFilters">
+        <button type="button" id="catFilterFav" class="fav-chip"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:block;flex:0 0 auto"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>Только избранное</button>
+        <button type="button" id="catFilterBl" class="bl-chip">BL</button>
+      </div>
+    </div>
+    <div class="filter-section mobile-actions">
+  <label>Данные</label>
+<div class="seg" id="appDataActions">
+  <button type="button" id="mExport"><svg width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-0.15em;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Экспорт</button>
+  <button type="button" id="mImport"><svg width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-0.15em;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg> Импорт</button>
+  <button type="button" id="mTrash"><svg width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-0.15em;"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg> Корзина</button>
+</div>
+    </div>
+    <div class="filter-section">
+  <label>Вкладка при открытии</label>
+  <div class="seg" id="catSetStatus"></div>
+</div>
+<div class="filter-section">
+  <label>Фильтр по типу (зелёный — только, красный — исключить)</label>
+  <div class="type-toggle-row" id="catSetTypeFilter"></div>
+</div>
+    <div class="filter-section">
+  <label>Сортировка</label>
+  <div class="seg" id="catSetSort"></div>
+</div>
+<div class="filter-section">
+  <label class="custom-checkbox">
+    <input type="checkbox" id="catSetPersistSort">
+    <span class="checkmark"></span>
+    Запоминать выбранную сортировку
+  </label>
+</div>
+<div class="actions">
+      <button class="btn ghost" id="catSetCancel">Отмена</button>
+      <button class="btn primary" id="catSetSave">Сохранить</button>
+    </div>
+  </div>
+</div>
+
+  
+<div class="modal" id="anilistModal">
+  <div class="modal-panel">
+    <h2>Поиск в AniList</h2>
+    <input type="text" class="tmdb-input" id="anilistQuery" placeholder="Название манги, манхвы, маньхуа…" autocomplete="off">
+    <div class="tmdb-results" id="anilistResults">
+      <div class="tmdb-status">Введи название и нажми Enter</div>
+    </div>
+    <div class="actions">
+      <button class="btn ghost" id="anilistClose">Закрыть</button>
+    </div>
+  </div>
+</div>
+
+  <div class="modal" id="slashlibModal">
+  <div class="modal-panel">
+    <h2>Поиск на Slashlib</h2>
+    <input type="text" class="tmdb-input" id="slashlibQuery" placeholder="Название манги, манхвы или комикса…" autocomplete="off">
+    <div class="tmdb-results" id="slashlibResults">
+      <div class="tmdb-status">Введи название и нажми Enter</div>
+    </div>
+    <div class="actions">
+      <button class="btn ghost" id="slashlibClose">Закрыть</button>
+    </div>
+  </div>
+  </div>
+
+  <div class="modal" id="comizyModal">
+  <div class="modal-panel">
+    <h2>Поиск на Comizy</h2>
+    <input type="text" class="tmdb-input" id="comizyQuery" placeholder="Название манги, манхвы…" autocomplete="off">
+    <div class="tmdb-results" id="comizyResults">
+      <div class="tmdb-status">Введи название и нажми Enter</div>
+    </div>
+    <div class="actions">
+      <button class="btn ghost" id="comizyClose">Закрыть</button>
+    </div>
+  </div>
+  </div>
+  
+  <div class="modal" id="tmdbModal">
+  <div class="modal-panel">
+    <h2>Поиск в TMDB</h2>
+    <input type="text" class="tmdb-input" id="tmdbQuery" placeholder="Название дорамы, фильма или сериала…" autocomplete="off">
+    <div class="tmdb-results" id="tmdbResults">
+      <div class="tmdb-status">Введи название и нажми Enter</div>
+    </div>
+    <div class="actions">
+      <button class="btn ghost" id="tmdbClose">Закрыть</button>
+    </div>
+  </div>
+</div>
+
+
+
+ <div class="modal" id="doramaModal">
+  <div class="modal-panel">
+    <h2>Поиск на Dorama.land</h2>
+    <input type="text" class="tmdb-input" id="doramaQuery" placeholder="Название дорамы…" autocomplete="off">
+    <div class="tmdb-results" id="doramaResults">
+      <div class="tmdb-status">Введи название и нажми Enter</div>
+    </div>
+    <div class="actions">
+      <button class="btn ghost" id="doramaClose">Закрыть</button>
+    </div>
+  </div>
+ </div> 
+
+
+<div class="modal" id="knigiModal">
+  <div class="modal-panel">
+    <h2>Поиск на Knigi.ws</h2>
+    <input type="text" class="tmdb-input" id="knigiQuery" placeholder="Название книги или автор…" autocomplete="off">
+    <div class="tmdb-results" id="knigiResults">
+      <div class="tmdb-status">Введи название и нажми Enter</div>
+    </div>
+    <div class="actions">
+      <button class="btn ghost" id="knigiClose">Закрыть</button>
+    </div>
+  </div>
+</div>
+
+  <div class="modal" id="flibustaModal">
+  <div class="modal-panel">
+    <h2>Поиск на Flibusta</h2>
+    <input type="text" class="tmdb-input" id="flibustaQuery" placeholder="Название книги или автор…" autocomplete="off">
+    <div class="tmdb-results" id="flibustaResults">
+      <div class="tmdb-status">Введи название и нажми Enter</div>
+    </div>
+    <div class="actions">
+      <button class="btn ghost" id="flibustaClose">Закрыть</button>
+    </div>
+  </div>
+  </div>
+
+  <div class="modal" id="ficbookModal">
+  <div class="modal-panel">
+    <h2>Поиск на Ficbook</h2>
+    <input type="text" class="tmdb-input" id="ficbookQuery" placeholder="Название фанфика, автор или фандом…" autocomplete="off">
+    <div class="tmdb-results" id="ficbookResults">
+      <div class="tmdb-status">Введи название и нажми Enter</div>
+    </div>
+    <div class="actions">
+      <button class="btn ghost" id="ficbookClose">Закрыть</button>
+    </div>
+  </div>
+  </div>
+
+  <div class="modal" id="fanficsModal">
+<div class="modal-panel">
+  <h2>Поиск на Fanfics.me</h2>
+  <input type="text" class="tmdb-input" id="fanficsQuery" placeholder="Название фанфика, автор или фандом…" autocomplete="off">
+  <div class="tmdb-results" id="fanficsResults">
+    <div class="tmdb-status">Введи название и нажми Enter</div>
+  </div>
+  <div class="actions">
+    <button class="btn ghost" id="fanficsClose">Закрыть</button>
+  </div>
+</div>
+  </div>
+
+  <div class="modal" id="ao3Modal">
+<div class="modal-panel">
+  <h2>Поиск на AO3</h2>
+  <input type="text" class="tmdb-input" id="ao3Query" placeholder="Название, автор или фандом…" autocomplete="off">
+  <div class="tmdb-results" id="ao3Results">
+    <div class="tmdb-status">Введи название и нажми Enter</div>
+  </div>
+  <div class="actions">
+    <button class="btn ghost" id="ao3Close">Закрыть</button>
+  </div>
+</div>
+  </div>
+  
+  <div class="modal" id="trashModal">
+  <div class="modal-panel">
+    <h2 style="display:flex;align-items:center;gap:8px">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+      Корзина
+    </h2>
+    <div class="cat-settings-help">Удалённые карточки хранятся 7 дней. Потом удаляются навсегда.</div>
+    <div class="trash-list" id="trashList"></div>
+    <div class="actions" style="margin-top:16px">
+      <button class="btn ghost" id="trashEmptyBtn" style="color:#ff8a8a">Очистить всё</button>
+      <button class="btn primary" id="trashCloseBtn">Закрыть</button>
+    </div>
+  </div>
+  </div>
+
+<div class="modal" id="mangalibModal">
+  <div class="modal-panel">
+    <h2>Импорт из MangaLib</h2>
+    <div class="import-help">
+      Экспортируй свой список из MangaLib в <b>JSON</b> через браузерное расширение или скрипт,
+      затем выбери этот файл здесь — карточки добавятся в раздел «Комиксы».<br><br>
+      <b>Позже:</b> здесь появится автоподключение к API, без ручного экспорта.
+    </div>
+    <button type="button" class="import-pick" id="mangalibPick">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+        <polyline points="17 8 12 3 7 8"/>
+        <line x1="12" y1="3" x2="12" y2="15"/>
+      </svg>
+      Выбрать файл JSON
+    </button>
+    <input type="file" id="mangalibFile" accept="application/json,.json" multiple style="display:none">
+    <div class="import-status" id="mangalibStatus"></div>
+    <div class="actions">
+      <button class="btn ghost" id="mangalibClose">Закрыть</button>
+    </div>
+  </div>
+</div>
+  <div class="modal" id="kinogoModal">
+  <div class="modal-panel">
+    <h2>Поиск на Kinogo</h2>
+    <input type="text" class="tmdb-input" id="kinogoQuery" placeholder="Название фильма или сериала…" autocomplete="off">
+    <div class="tmdb-results" id="kinogoResults">
+      <div class="tmdb-status">Введи название и нажми Enter</div>
+    </div>
+    <div class="actions">
+      <button class="btn ghost" id="kinogoClose">Закрыть</button>
+    </div>
+  </div>
+  </div>
+<div class="cloud-modal" id="cloudModal">
+  <div class="cloud-panel" id="cloudPanel"></div>
+</div>
+
+<div class="cloud-banner" id="cloudBanner">
+  <span class="cloud-banner-text" id="cloudBannerText">Облако недоступно</span>
+  <button class="cloud-banner-go" id="cloudBannerGo">Сделать локальный бэкап</button>
+  <button class="cloud-banner-later" id="cloudBannerLater">Позже</button>
+</div>
+
+<div class="modal" id="importModeModal">
+  <div class="modal-panel">
+    <h2>Импорт</h2>
+    <div class="import-help" id="importModeInfo"></div>
+    <div class="import-mode-actions">
+      <button type="button" class="btn primary" id="importModeMerge">Добавить к текущим</button>
+      <button type="button" class="btn danger" id="importModeReplace">Заменить всё</button>
+      <button type="button" class="btn ghost" id="importModeCancel">Отмена</button>
+    </div>
+  </div>
+</div>
+
+<div class="notes-modal moment-modal" id="momentModal">
+  <div class="notes-panel moment-panel" id="momentPanel"></div>
+</div>
+
+<!-- ═══ МОДАЛКА ПРОСМОТРА СКРИНШОТА ═══ -->
+<div class="screenshot-view" id="screenshotView">
+  <div class="screenshot-topbar">
+    <button type="button" class="screenshot-btn" id="screenshotOcrBtn" title="Распознать текст">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7V4h16v3"/><path d="M9 20h6"/><path d="M12 4v16"/></svg>
+    </button>
+    <button type="button" class="screenshot-btn" id="screenshotDeleteBtn" title="Удалить">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+    </button>
+    <button type="button" class="screenshot-btn" id="screenshotCloseBtn" title="Закрыть">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+  </div>
+  <div class="screenshot-stage" id="screenshotStage">
+    <div class="screenshot-zoom-layer" id="screenshotZoomLayer">
+      <div class="screenshot-img-wrap" id="screenshotImgWrap">
+        <img id="screenshotImg" src="" alt="">
+        <div class="screenshot-ocr-overlay" id="screenshotOcrOverlay"></div>
+      </div>
+    </div>
+  </div>
+  <div class="screenshot-ocr-hint" id="screenshotOcrHint" style="display:none;">
+    <span>Ткни на текст, чтобы добавить карточку</span>
+  </div>
+</div>
+
+<!-- ═══ POPUP ДЕЙСТВИЙ С OCR-СТРОКОЙ ═══ -->
+<div class="ocr-popup" id="ocrPopup">
+  <div class="ocr-popup-inner">
+    <input type="text" id="ocrPopupInput" placeholder="Текст для поиска" autocomplete="off">
+    <div class="ocr-popup-btns">
+      <button type="button" class="btn ghost" id="ocrPopupCancel">Отмена</button>
+      <button type="button" class="btn ghost" id="ocrPopupCopy">Копировать</button>
+      <button type="button" class="btn primary" id="ocrPopupAdd">Добавить</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ МОДАЛКА ВЫБОРА ТИПА И ИСТОЧНИКА ═══ -->
+<div class="modal" id="ocrSearchModal">
+  <div class="modal-panel">
+    <h2>Добавить карточку</h2>
+    <div class="ocr-query-preview" id="ocrQueryPreview"></div>
+    <label>Тип контента</label>
+    <div class="seg" id="ocrTypeSeg"></div>
+    <label>Где искать</label>
+    <div class="seg" id="ocrSourceSeg" style="margin-bottom:18px;"></div>
+    <div class="actions">
+      <button class="btn ghost" id="ocrSearchCancel">Отмена</button>
+      <button class="btn primary" id="ocrSearchGo" disabled>Найти</button>
+    </div>
+  </div>
+</div>
+
+<!-- ЧИТАЛКА SLASHLIB -->
+<div class="reader-modal" id="readerModal">
+<div class="reader-head" id="readerHead">
+  <div class="reader-head-bar">
+    <div class="reader-head-inner">
+      <div class="reader-head-info">
+        <div class="reader-head-vol" id="readerHeadVol"></div>
+        <div class="reader-head-pos" id="readerHeadPos"></div>
+      </div>
+      <div class="reader-head-title" id="readerTitle"></div>
+      <button class="reader-close-btn" id="readerCloseBtn" title="Закрыть" aria-label="Закрыть">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="reader-progress-track" id="readerProgressTrack">
+      <div class="reader-progress-fill" id="readerProgressFill"></div>
+    </div>
+  </div>
+</div>
+  
+  <div class="reader-stage" id="readerStage">
+    <div class="reader-pages" id="readerPages"></div>
+  </div>
+  
+<div class="reader-island" id="readerIsland">
+  <button class="reader-island-btn" id="readerChaptersBtn" title="Главы" aria-label="Главы">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <text x="3" y="8.5" font-size="5.5" font-weight="700" fill="currentColor" stroke="none" font-family="-apple-system, system-ui, sans-serif">1</text>
+      <text x="3" y="15" font-size="5.5" font-weight="700" fill="currentColor" stroke="none" font-family="-apple-system, system-ui, sans-serif">2</text>
+      <text x="3" y="21.5" font-size="5.5" font-weight="700" fill="currentColor" stroke="none" font-family="-apple-system, system-ui, sans-serif">3</text>
+      <line x1="10" y1="7" x2="20" y2="7"/>
+      <line x1="10" y1="13.5" x2="20" y2="13.5"/>
+      <line x1="10" y1="20" x2="20" y2="20"/>
+    </svg>
+  </button>
+  <button class="reader-island-btn" id="readerPinBtn" title="Сохранить положение" aria-label="Сохранить положение">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
+    </svg>
+  </button>
+  <button class="reader-island-btn" id="readerLikeBtn" title="Метка" aria-label="Метка">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+  </button>
+  <button class="reader-island-btn" id="readerDiscMarkBtn" title="Пометить дисклеймер" aria-label="Пометить дисклеймер">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="12" r="8"/>
+    <line x1="12" y1="2" x2="12" y2="6"/>
+    <line x1="12" y1="18" x2="12" y2="22"/>
+    <line x1="2" y1="12" x2="6" y2="12"/>
+    <line x1="18" y1="12" x2="22" y2="12"/>
+  </svg>
+  </button>
+  <button class="reader-island-btn" id="readerMusicBtn" title="Музыка" aria-label="Музыка">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M9 18V5l12-2v13"/>
+      <circle cx="6" cy="18" r="3"/>
+      <circle cx="18" cy="16" r="3"/>
+    </svg>
+  </button>
+  <div class="reader-island-nav" id="readerIslandNav">
+    <button class="reader-island-btn" id="readerPrevChapter" title="Предыдущая глава" aria-label="Предыдущая глава">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+    </button>
+    <button class="reader-island-btn" id="readerNextChapterBtn" title="Следующая глава" aria-label="Следующая глава">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+    </button>
+  </div>
+  <button class="reader-island-btn" id="readerSettingsBtn" title="Настройки" aria-label="Настройки">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="3"/>
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+    </svg>
+  </button>
+</div>
+  
+  <div class="reader-settings-modal" id="readerSettingsModal">
+    <div class="reader-settings-panel" id="readerSettingsPanel">
+      <div class="rs-head">
+  <h3>Настройки</h3>
+      </div>
+<div class="rs-body">
+  <div class="rs-group">
+    <label>Режим чтения</label>
+    <div class="seg" id="rsViewMode">
+      <button type="button" data-v="WEBTOON">Вертикально</button>
+      <button type="button" data-v="LEFT_TO_RIGHT">Горизонтально</button>
+    </div>
+  </div>
+  <div class="rs-group">
+  <label>Ширина фрейма (ландшафт)</label>
+  <div class="rs-slider-row">
+    <input type="range" id="rsPageWidth" min="8" max="36" step="1" value="22" class="rs-slider">
+    <span class="rs-slider-value" id="rsPageWidthValue">22%</span>
+  </div>
+  </div>
+  <div class="rs-group rs-group-toggle">
+    <label>Увеличение двойным нажатием</label>
+    <label class="rs-toggle">
+      <input type="checkbox" id="rsDoubleTapZoom">
+      <span class="rs-toggle-track"><span class="rs-toggle-thumb"></span></span>
+    </label>
+  </div>
+  <div class="rs-group rs-group-toggle">
+  <label>Запоминать яркость</label>
+  <label class="rs-toggle">
+    <input type="checkbox" id="rsRememberBrightness">
+    <span class="rs-toggle-track"><span class="rs-toggle-thumb"></span></span>
+  </label>
+  </div>
+  <div class="rs-group">
+    <label>Язык</label>
+    <div class="seg" id="rsLanguage">
+      <button type="button" data-v="ru">Русский</button>
+      <button type="button" data-v="en">Английский</button>
+    </div>
+  </div>
+  <div class="rs-group">
+    <label>Переход по главам</label>
+    <div class="seg" id="rsNextChapter">
+      <button type="button" data-v="button">Кнопки</button>
+      <button type="button" data-v="auto">Авто</button>
+    </div>
+  </div>
+</div>
+    
+    </div>
+  </div>
+  
+  <div class="reader-chapters-modal" id="readerChaptersModal">
+    <div class="reader-chapters-panel" id="readerChaptersPanel">
+      <div class="rc-head">
+  <h3>Главы</h3>
+      </div>
+      <div class="rc-list" id="readerChaptersList"></div>
+    </div>
+  </div>
+  <!-- Выпадающий список иконок для метки (долгий тап на кнопке лайка) -->
+<div class="reader-tag-picker-backdrop" id="readerTagPickerBackdrop"></div>
+<div class="reader-tag-picker" id="readerTagPicker"></div>
+</div>
+
+
+  
+<div class="toast" id="toast"></div>
+  
+<input type="file" id="fileInput" accept="application/json" multiple style="display:none">
+
+<script src="lib/eruda.js"></script>
+  <script src="lib/supabase.js"></script>
+
+<!-- МИНИ-ПЛЕЕР (ФУТЕР) -->
+<div class="mini-player" id="miniPlayer">
+  <div class="mini-progress-wrap" id="miniProgressWrap">
+    <div class="mini-progress-mini" id="miniProgress"></div>
+  </div>
+  <div class="mini-player-info" id="miniInfo" onclick="Player.openModal()">
+    <img class="mini-player-cover" id="miniCover" src="" alt="">
+    <div class="mini-player-text">
+      <div class="mini-player-title" id="miniTitle">Трек</div>
+      <div class="mini-player-artist" id="miniArtist">Исполнитель</div>
+    </div>
+  </div>
+<div class="mini-player-controls">
+  <div class="mp-group mp-controls">
+    <button class="mini-btn" id="miniPrevBtn" onclick="Player.prev()" title="Предыдущий">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
+    </button>
+    <button class="mini-btn play" id="miniPlayBtn" onclick="Player.togglePlay()">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+    </button>
+    <button class="mini-btn" id="miniNextBtn" onclick="Player.next()" title="Следующий">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg>
+    </button>
+    <button class="mini-btn" id="miniRepeatBtn" onclick="Player.cycleRepeat()" title="Повтор">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+      <span class="repeat-badge" id="miniRepeatBadge">1</span>
+    </button>
+  </div>
+  <div class="mp-group mp-extras">
+    <button class="mini-btn" id="miniFavBtn" onclick="Player.toggleFav()" title="В избранное">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+    </button>
+    <button class="mini-btn" id="miniPlaylistBtn" onclick="Player.openPlaylist()" title="Плейлист">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+    </button>
+    <button class="mini-btn mini-close" id="miniCloseBtn" onclick="Player.close()" title="Закрыть" aria-label="Закрыть плеер">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+  </div>
+</div>
+</div>
+  
+  
+<!-- МОДАЛКА ПЛЕЕРА -->
+<div class="player-modal" id="playerModal">
+  <!-- Шапка -->
+  <div class="player-modal-head">
+    <button class="player-icon-btn" onclick="Player.minimize()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+    </button>
+    <span style="font-size:12px; text-transform:uppercase; letter-spacing:1px; color:var(--fg2); font-weight:600;">Сейчас играет</span>
+    <button class="player-icon-btn" onclick="Player.close()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+  </div>
+
+  <!-- Основная зона -->
+  <div class="player-modal-main">
+    <!-- ЛЕВАЯ ПАНЕЛЬ (ТЕКСТ) -->
+<div class="player-lyrics-pane" id="playerLyricsPane">
+  <div class="player-lyrics-head">
+    <button class="player-btn-txt" onclick="Player.toggleLyrics()">Тт</button>
+  </div>
+  <div class="player-lyrics-content" id="playerLyricsContent"></div>
+  <button class="player-lyrics-sync-btn" id="playerLyricsSyncBtn" onclick="Player.syncLyrics()" title="Синхронизировать" aria-label="Синхронизировать">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10"/><path d="M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+  </button>
+</div>
+    <!-- ПРАВАЯ ПАНЕЛЬ (УПРАВЛЕНИЕ) -->
+    <div class="player-main-pane">
+      <div class="player-main-layout">
+        <div class="player-controls-col">
+          <div class="player-modal-info">
+            <div class="player-modal-text">
+              <div class="player-modal-title" id="playerBigTitle">Трек</div>
+              <div class="player-modal-artist" id="playerBigArtist">Исполнитель</div>
+            </div>
+            <div class="player-actions-row">
+              <button class="player-btn-txt" onclick="Player.toggleLyrics()">Тт</button>
+              <button class="player-fav-btn" id="playerBigFav" onclick="Player.toggleFav()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+              </button>
+            </div>
+          </div>
+
+          <div class="player-timeline-wrap" id="playerTimelineWrap">
+            <div class="player-timeline" id="playerTimeline">
+              <div class="player-timeline-fill" id="playerTimelineFill"></div>
+              <div class="player-timeline-thumb" id="playerTimelineThumb" style="left: 0%"></div>
+            </div>
+            <div class="player-time-labels">
+              <span id="playerTimeCur">0:00</span>
+              <span id="playerTimeTot">0:00</span>
+            </div>
+          </div>
+
+          <div class="player-main-controls">
+            <button class="mini-btn" id="playerRepeatBtn" onclick="Player.cycleRepeat()" style="color:var(--fg2); position:relative;">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+              <span class="repeat-badge" id="playerRepeatBadge">1</span>
+            </button>
+            <button class="mini-btn" onclick="Player.prev()">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
+            </button>
+            <button class="mini-btn play" id="playerBigPlayBtn" onclick="Player.togglePlay()">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+            </button>
+            <button class="mini-btn" onclick="Player.next()">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg>
+            </button>
+            <button class="mini-btn" onclick="Player.openPlaylist()" style="color:var(--fg);">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+            </button>
+          </div>
+        </div>
+        <div class="player-cover-col">
+          <img class="player-big-cover" id="playerBigCover" src="" alt="">
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ОТДЕЛЬНАЯ МОДАЛКА ПЛЕЙЛИСТА -->
+<div class="playlist-modal" id="playlistModal">
+  <div class="playlist-panel">
+    <div class="player-modal-head">
+      <button class="player-icon-btn" onclick="Player.closePlaylist()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <span style="font-size:14px; font-weight:600;">Очередь</span>
+      <div style="width:44px;"></div>
+    </div>
+    <div class="player-playlist-list" id="playerPlaylistList"></div>
+  </div>
+</div>
+  
+
+
+  
+<script>
+  eruda.init({
+    tool: ['console', 'elements', 'network', 'resources'],
+    autoScale: true,
+    useShadowDom: true,
+    defaults: {
+      displayPosition: 'top-left',
+      transparency: 0.85,
+      theme: 'Dark'
+    }
+  });
+</script>
+
+
+<script src="js/constants.js"></script>
+<script src="js/utils.js"></script>
+<script src="js/cover-cache.js"></script>
+<script src="js/state.js"></script>
+<script src="js/filters.js"></script>
+<script src="js/parsers/comizy.js"></script>
+<script src="js/parsers/slashlib.js"></script>
+<script src="js/parsers/tmdb.js"></script>
+<script src="js/parsers/anilist.js"></script>
+<script src="js/parsers/dorama.js"></script>
+<script src="js/parsers/kinogo.js"></script>
+<script src="js/parsers/books.js"></script>
+<script src="js/parsers/mangalib.js"></script>
+<script src="js/auto-search.js"></script>
+<script src="js/render.js"></script>
+<script src="js/moments.js"></script>
+<script src="js/view.js"></script>
+<script src="js/editor.js"></script>
+<script src="js/refresh.js"></script>
+<script src="js/settings.js"></script>
+<script src="js/import-export.js"></script>
+<script src="js/trash.js"></script>
+<script src="js/cloud.js"></script>
+<script src="js/media-session.js"></script>
+<script src="js/player.js"></script>
+<script src="js/screenshots.js"></script>
+<script src="js/reader.js"></script>
+<script src="js/init.js"></script>
+</body>
+</html>
