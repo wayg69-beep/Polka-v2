@@ -1,0 +1,777 @@
+/* ==========================================================
+   07-player.css — Плеер: мини-плеер, модалка плеера, плейлист, тексты
+   ========================================================== */
+
+/* =========================================
+   МУЗЫКАЛЬНЫЙ ПЛЕЕР (ПОЛКА)
+   ========================================= */
+
+/* --- 1. ФУТЕР (Мини-плеер) --- */
+.mini-player {
+  position: fixed;
+  left: var(--sb-closed);
+  right: 0; bottom: 0;
+  height: calc(64px + env(safe-area-inset-bottom, 0px));
+  padding: 0 16px;                 /* ← убрали env() из padding */
+  background: rgba(14, 14, 18, 0.85);
+  backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+  border-top: 1px solid rgba(255,255,255,0.08);
+  border-left: 1px solid rgba(255,255,255,0.08);
+  z-index: 80;
+  display: flex; align-items: center;
+  transform: translateY(100%);
+  transition: transform .4s cubic-bezier(.25,1,.5,1), left .25s ease;
+  will-change: transform, left;
+}
+body.sidebar-open .mini-player {
+  left: var(--sb-open); /* Уезжает за сайдбаром */
+}
+body.player-active .mini-player { transform: translateY(0); }
+body.player-modal-open .mini-player { transform: translateY(100%); }
+
+.mini-player-info {
+  flex: 1; min-width: 0; display: flex; align-items: center; gap: 14px;
+  padding-left: 4px;
+}
+.mini-player-cover {
+  width: 50px; height: 50px; border-radius: 10px; object-fit: cover;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+  flex: 0 0 auto;
+}
+.mini-player-text {
+  display: flex; flex-direction: column; overflow: hidden; gap: 3px;
+  justify-content: center;
+}
+.mini-player-title {
+  font-size: 17px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  color: var(--fg); line-height: 1.2;
+}
+.mini-player-artist {
+  font-size: 14.5px; font-weight: 600; color: var(--fg2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  line-height: 1.2;
+}
+
+/* Зона захвата для прогресса мини-плеера */
+.mini-progress-wrap {
+  position: absolute; 
+  top: -14px;         /* ← уходит выше, чтобы поймать палец над полоской */
+  left: 0; right: 0; 
+  height: 30px;        /* ← было 22px, стало 30px — ловит ещё ниже */
+  cursor: pointer; 
+  z-index: 5; 
+  touch-action: none;  /* ← то же самое, иначе drag не работает */
+}
+
+/* --- 2. МОДАЛКА ПЛЕЕРА --- */
+.player-modal {
+  position: fixed; inset: 0;
+  z-index: 650;
+  display: flex; flex-direction: column;
+  background: rgba(10, 10, 14, 0.85);
+  backdrop-filter: blur(32px); -webkit-backdrop-filter: blur(32px);
+  opacity: 0; pointer-events: none;
+  visibility: hidden;                                 /* ← добавили */
+  transition: opacity .4s cubic-bezier(.25,1,.5,1),
+              transform .4s cubic-bezier(.25,1,.5,1),
+              visibility 0s linear .4s;               /* ← добавили */
+  transform: translateY(20px);
+}
+.player-modal.on {
+  opacity: 1; pointer-events: auto; transform: translateY(0);
+  visibility: visible;                                /* ← добавили */
+  transition: opacity .4s cubic-bezier(.25,1,.5,1),
+              transform .4s cubic-bezier(.25,1,.5,1),
+              visibility 0s;                          /* ← добавили */
+}
+
+.player-modal-head {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 8px 24px;                  /* было 16px — срезал 8px воздуха */
+  margin-top: env(safe-area-inset-top, 0px);
+  flex: 0 0 auto;
+  z-index: 10;
+}
+
+.player-icon-btn {
+  background: transparent; /* Убираем этот серый фон */
+  border-radius: 0;        /* Убираем скругление (кружок) */
+  width: 44px; 
+  height: 44px; 
+  display: grid; 
+  place-items: center;
+  border: none; 
+  color: #fff; 
+  cursor: pointer;
+  transition: opacity .15s, transform .1s; /* Меняем transition под новую логику */
+}
+
+.player-icon-btn:active { 
+  background: transparent; /* Убираем фон при нажатии */
+  opacity: 0.6;            /* При тапе кнопка просто станет чуть прозрачной — это даёт приятный отклик */
+  transform: scale(.92);   /* И слегка сожмётся */
+}
+
+.player-icon-btn svg { 
+  width: 22px;  /* Иконки можно сделать чуть крупнее, раз фона больше нет */
+  height: 22px; 
+}
+
+.player-modal-main {
+  flex: 1; position: relative; overflow: hidden; width: 100%;
+}
+
+/* Скрытая панель текста не должна перехватывать клики */
+.player-lyrics-pane {
+  position: absolute;
+  top: 0; left: 0;
+  width: 50%; height: 100%;
+  transform: translateX(-100%); opacity: 0;
+  transition: transform 0.4s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.4s ease;
+  z-index: -1;
+  background: inherit;
+  display: flex; flex-direction: column;
+  padding: 0 24px 30px 24px;                     /* убрал верхний паддинг */
+  will-change: transform, opacity;
+  pointer-events: none;
+}
+  
+/* Кнопку Тт вынимаем из потока — она больше не съедает место сверху */
+.player-lyrics-head {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  padding: 0;
+  z-index: 5;
+  display: flex; justify-content: flex-end;
+  flex: 0 0 auto;
+}
+  .player-modal.lyrics-open .player-lyrics-pane {
+  transform: translateX(0); opacity: 1;
+  z-index: 10; /* <--- ВОЗВРАЩАЕМ ПОВЕРХ */
+  pointer-events: auto;
+}
+
+/* --- Новая модалка плейлиста --- */
+.playlist-modal {
+  position: fixed; inset: 0; z-index: 660;
+  background: rgba(10, 10, 14, 0.85);
+  backdrop-filter: blur(32px); -webkit-backdrop-filter: blur(32px);
+  display: flex; flex-direction: column;
+  opacity: 0; pointer-events: none;
+  visibility: hidden;                                 /* ← добавили */
+  transition: opacity .3s ease, transform .3s ease,
+              visibility 0s linear .3s;               /* ← добавили */
+  transform: translateY(20px);
+}
+.playlist-modal.on {
+  opacity: 1; pointer-events: auto; transform: translateY(0);
+  visibility: visible;                                /* ← добавили */
+  transition: opacity .3s ease, transform .3s ease,
+              visibility 0s;                          /* ← добавили */
+}
+.playlist-panel {
+  flex: 1; display: flex; flex-direction: column;
+  padding-top: env(safe-area-inset-top, 0px);
+  overflow: hidden;
+}
+.playlist-panel .player-playlist-list {
+  flex: 1; overflow-y: auto; padding: 16px;
+}
+
+/* Убираем font-weight из transition (он не анимируется и дёргает), цвет и свечение — плавно */
+.player-lyrics-content p {
+  margin: 0 0 16px;
+  color: rgba(255, 255, 255, 0.35);
+  transition: color .35s ease, text-shadow .35s ease;
+}
+.player-lyrics-content p.active {
+  color: rgba(255, 255, 255, 0.95);
+  font-weight: 700;
+  text-shadow: 0 0 16px rgba(164,139,255,0.35);
+}
+.player-lyrics-content p[data-i] { cursor: pointer; }
+.player-lyrics-content::-webkit-scrollbar { display: none; }
+
+  .player-main-pane {
+  flex: 1; display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  width: 100%; height: 100%; overflow-y: auto;
+  padding-left: 0;
+  box-sizing: border-box;
+}
+.player-modal.lyrics-open .player-main-pane {
+  padding-left: 50%;
+}
+
+.player-main-layout {
+  display: flex; flex-direction: row;
+  align-items: center; justify-content: center;
+  width: 100%; height: 100%; padding: 32px; gap: 48px;
+}
+
+.player-cover-col { order: 1; flex: 0 1 auto; display: flex; justify-content: center; }
+.player-big-cover {
+  width: min(100%, 55vh, 400px);
+  height: auto;
+  aspect-ratio: 1/1;
+  max-height: 55vh;
+  border-radius: 24px;
+  object-fit: cover;
+  box-shadow: 0 24px 60px rgba(0,0,0,0.6);
+}
+
+.player-controls-col {
+  order: 2; flex: 1; display: flex; flex-direction: column;
+  justify-content: center; width: 100%; max-width: 480px;
+}
+
+.player-modal-info {
+  display: flex; flex-direction: row;
+  justify-content: space-between; align-items: center;
+  margin-bottom: 24px; gap: 16px; width: 100%;
+}
+.player-modal-text { min-width: 0; flex: 1; text-align: left; }
+.player-modal-title { font-size: 28px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 6px; }
+.player-modal-artist { font-size: 18px; font-weight: 600; color: var(--fg2); }
+
+.player-actions-row { display: flex; align-items: center; gap: 12px; flex: 0 0 auto; }
+
+.player-fav-btn svg { width: 22px; height: 22px; }
+
+.player-timeline-wrap { 
+  width: 100%; 
+  margin-bottom: 20px;
+  padding: 14px 0;          /* ← растягивает зону касания: 14+4+14 = ~32px по высоте */
+  cursor: pointer;
+  touch-action: none;        /* ← WebView не перехватывает жест как скролл */
+  box-sizing: border-box;
+  position: relative;
+}
+
+.player-timeline {
+  position: relative; 
+  width: 100%; 
+  height: 4px;              /* ← сама полоска всё ещё тонкая, не раздулась */
+  background: rgba(255,255,255,0.1); 
+  border-radius: 2px;
+  /* cursor: pointer убран — теперь он на wrap */
+  /* margin-bottom: 8px убран — его заменяет margin-top у labels */
+}
+
+.player-time-labels {
+  display: flex; justify-content: space-between;
+  font-size: 13px; font-weight: 600; color: var(--fg2);
+  font-variant-numeric: tabular-nums; margin-top: 6px;
+}
+
+.player-main-controls { display: flex; align-items: center; justify-content: space-between; width: 100%; gap: 8px; }
+.player-main-controls .mini-btn { padding: 10px; }
+.player-main-controls .mini-btn svg { width: 32px; height: 32px; }
+.player-main-controls .mini-btn.play svg { width: 58px; height: 58px; }
+
+.player-modal.lyrics-open .player-main-layout {
+  flex-direction: column; justify-content: center; gap: 24px; padding: 16px;
+}
+.player-modal.lyrics-open .player-cover-col { order: 1; width: 100%; }
+.player-modal.lyrics-open .player-controls-col { order: 2; max-width: 100%; }
+
+@media (max-width: 800px) {
+  .player-modal-main { flex-direction: column; }
+  .player-lyrics-pane { width: 100%; padding: 16px 24px; }
+  .player-modal.lyrics-open .player-main-pane { transform: none; display: none; }
+  .player-modal.lyrics-open .player-lyrics-pane { display: flex; height: 100%; }
+  
+  .player-main-layout { flex-direction: column; gap: 20px; padding-top: 10px; justify-items: center; }
+  .player-controls-col { order: 2; max-width: 100%; }
+  .player-cover-col { order: 1; }
+  .player-big-cover { max-width: 260px; }
+  
+  .player-modal-info { flex-direction: row !important; align-items: center !important; justify-content: space-between !important; text-align: left !important; width: 100% !important; margin-bottom: 16px !important; }
+  .player-modal-text { flex: 1 !important; min-width: 0 !important; }
+  .player-actions-row { margin-top: 0 !important; margin-left: 12px !important; flex: 0 0 auto !important; }
+  .player-modal-title { font-size: 22px; }
+}
+
+/* --- 3. ОЧЕРЕДЬ (Плейлист) --- */
+.player-playlist-list { flex: 1; overflow-y: auto; padding: 16px; }
+
+.playlist-item {
+  display: flex !important; flex-direction: row !important;
+  align-items: center !important; gap: 14px !important;
+  padding: 10px 12px !important; border-radius: 12px; transition: background .15s;
+  cursor: pointer; user-select: none;
+}
+.playlist-item:active { background: rgba(255,255,255,0.05); }
+.playlist-item.active { background: rgba(124, 92, 255, 0.15); }
+.playlist-item.dragging { opacity: 0.7; background: rgba(124, 92, 255, 0.25); transform: scale(0.98); }
+
+.playlist-item-cover {
+  width: 52px !important; height: 52px !important;
+  min-width: 52px !important; max-width: 52px !important;
+  border-radius: 8px !important; object-fit: cover !important;
+  flex: 0 0 52px !important; box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+}
+.playlist-item-text {
+  flex: 1 !important; min-width: 0 !important;
+  display: flex !important; flex-direction: column !important;
+  gap: 3px !important; overflow: hidden !important; text-align: left !important;
+}
+.playlist-item-title {
+  font-size: 16px !important; font-weight: 700 !important;
+  color: var(--fg) !important; white-space: nowrap !important;
+  overflow: hidden !important; text-overflow: ellipsis !important; line-height: 1.2 !important;
+}
+.playlist-item-artist {
+  font-size: 13.5px !important; font-weight: 600 !important;
+  color: var(--fg2) !important; white-space: nowrap !important;
+  overflow: hidden !important; text-overflow: ellipsis !important; line-height: 1.2 !important;
+}
+.playlist-item-drag-handle {
+  color: var(--fg2) !important; opacity: 0.5 !important;
+  cursor: grab !important; padding: 8px 4px !important;
+  flex: 0 0 auto !important; font-size: 20px !important; line-height: 1 !important;
+}
+
+/* --- 4. КНОПКА "ИГРАТЬ" (РОЗОВАЯ СВЕТЯШКА) --- */
+.view-link-btn.play-music-btn {
+  background: #d65fbf !important;
+  box-shadow: 0 0 4px rgba(214, 95, 191, 0.55), 0 0 10px rgba(214, 95, 191, 0.35), 0 0 20px rgba(199, 124, 210, 0.25) !important;
+}
+.view-link-btn.play-music-btn:active {
+  background: #e67ad1 !important;
+  box-shadow: 0 0 6px rgba(230, 122, 209, 0.7), 0 0 14px rgba(230, 122, 209, 0.45), 0 0 24px rgba(199, 124, 210, 0.35) !important;
+}
+
+/* --- 5. ФАБЫ НАД ПЛЕЕРОМ --- */
+body.player-active .fab {
+  z-index: 85 !important;
+  top: auto !important;
+  bottom: calc(64px + 20px + env(safe-area-inset-bottom, 0px)) !important;
+  transition: bottom .4s cubic-bezier(.25,1,.5,1) !important;
+}
+body.player-active .fab-emergency {
+  z-index: 85 !important;
+  top: auto !important;
+  bottom: calc(64px + 20px + env(safe-area-inset-bottom, 0px)) !important;
+  transition: bottom .4s cubic-bezier(.25,1,.5,1) !important;
+}
+@media (max-width: 700px) {
+  body.player-active .fab { top: auto !important; bottom: calc(64px + 62px + 20px) !important; }
+body.player-active .fab-emergency { top: auto !important; bottom: calc(64px + 62px + 20px) !important; }
+}
+
+/* --- 6. БЛОКИРОВКА КЛИКОВ ПОД ПЛЕЕРОМ --- */
+body.player-modal-open header,
+body.player-modal-open .sidebar,
+body.player-modal-open .main,
+body.player-modal-open .content,
+body.player-modal-open .bottom-nav,
+body.player-modal-open .fab,
+body.player-modal-open .fab-emergency,
+body.player-modal-open .mini-player {
+  pointer-events: none !important;
+}
+body.player-modal-open .player-modal {
+  pointer-events: auto !important;
+    }
+
+.player-timeline-wrap,
+.mini-progress-wrap {
+  touch-action: none;
+}
+@media (min-width: 801px) {
+  .player-lyrics-head { display: none; }
+}
+
+  /* Крестик закрытия в мини-плеере */
+.mini-btn.mini-close {
+  margin-left: 4px;
+  color: var(--fg2);
+}
+.repeat-badge {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  background: transparent;
+  color: #5e00ff;
+  font-size: 12px; font-weight: 900;
+  width: auto; height: auto;
+  border-radius: 0;
+  display: none;
+  line-height: 1;
+  box-shadow: none;
+  pointer-events: none;
+  /* Свечение стало мягче и тусклее */
+  text-shadow: 0 0 1px rgba(110, 0, 255, 0.8);
+}
+.repeat-badge.visible { display: block; }
+
+/* В медиа-запросе landscape max-height: 600px не забудь убрать transform, если он там был, 
+   или оставь просто: top: 50%; left: 50%; transform: translate(-50%, -50%); */
+
+@media (max-width: 700px) {
+.mini-player {
+  bottom: 62px;
+  height: 64px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  display: none;
+  transform: none;
+}
+  body.player-active .mini-player {
+    display: flex;
+    transform: none;
+  }
+  body.player-modal-open .mini-player {
+    display: none;
+  }
+}
+  
+
+  /* =========================================
+   LANDSCAPE НА МАЛЕНЬКИХ ЭКРАНАХ (телефон)
+   ========================================= */
+@media (orientation: landscape) and (max-height: 600px) {
+  
+  /* Шапка плеера — компактная, с учётом боковых safe-area (вырез камеры) */
+  .player-modal-head {
+    padding: 8px 16px;
+    padding-left: calc(16px + env(safe-area-inset-left, 0px));
+    padding-right: calc(16px + env(safe-area-inset-right, 0px));
+    margin-top: env(safe-area-inset-top, 0px);
+  }
+  .player-icon-btn { width: 38px; height: 38px; }
+  .player-icon-btn svg { width: 18px; height: 18px; }
+  
+  /* ГЛАВНОЕ: возвращаем горизонтальный лейаут, несмотря на max-width: 800 */
+  .player-modal-main { flex-direction: row; }
+  .player-main-pane { padding-left: 0; }
+  
+  .player-main-layout {
+    flex-direction: row;
+    gap: 24px;
+    padding: 8px 24px;
+    align-items: center;
+  }
+  
+  .player-cover-col {
+    order: 1;             /* обложка слева */
+    width: auto;
+    flex: 0 0 auto;
+  }
+  .player-controls-col {
+    order: 2;             /* управление справа */
+    max-width: 100%;
+    flex: 1;
+  }
+  
+  /* Обложка считается по высоте экрана, не обрезается */
+  .player-big-cover {
+    width: min(40vw, 72vh, 260px);
+    max-height: 72vh;
+    max-width: none;
+  }
+  
+  /* Инфо-блок плотнее */
+  .player-modal-info {
+    margin-bottom: 10px;
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    gap: 8px;
+  }
+  .player-modal-title { font-size: 18px; margin-bottom: 2px; }
+  .player-modal-artist { font-size: 13px; }
+  
+  .player-actions-row { gap: 8px; }
+  .player-btn-txt { font-size: 14px; padding: 6px 10px; }
+  .player-fav-btn { padding: 6px; }
+  .player-fav-btn svg { width: 18px; height: 18px; }
+  
+  /* Таймлайн короче */
+  .player-timeline-wrap { margin-bottom: 10px; padding: 10px 0; }
+  .player-time-labels { font-size: 11px; }
+  
+  /* Кнопки управления — меньше, но не крошечные */
+  .player-main-controls { gap: 6px; }
+  .player-main-controls .mini-btn { padding: 6px; }
+  .player-main-controls .mini-btn svg { width: 24px; height: 24px; }
+  .player-main-controls .mini-btn.play svg { width: 46px; height: 46px; }
+  /* ===== ТЕКСТ ОТКРЫТ ===== */
+/* Плеер справа скрыт (наследуется из мобильного запроса),
+   поэтому текст занимает весь экран */
+.player-modal.lyrics-open .player-lyrics-pane {
+  width: 100%;
+  padding: 12px 16px 30px 16px;
+  padding-left: calc(16px + env(safe-area-inset-left, 0px));
+  padding-right: calc(16px + env(safe-area-inset-right, 0px));
+}
+.player-modal.lyrics-open .player-main-pane {
+  display: none;
+  padding-left: 0;
+}
+
+.player-lyrics-content {
+  font-size: 18px;
+  line-height: 1.35;
+  padding: 0 0 30px 0; 
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0px, black 10px, black calc(100% - 50px), transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0px, black 10px, black calc(100% - 50px), transparent 100%);
+}
+  .player-lyrics-sync-btn { bottom: 56px; }
+  .player-lyrics-content p { margin-bottom: 10px; }
+
+.player-lyrics-head { padding-bottom: 8px; }
+.player-btn-txt { font-size: 14px; padding: 6px 12px; }
+}
+
+/* Совсем узкий landscape (телефон в горизонте на низких экранах) */
+@media (orientation: landscape) and (max-height: 400px) {
+  .player-main-layout { padding: 4px 16px; gap: 16px; }
+  .player-big-cover { width: min(35vw, 78vh, 220px); }
+  .player-modal-title { font-size: 16px; }
+  .player-modal-artist { font-size: 12px; }
+  .player-timeline-wrap { margin-bottom: 8px; padding: 8px 0; }
+  
+  .player-modal.lyrics-open .player-lyrics-pane { width: 45%; padding: 8px 12px; }
+  .player-modal.lyrics-open .player-main-pane { padding-left: 45%; }
+  .player-lyrics-content { font-size: 15px; }
+}
+
+  /* =========================================
+   КНОПКИ МИНИ-ПЛЕЕРА — НОВАЯ СТРУКТУРА
+   ========================================= */
+.mini-player-controls {
+  display: flex; align-items: center;
+  gap: 14px;
+  flex: 0 0 auto;
+  padding-left: 8px;
+  padding-right: 4px;
+}
+  
+.mp-group { display: flex; align-items: center; }
+.mp-controls { gap: 6px; }
+.mp-extras { gap: 4px; }
+
+.mini-btn {
+  background: transparent;
+  border: 0;
+  color: var(--fg);
+  cursor: pointer;
+  display: grid; place-items: center;
+  padding: 8px;
+  border-radius: 12px;
+  transition: transform .15s, background .2s, color .2s;
+  position: relative;
+}
+
+.mini-btn svg { width: 22px; height: 22px; }
+
+.mp-controls .mini-btn { background: rgba(255,255,255,0.04); }
+.mp-controls .mini-btn:hover,
+.mp-controls .mini-btn:active { background: rgba(255,255,255,0.12); }
+.mp-controls .mini-btn:active { transform: scale(.94); }
+
+.mp-controls .mini-btn.play {
+  background: rgba(94, 0, 255, 0.15); /* Глубокий фиолетовый с прозрачностью */
+  color: #5e00ff;
+  box-shadow: inset 0 0 8px rgba(110, 0, 255, 0.2);
+}
+.mp-controls .mini-btn.play:active {
+  background: rgba(94, 0, 255, 0.25);
+  transform: scale(.94);
+}
+.mp-controls .mini-btn.play svg { 
+  width: 30px; 
+  height: 30px; 
+  filter: drop-shadow(0 0 4px rgba(110, 0, 255, 0.7)); /* Добавил свечения иконке */
+}
+  
+.mp-extras .mini-btn {
+  color: var(--fg2);
+  padding: 8px 6px;
+}
+.mp-extras .mini-btn:active {
+  color: var(--fg);
+  transform: scale(.94);
+}
+  
+.mini-btn.mini-close { color: var(--fg2); }
+.mini-btn.mini-close:active { color: var(--bad); }
+
+/* Кнопка Тт — теперь крупнее */
+.player-btn-txt {
+  background: transparent; border: none; border-radius: 12px;
+  color: var(--fg2);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 20px; font-weight: 700; /* ← Увеличили размер и жирность */
+  padding: 10px 18px; cursor: pointer;
+  transition: color .2s, filter .2s;
+}
+.player-btn-txt:active { opacity: 0.7; }
+.player-modal.lyrics-open .player-btn-txt {
+  color: #5e00ff;
+  filter: drop-shadow(0 0 4px rgba(110, 0, 255, 0.9)) drop-shadow(0 0 10px rgba(110, 0, 255, 0.6));
+}
+
+/* Кнопка синка (тот самый неоновый фаб) */
+.player-lyrics-sync-btn {
+  position: absolute;
+  bottom: 50px; /* Твои 50px */
+  right: 24px;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: transparent;
+  color: #5e00ff; /* ← Новая основа */
+  border: 2px solid #5e00ff;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  box-shadow:
+    0 0 6px rgba(110, 0, 255, 0.8), /* ← Оставили розоватый неон */
+    0 0 14px rgba(110, 0, 255, 0.55),
+    0 0 26px rgba(110, 0, 255, 0.35),
+    inset 0 0 6px rgba(110, 0, 255, 0.3);
+  opacity: 0;
+  transform: translateY(8px);
+  pointer-events: none;
+  transition: opacity .25s ease, transform .25s ease, box-shadow .2s ease;
+  z-index: 20;
+}
+.player-lyrics-sync-btn.show {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+.player-lyrics-sync-btn.show:hover {
+  box-shadow:
+    0 0 8px rgba(110, 0, 255, 1),
+    0 0 20px rgba(110, 0, 255, 0.75),
+    0 0 34px rgba(110, 0, 255, 0.45),
+    inset 0 0 8px rgba(110, 0, 255, 0.4);
+}
+  
+.player-lyrics-sync-btn:active {
+  transform: translateY(0) scale(.92);
+  box-shadow:
+    0 0 10px rgba(110, 0, 255, 1),
+    0 0 24px rgba(110, 0, 255, 0.85),
+    0 0 40px rgba(110, 0, 255, 0.55),
+    inset 0 0 10px rgba(110, 0, 255, 0.5);
+}
+.player-lyrics-sync-btn svg {
+  display: block;
+  width: 20px;
+  height: 20px;
+  filter:
+    drop-shadow(0 0 3px rgba(110, 0, 255, 1))
+    drop-shadow(0 0 8px rgba(110, 0, 255, 0.8))
+    drop-shadow(0 0 14px rgba(110, 0, 255, 0.5));
+}
+
+/* Контент текста: убираем верхний градиент и поднимаем низ */
+/* Контент текста: идеальная симметрия сверху и снизу */
+.player-lyrics-content {
+  flex: 1;
+  overflow-y: auto;
+  scrollbar-width: none;
+  font-size: 28px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: rgba(255, 255, 255, 0.35);
+  white-space: pre-wrap;
+  text-align: left;
+  
+  /* 0 сверху (прилеплено намертво), 300px снизу (отодвигает от края) */
+  padding: 0 0 30px 0; 
+  
+  /* Маска: сверху всего 10px, чтобы не резало первую строчку, снизу растворяется в пустоте */
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0px, black 10px, black calc(100% - 100px), transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0px, black 10px, black calc(100% - 100px), transparent 100%);
+  
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  scroll-behavior: smooth;
+  position: relative;
+}
+
+/* Избранное (Большой) */
+.player-fav-btn {
+  background: transparent; border: none; border-radius: 12px;
+  padding: 8px; color: var(--fg2); cursor: pointer; display: grid; place-items: center;
+  transition: color .2s, filter .2s;
+}
+.player-fav-btn.on {
+  background: transparent;
+  color: #5e00ff;
+  filter: drop-shadow(0 0 4px rgba(110, 0, 255, 0.9)) drop-shadow(0 0 10px rgba(110, 0, 255, 0.6));
+}
+
+/* Избранное (Мини) */
+.mp-extras .mini-btn.on {
+  color: #5e00ff;
+  filter: drop-shadow(0 0 3px rgba(110, 0, 255, 1)) drop-shadow(0 0 8px rgba(110, 0, 255, 0.8));
+}
+
+/* Повтор (Большой) */
+#playerRepeatBtn.on {
+  color: #5e00ff;
+  /* Оставляем двойное свечение, но чуть мягче, чем в самый первый раз */
+  filter: drop-shadow(0 0 3px rgba(110, 0, 255, 0.9)) drop-shadow(0 0 8px rgba(110, 0, 255, 0.6));
+}
+
+/* Повтор (Мини) */
+.mp-controls .mini-btn#miniRepeatBtn { 
+  margin-left: 6px; 
+  background: transparent;
+  color: var(--fg2);
+  transition: color .2s, filter .2s;
+}
+
+.mp-controls .mini-btn#miniRepeatBtn.on {
+  background: transparent;
+  color: #5e00ff;
+  box-shadow: none;
+  filter: drop-shadow(0 0 2px rgba(110, 0, 255, 0.8));
+}
+/* Полоска прогресса (Большой) */
+.player-timeline-fill {
+  position: absolute; left: 0; top: 0; height: 100%;
+  background: #5e00ff; border-radius: 2px; width: 0%;
+  box-shadow: 0 0 4px #5e00ff, 0 0 10px rgba(110, 0, 255, 0.8), 0 0 20px rgba(110, 0, 255, 0.4);
+  transition: box-shadow .2s ease;
+}
+.player-timeline-thumb {
+  position: absolute; top: 50%; width: 12px; height: 12px;
+  background: #5e00ff; border-radius: 50%; transform: translate(-50%, -50%);
+  box-shadow: 0 0 4px #5e00ff, 0 0 10px #5e00ff, 0 0 18px rgba(110, 0, 255, 0.6);
+  pointer-events: none; transition: box-shadow .2s ease, transform .2s ease;
+}
+.player-timeline-wrap:active .player-timeline-thumb {
+  transform: translate(-50%, -50%) scale(1.2);
+  box-shadow: 0 0 6px #5e00ff, 0 0 14px rgba(110, 0, 255, 0.9), 0 0 24px rgba(110, 0, 255, 0.6);
+}
+
+/* Полоска прогресса (Мини) */
+.mini-progress-mini {
+  position: absolute; top: 50%; left: 0; height: 2px; transform: translateY(-50%);
+  background: #5e00ff; width: 0%;
+  box-shadow: 0 0 4px #5e00ff, 0 0 10px rgba(110, 0, 255, 0.8);
+  border-radius: 0 2px 2px 0; pointer-events: none;
+}
+
+/* === Мобилка: компактно, без лишних кнопок === */
+@media (max-width: 700px) {
+  .mini-player-controls { gap: 12px; padding-left: 8px; padding-right: 0; }
+  .mini-player-controls #miniRepeatBtn,
+  .mini-player-controls #miniFavBtn,
+  .mini-player-controls #miniPlaylistBtn { display: none !important; }
+  
+  .mp-controls { gap: 0; }
+  .mp-extras { gap: 0; }
+  
+  .mini-btn { padding: 4px 6px; }
+  .mini-btn svg { width: 18px; height: 18px; }
+  .mp-controls .mini-btn.play svg { width: 26px; height: 26px; }
+  .mini-btn.mini-close svg { width: 16px; height: 16px; }
+}

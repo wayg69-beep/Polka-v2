@@ -1,0 +1,261 @@
+/* ==========================================================
+   10-cloud.css — Облако: модалка, баннер, аватар, индикаторы
+   ========================================================== */
+
+.cloud-modal{
+  position:fixed; inset:0; background:rgba(0,0,0,.7);
+  backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px);
+  z-index:500; display:none; align-items:center; justify-content:center;
+  padding:20px;
+}
+.cloud-modal.on{ display:flex; }
+.cloud-panel{
+  background:var(--bg2); border:1px solid #2a2a38; border-radius:22px;
+  padding:22px 20px; width:100%; max-width:420px;
+  box-shadow:0 24px 60px rgba(0,0,0,.7);
+  animation:pop .22s ease;
+  max-height:90vh; overflow-y:auto; scrollbar-width:none;
+}
+.cloud-panel::-webkit-scrollbar{ display:none; }
+.cloud-panel h2{
+  margin:0 0 8px; font-size:20px; font-weight:700;
+  display:flex; align-items:center; gap:8px;
+}
+.cloud-panel .cloud-sub{
+  font-size:13px; color:var(--fg2); line-height:1.5;
+  margin-bottom:16px;
+}
+.cloud-panel label{
+  display:block; font-size:11px; color:var(--fg2);
+  margin:12px 0 5px; text-transform:uppercase;
+  letter-spacing:.4px; font-weight:600;
+}
+.cloud-panel input{
+  width:100%; background:var(--bg3); border:1px solid #26263a;
+  color:var(--fg); padding:11px 12px; border-radius:10px;
+  font-size:15px; outline:none; font-family:inherit;
+  box-sizing:border-box;
+}
+.cloud-panel input:focus{ border-color:var(--acc); }
+.cloud-panel .cloud-actions{
+  display:flex; gap:8px; margin-top:20px;
+}
+  .cloud-panel .cloud-actions-col{
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  margin-top:14px;
+}
+.cloud-backup-info{
+  font-size:13px;
+  color:var(--fg2);
+  text-align:center;
+  padding:10px 12px;
+  background:var(--bg3);
+  border-radius:10px;
+  margin-top:12px;
+  line-height:1.4;
+}
+  .cloud-panel h2 svg{
+  flex:0 0 auto;
+  display:block;
+  color:var(--acc2);
+}
+.cloud-btn{
+  display:inline-flex !important;
+  align-items:center;
+  justify-content:center;
+  gap:8px;
+}
+.cloud-btn svg{
+  flex:0 0 auto;
+  display:block;
+  opacity:.9;
+}
+.admin-badge{
+  display:inline-flex;
+  align-items:center;
+  gap:4px;
+  color:#ffb020;
+  font-weight:600;
+  vertical-align:middle;
+  text-shadow:
+    0 0 4px rgba(255,176,32,.85),
+    0 0 10px rgba(255,176,32,.5),
+    0 0 18px rgba(255,176,32,.25);
+}
+.admin-badge svg{
+  display:block;
+  flex:0 0 auto;
+  filter:
+    drop-shadow(0 0 3px rgba(255,176,32,.9))
+    drop-shadow(0 0 7px rgba(255,176,32,.55))
+    drop-shadow(0 0 12px rgba(255,176,32,.3));
+  transform:translateY(-1px);
+}
+.cloud-panel .cloud-err{
+  font-size:13px; color:#e57c7c; margin-top:10px;
+  line-height:1.4; min-height:18px;
+}
+.cloud-panel .cloud-status{
+  font-size:13px; color:var(--fg2); margin-top:10px;
+  line-height:1.4; min-height:18px;
+}
+
+/* Кнопка «Облако» в сайдбаре */
+
+.cloud-banner{
+  position:fixed; left:50%; transform:translateX(-50%);
+  bottom:24px; z-index:400;
+  background:#16161d; border:1px solid rgba(255,176,32,.4);
+  border-radius:14px; padding:12px 14px;
+  box-shadow:0 12px 30px rgba(0,0,0,.6);
+  display:none; align-items:center; gap:10px;
+  max-width:92vw; animation:pop .2s ease;
+}
+.cloud-banner.on{ display:flex; }
+.cloud-banner .cloud-banner-text{
+  font-size:13px; color:var(--fg); line-height:1.4;
+}
+.cloud-banner button{
+  padding:8px 12px; border-radius:9px; border:0;
+  font-family:inherit; font-size:13px; font-weight:600;
+  cursor:pointer; white-space:nowrap; flex:0 0 auto;
+}
+.cloud-banner .cloud-banner-go{ background:var(--acc); color:#fff; }
+.cloud-banner .cloud-banner-later{ background:var(--bg3); color:var(--fg2); }
+  /* Кнопка облака в шапке */
+.iconbtn.has-avatar{ padding:0; }
+.iconbtn.has-avatar .avatar-img{
+  width:100%; height:100%;
+  object-fit:cover;
+  display:block;
+  border-radius:9px;
+}
+/* Статус облака на кнопке — размер как точка статуса на карточке */
+.iconbtn.online::after,
+.iconbtn.cloud-ok::after,
+.iconbtn.cloud-err::after,
+.iconbtn.cloud-sync::after,
+.iconbtn.cloud-idle::after{
+  content:'';
+  position:absolute;
+  right:-1px;
+  bottom:-1px;
+  width:8px;
+  height:8px;
+  border-radius:50%;
+  pointer-events:none;
+  z-index:5;
+  background:var(--dot-c, #5a5a6e);
+  box-shadow:
+    0 0 3px var(--dot-c, #5a5a6e),
+    0 0 7px var(--dot-c, #5a5a6e),
+    0 0 12px var(--dot-c, #5a5a6e);
+}
+/* Зелёная — как оценка 10/10 */
+.iconbtn.online::after,
+.iconbtn.cloud-ok::after{
+  --dot-c: hsl(115.6, 80%, 68%);
+}
+/* Жёлтая — как оценка 4 */
+.iconbtn.cloud-sync::after{
+  --dot-c: hsl(43.3, 80%, 68%);
+  animation:cloudSyncPulse 1.1s ease-in-out infinite;
+}
+/* Красная — как оценка 1 */
+.iconbtn.cloud-err::after{
+  --dot-c: hsl(0, 80%, 68%);
+}
+/* Серая — залогинена, но бэкапа нет */
+.iconbtn.cloud-idle::after{
+  --dot-c: #5a5a6e;
+  content:'';
+  position:absolute;
+  right:-1px;
+  bottom:-1px;
+  width:11px;
+  height:11px;
+  border-radius:50%;
+  background:#5a5a6e;
+  box-shadow:
+    0 0 3px rgba(90,90,110,.9),
+    0 0 7px rgba(90,90,110,.5);
+  pointer-events:none;
+  z-index:5;
+}
+@keyframes cloudSyncPulse{
+  0%, 100% { opacity:1; }
+  50% { opacity:.35; }
+}
+  /* Аватарка в модалке облака — скруглённый квадрат */
+.cloud-avatar-wrap{
+  margin:10px 0 8px;
+  padding:0;
+  line-height:0;
+  font-size:0;
+  text-align:center;
+}
+.cloud-avatar{
+  display:block;
+  margin:0 auto;
+  position:relative;
+  border-radius:22px;
+  background-color:var(--bg3);
+  background-repeat:no-repeat;
+  background-position:center;
+  background-size:cover;
+  border:2px solid #26263a;
+  color:var(--fg2);
+  cursor:pointer;
+  box-sizing:border-box;
+  transition:border-color .15s, transform .12s;
+  padding:0;
+}
+.cloud-avatar::before{
+  content:'';
+  position:absolute;
+  top:50%; left:50%;
+  transform:translate(-50%,-50%);
+  width:44px; height:44px;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%239a9aa8' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'><path d='M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2'/><circle cx='12' cy='7' r='4'/></svg>");
+  background-size:contain;
+  background-repeat:no-repeat;
+  pointer-events:none;
+}
+.cloud-avatar.has-photo::before{ display:none; }
+.cloud-avatar:active{ transform:scale(.96); }
+.cloud-avatar:hover{ border-color:var(--acc); }
+.cloud-avatar.empty{ border-style:dashed; }
+.cloud-avatar svg{ display:none; }
+.cloud-avatar.has-photo svg{ display:none; }
+.cloud-avatar-edit{
+  position:absolute;
+  right:-6px;
+  bottom:-6px;
+  width:28px;
+  height:28px;
+  border-radius:50%;
+  background:var(--acc);
+  color:#fff;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-size:16px;
+  font-weight:700;
+  line-height:1;
+  border:2px solid var(--acc);
+  box-shadow:
+    0 2px 8px rgba(0,0,0,.5),
+    0 0 4px rgba(124,92,255,.95),
+    0 0 10px rgba(124,92,255,.6),
+    0 0 18px rgba(124,92,255,.3);
+  pointer-events:none;
+  z-index:2;
+}
+.cloud-avatar-hint{
+  text-align:center;
+  font-size:12px;
+  color:var(--fg2);
+  margin-bottom:14px;
+}

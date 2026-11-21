@@ -1,0 +1,330 @@
+/* ==========================================================
+   05-modals.css — Модалки: поиск, заметки, обложка, корзина, импорт
+   ========================================================== */
+
+/* Модалка поиска TMDB */
+.tmdb-input{
+  width:100%;
+  background:var(--bg3);
+  border:1px solid #26263a;
+  color:var(--fg);
+  padding:11px 13px;
+  border-radius:11px;
+  font-size:15px;
+  font-family:inherit;
+  outline:none;
+  margin-bottom:12px;
+  box-sizing:border-box;
+}
+.tmdb-input:focus{ border-color:var(--acc); }
+.tmdb-results{
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  max-height:50vh;
+  overflow-y:auto;
+  margin-bottom:14px;
+}
+.tmdb-result{
+  display:flex;
+  gap:12px;
+  padding:8px;
+  background:var(--bg3);
+  border:1px solid #26263a;
+  border-radius:10px;
+  cursor:pointer;
+  transition:background .15s, border-color .15s;
+}
+.tmdb-result:active{ background:#242436; border-color:var(--acc); }
+.tmdb-result-poster{
+  flex:0 0 56px;
+  width:56px;
+  aspect-ratio:2/3;
+  background:var(--bg2);
+  border-radius:6px;
+  overflow:hidden;
+  display:grid;
+  place-items:center;
+  font-size:20px;
+}
+.tmdb-result-poster img{ width:100%; height:100%; object-fit:cover; display:block; }
+.tmdb-result-info{
+  flex:1; min-width:0;
+  display:flex; flex-direction:column; justify-content:center; gap:4px;
+}
+.tmdb-result-title{
+  font-size:14px; font-weight:600; color:var(--fg);
+  line-height:1.25; overflow:hidden;
+  display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;
+}
+.tmdb-result-type{
+  display:inline-block;
+  padding:2px 6px;
+  border-radius:5px;
+  background:#221c3a;
+  color:var(--acc2);
+  font-size:10.5px; font-weight:600;
+  margin-left:6px;
+  vertical-align:middle;
+}
+.tmdb-result-meta{
+  font-size:11.5px; color:var(--fg2);
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+.tmdb-status{
+  text-align:center;
+  color:var(--fg2);
+  padding:20px;
+  font-size:13px;
+  line-height:1.5;
+}
+
+/* Модалка URL */
+.url-modal{
+  position:fixed; top:0; left:0; right:0;
+  height:100vh; height:100dvh; z-index:250;
+  background:rgba(0,0,0,.6);
+  backdrop-filter:blur(4px); -webkit-backdrop-filter:blur(4px);
+  display:none; align-items:center; justify-content:center;
+  padding:24px;
+}
+.url-modal.on{ display:flex; }
+.url-panel{
+  background:var(--bg2);
+  width:100%; max-width:460px;
+  border-radius:18px; padding:14px;
+  border:1px solid #2a2a38;
+  box-shadow:0 20px 60px rgba(0,0,0,.6);
+  animation:pop .2s ease;
+  display:flex; gap:8px; align-items:stretch;
+}
+.url-panel input{ flex:1; min-width:0; }
+.url-panel .iconbtn{
+  flex:0 0 44px; width:44px; min-height:44px; height:auto;
+  background:var(--acc); border-color:var(--acc); color:#fff;
+}
+.url-panel .iconbtn:active{ background:var(--acc2); }
+
+/* Модалка заметок */
+.notes-modal {
+  position: fixed; 
+  inset: 0; 
+  z-index: 260;
+  display: none;
+  overflow-y: auto; 
+  padding: 24px;
+  /* Убрали фон, блюр и transform из самого контейнера */
+}
+.notes-modal.on { display: flex; }
+
+/* Модалка метки должна быть поверх открытой карточки — иначе вылезает под ней */
+#momentModal { z-index: 550; }
+
+/* Выносим фон и блюр в псевдоэлемент, чтобы он не влиял на рендеринг панели */
+.notes-modal::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.6);
+  backdrop-filter: blur(4px); 
+  -webkit-backdrop-filter: blur(4px);
+  pointer-events: none;
+  z-index: -1; 
+}
+
+.notes-panel {
+  margin: auto; 
+  background: var(--bg2);
+  width: 100%; max-width: 560px; 
+  max-height: 100%; 
+  border-radius: 20px;
+  border: 1px solid #2a2a38;
+  box-shadow: 0 20px 60px rgba(0,0,0,.6);
+  animation: pop .2s ease;
+  display: flex; flex-direction: column;
+  overflow: hidden;
+  }
+.notes-head{
+  display:flex; align-items:center; gap:10px;
+  padding:14px 18px 12px;
+  border-bottom:1px solid #22222e;
+}
+.notes-head h3{ margin:0; font-size:16px; flex:1; font-weight:700; }
+.notes-head .iconbtn{ width:32px; height:32px; border-radius:9px; font-size:14px; }
+.notes-body{ flex:1 1 auto; min-height:0; padding:14px 18px; overflow:auto; }
+.notes-body textarea{ width:100%; height:200px; resize:vertical; min-height:140px; }
+.notes-foot{
+  flex:0 0 auto; display:flex; gap:8px;
+  padding:12px 18px 16px;
+  border-top:1px solid #22222e;
+}
+
+/* Полноэкранная обложка */
+/* Полноэкранная обложка */
+.cover-view-modal{
+  position:fixed; top:0; left:0; right:0;
+  height:100vh; height:100dvh; z-index:280;
+  display:none; align-items:center; justify-content:center;
+  padding:32px; cursor:pointer;
+  /* Убрали opacity отсюда! */
+}
+.cover-view-modal.on{ display:flex; }
+
+/* Блюр и фон живут здесь */
+.cover-view-modal::before{
+  content:'';
+  position:absolute;
+  inset:0;
+  background:rgba(0,0,0,0); /* Начинаем с прозрачного */
+  backdrop-filter:blur(10px); 
+  -webkit-backdrop-filter:blur(10px);
+  transition:background-color .22s ease; /* Анимируем только цвет фона */
+  pointer-events:none;
+  will-change:background-color;
+  transform:translateZ(0); /* Форсим GPU-слой для блюра */
+  z-index:0;
+}
+.cover-view-modal.visible::before{
+  background:rgba(0,0,0,.75); /* Плавно заливаем тёмным */
+}
+
+/* Картинка */
+.cover-view-modal img{
+  position:relative;
+  z-index:1;
+  max-width:100%; max-height:100%;
+  border-radius:16px;
+  box-shadow:0 24px 60px rgba(0,0,0,.7);
+  display:block;
+  transform:scale(.96);
+  opacity:0;
+  transition:transform .22s ease, opacity .22s ease;
+  will-change:transform, opacity;
+  backface-visibility:hidden;
+}
+.cover-view-modal.visible img{
+  transform:scale(1);
+  opacity:1;
+}
+
+/* Модалка настроек категории */
+.modal{position:fixed; top:0; left:0; right:0;
+  height:100vh; height:100dvh; z-index:500;
+  background:rgba(0,0,0,.65);
+  display:none; align-items:center; justify-content:center;
+  backdrop-filter:blur(4px); padding:32px}
+.modal.on{display:flex}
+.modal-panel{
+  background:var(--bg2); width:100%; max-width:580px; max-height:80vh;
+  border-radius:18px; overflow-y:auto; padding:20px 18px 18px;
+  border:1px solid #26263a; animation:pop .2s ease;
+  scrollbar-width:none;
+}
+@keyframes pop{from{transform:scale(.96)}to{transform:scale(1)}}
+.modal-panel::-webkit-scrollbar{display:none; width:0; height:0}
+.modal-panel h2{margin:0 0 4px; font-size:17px}
+
+/* Окно выбора режима импорта */
+.import-mode-actions{ display:flex; flex-direction:column; gap:8px; margin-top:16px; }
+.import-mode-actions .btn{ flex:0 0 auto; }
+
+/* Импорт MangaLib */
+.import-help{
+  font-size:13.5px; line-height:1.55;
+  color:var(--fg2); margin:14px 0 16px;
+}
+.import-help b{ color:var(--fg); }
+.import-pick{
+  display:flex; align-items:center; justify-content:center; gap:10px;
+  width:100%; padding:16px;
+  border-radius:12px;
+  background:var(--acc); color:#fff;
+  border:0; font-family:inherit;
+  font-size:15px; font-weight:600;
+  cursor:pointer;
+  transition:background .15s;
+  box-shadow:
+    0 0 4px rgba(124,92,255,.55),
+    0 0 12px rgba(124,92,255,.32);
+}
+.import-pick:active{ background:var(--acc2); }
+.import-pick svg{ display:block; }
+.import-status{
+  margin-top:14px; font-size:13px;
+  color:var(--fg2); min-height:18px; line-height:1.5;
+}
+.import-status.ok{ color:#7ec98c; }
+.import-status.err{ color:#e57c7c; }
+
+/* Корзина */
+.trash-list{
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  max-height:50vh;
+  overflow-y:auto;
+  scrollbar-width:none;
+}
+.trash-list::-webkit-scrollbar{ display:none; }
+.trash-item{
+  display:flex;
+  gap:10px;
+  padding:8px;
+  background:var(--bg3);
+  border:1px solid #26263a;
+  border-radius:10px;
+  align-items:center;
+}
+.trash-cover{
+  flex:0 0 40px;
+  width:40px;
+  height:56px;
+  border-radius:6px;
+  background:var(--bg2);
+  overflow:hidden;
+  display:grid;
+  place-items:center;
+  font-size:18px;
+}
+.trash-cover img{
+  width:100%; height:100%;
+  object-fit:cover;
+  display:block;
+}
+.trash-info{
+  flex:1;
+  min-width:0;
+}
+.trash-title{
+  font-size:13.5px;
+  font-weight:600;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.trash-meta{
+  font-size:11.5px;
+  color:var(--fg2);
+  margin-top:2px;
+}
+.trash-btn{
+  flex:0 0 auto;
+  width:32px;
+  height:32px;
+  border-radius:8px;
+  border:1px solid #26263a;
+  background:var(--bg2);
+  color:var(--fg);
+  cursor:pointer;
+  display:grid;
+  place-items:center;
+  transition:background .15s, color .15s;
+}
+.trash-btn.restore:hover, .trash-btn.restore:active{ background:rgba(62,207,142,.15); color:#7ec98c; border-color:rgba(62,207,142,.4); }
+.trash-btn.delete:hover, .trash-btn.delete:active{ background:rgba(255,90,90,.15); color:#ff8a8a; border-color:rgba(255,90,90,.4); }
+.trash-empty{
+  text-align:center;
+  color:var(--fg2);
+  font-size:13px;
+  padding:20px;
+  }

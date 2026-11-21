@@ -1,0 +1,919 @@
+/* ==========================================================
+   08-reader.css — Читалка манги
+   ========================================================== */
+
+/* --- СТИЛИ ЧИТАЛКИ --- */
+html.reader-open-bg,
+body.reader-open-bg {
+  background: #000 !important;
+}
+.reader-modal {
+  position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+  z-index: 600;
+  background: #000;
+  display: none; flex-direction: column; overflow: hidden;
+}
+.reader-modal.on { display: flex; }
+
+/* ===== ВЕРХНИЙ БАР — стеклянная подложка как у островка ===== */
+.reader-head {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  z-index: 10;
+  /* padding-top убран — стекляшка идёт от самого верха, статус-бар учитывается внутри бара */
+  pointer-events: none;
+}
+.reader-modal.ui-hidden .reader-head {
+  pointer-events: none;
+                  }
+  
+.reader-head-bar {
+  position: relative;
+  background: rgba(22, 22, 29, 0.72);
+  backdrop-filter: blur(20px) saturate(1.4);
+  -webkit-backdrop-filter: blur(20px) saturate(1.4);
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  border-radius: 0 0 22px 22px;
+  box-shadow:
+    0 8px 32px rgba(0,0,0,.5),
+    inset 0 1px 0 rgba(255,255,255,0.06);
+  padding: 16px 16px 16px;
+  pointer-events: auto;
+  overflow: visible;
+  transform: translateY(-100%);
+  opacity: 0;
+}
+.reader-modal:not(.ui-hidden) .reader-head-bar {
+  animation: headBarShow 0.32s cubic-bezier(.2,.9,.3,1) forwards;
+}
+.reader-modal.ui-hidden .reader-head-bar {
+  pointer-events: none;
+  animation: headBarHide 0.32s cubic-bezier(.2,.9,.3,1) forwards;
+}
+@keyframes headBarShow {
+  from { transform: translateY(-100%); opacity: 0; }
+  to   { transform: translateY(0);     opacity: 1; }
+}
+@keyframes headBarHide {
+  from { transform: translateY(0);     opacity: 1; }
+  to   { transform: translateY(-100%); opacity: 0; }
+       }
+  
+.reader-head-inner {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 48px;
+  }
+  
+.reader-head-info {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 0 1 auto;
+  max-width: 52%;
+  transform: translateY(5px);
+  }
+  
+.reader-head-vol {
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(232, 232, 239, 0.68);
+  letter-spacing: .3px;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 0 0 auto;
+  }
+  
+.reader-head-pos {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--fg);
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 0 1 auto;
+  min-width: 0;
+}
+.reader-head-pos::before {
+  content: '|';
+  margin-right: 8px;
+  color: rgba(232, 232, 239, 0.5);
+  font-weight: 400;
+  }
+  
+  .reader-head-title {
+  position: absolute;
+  left: 50%;
+  top: 55%;
+  transform: translate(-50%, calc(-50% + 5px));
+  font-family: 'Great Vibes', cursive;
+  font-size: 30px;
+  font-weight: 550;
+  color: var(--fg);
+  line-height: 1.4;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+  letter-spacing: 0;
+  padding: 0;
+  max-width: 100%;
+                             }
+
+.reader-close-btn {
+  flex: 0 0 auto;
+  width: 36px; height: 36px;
+  border: 0;
+  background: transparent;
+  color: var(--fg);
+  border-radius: 50%;
+  display: grid; place-items: center;
+  cursor: pointer;
+  padding: 0;
+  font-family: inherit;
+  transition: opacity .15s;
+  transform: translate(8px, 7px);
+}
+.reader-close-btn:active { opacity: .5; }
+.reader-close-btn svg { display: block; width: 22px; height: 22px; }
+
+/* Неоновый прогресс — внизу стекляшки, с местом для свечения */
+.reader-progress-track {
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  bottom: 7px;
+  height: 12px;
+  cursor: pointer;
+  touch-action: none;
+  z-index: 2;
+}
+.reader-progress-track::before {
+  content: '';
+  position: absolute;
+  left: 0; right: 0; top: 50%;
+  height: 3px;
+  transform: translateY(-50%);
+  background: rgba(255,255,255,0.1);
+  border-radius: 2px;
+  pointer-events: none;
+}
+.reader-progress-fill {
+  position: absolute;
+  left: 0; top: 50%;
+  height: 3px;
+  transform: translateY(-50%);
+  background: #5e00ff;
+  border-radius: 2px;
+  width: 0%;
+  pointer-events: none;
+  box-shadow:
+    0 0 4px #5e00ff,
+    0 0 10px rgba(110, 0, 255, 0.8),
+    0 0 20px rgba(110, 0, 255, 0.5);
+  transition: width .12s ease;
+  z-index: 1;
+       }
+  
+/* ===== ОСТРОВОК (нижние кнопки) ===== */
+.reader-island {
+  position: absolute;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 20px);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 18px;
+  border-radius: 22px;
+  background: rgba(22, 22, 29, 0.72);
+  backdrop-filter: blur(20px) saturate(1.4);
+  -webkit-backdrop-filter: blur(20px) saturate(1.4);
+  border: 1px solid rgba(255,255,255,0.08);
+  box-shadow:
+    0 8px 32px rgba(0,0,0,.5),
+    inset 0 1px 0 rgba(255,255,255,0.06);
+  z-index: 11;
+  transition: transform 0.3s ease, opacity 0.3s ease;
+  pointer-events: auto;
+}
+.reader-modal.ui-hidden .reader-island {
+  transform: translateX(-50%) translateY(120%);
+  opacity: 0;
+  pointer-events: none;
+}
+.reader-island-btn {
+  width: 42px; height: 36px;
+  border: 0;
+  background: transparent;
+  color: rgba(232, 232, 239, 0.85);
+  border-radius: 12px;
+  display: grid; place-items: center;
+  cursor: pointer;
+  padding: 0;
+  font-family: inherit;
+  transition: background .15s, color .15s;
+  flex: 0 0 auto;
+}
+.reader-island-btn svg { display: block; width: 20px; height: 20px; }
+.reader-island-btn:active { background: rgba(255,255,255,0.08); }
+.reader-island-btn:disabled { opacity: .3; pointer-events: none; }
+
+#readerLikeBtn {
+  position: relative;
+  color: rgba(232, 232, 239, 0.85);
+  transition: color .18s ease, filter .18s ease;
+  touch-action: manipulation;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  }
+#readerLikeBtn svg { transition: filter .18s ease; }
+#readerLikeBtn.lit { color: var(--ic, #ff5c8a); }
+#readerLikeBtn.lit svg {
+  filter: drop-shadow(0 0 3px var(--ic, #ff5c8a)) drop-shadow(0 0 8px var(--ic, #ff5c8a));
+}
+
+.reader-island-nav {
+  display: flex;
+  gap: 0;
+  margin-left: 4px;
+  padding-left: 6px;
+  border-left: 1px solid rgba(255,255,255,0.1);
+}
+.reader-island-nav.hidden { display: none; }
+
+/* ===== STAGE ===== */
+.reader-stage {
+  flex: 1 1 auto; min-height: 0; position: relative; overflow: hidden;
+}
+
+/* ===== ВЕРТИКАЛЬНЫЙ РЕЖИМ (ВЕБТУН) ===== */
+.reader-pages {
+width: 100%; height: 100%;
+overflow-y: auto; overflow-x: hidden;
+display: flex; flex-direction: column; 
+align-items: flex-start;
+gap: 0;
+padding: 16px 16px 16px;
+scrollbar-width: none;
+box-sizing: border-box;
+overscroll-behavior: contain;
+overflow-anchor: none;
+  }
+
+.reader-pages::-webkit-scrollbar { display: none; }
+
+/* Zoom: разрешаем горизонтальный скролл + сами картинки растягиваются */
+.reader-pages.zoomed {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.reader-pages:not(.horizontal) img {
+  width: calc(100% * var(--reader-zoom, 1));
+  max-width: none;
+    }
+  
+.reader-pages img {
+  display: block; 
+  width: 100%;
+  max-width: 100%;
+  height: auto;
+  object-fit: contain;
+  margin: 0 auto;
+  user-select: none; -webkit-user-drag: none; pointer-events: none;
+  background: transparent; 
+  border-radius: 0;
+}
+.reader-pages.horizontal {
+  flex-direction: row; 
+  overflow-x: auto; overflow-y: hidden;
+  align-items: center; 
+  scroll-snap-type: x mandatory;
+  padding: 0;
+  gap: 0;
+}
+.reader-pages.horizontal img {
+  flex: 0 0 100vw; 
+  width: 100vw;
+  height: 100%;
+  object-fit: contain; 
+  scroll-snap-align: center;
+  padding: 90px 15vw 100px;
+  box-sizing: border-box;
+}
+
+/* ===== ОВЕРЛЕЙ ЗАГРУЗКИ ===== */
+.reader-loading-overlay {
+  position: absolute;
+  inset: 0;
+  background: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 14px;
+  z-index: 15;
+  color: var(--fg2);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: .3px;
+}
+.reader-loading-overlay .spinner {
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  border: 3px solid rgba(124, 92, 255, .25);
+  border-top-color: var(--acc);
+  animation: readerSpin .8s linear infinite;
+}
+@keyframes readerSpin { to { transform: rotate(360deg); } }
+
+/* ===== КНОПКА СЛЕД. ГЛАВЫ ВНИЗУ ЛЕНТЫ ===== */
+.reader-next-chapter {
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  gap: 12px;
+}
+.reader-next-chapter.show { display: flex; }
+.reader-next-chapter .btn {
+  width: 100%; max-width: 300px;
+  padding: 14px; font-size: 16px;
+}
+
+/* ===== МОДАЛКИ (настройки / главы) ===== */
+/* Настройки — по центру, с затемнением */
+.reader-settings-modal {
+  position: absolute;
+  inset: 0;
+  z-index: 9;
+  display: none;
+  background: transparent;
+  padding: 0;
+}
+.reader-settings-modal.on { display: block; }
+
+/* Главы — прозрачный фон, панель позиционируется JS-ом,
+   z-index ниже островка (11), чтобы кнопки островка были кликабельны */
+.reader-chapters-modal {
+  position: absolute;
+  inset: 0;
+  z-index: 9;
+  display: none;
+  background: transparent;
+  padding: 0;
+}
+.reader-chapters-modal.on { display: block; }
+
+.reader-settings-panel {
+  position: absolute;
+  width: 400px;
+  max-width: calc(100vw - 24px);
+  max-height: calc(100vh - 120px);
+  background: rgba(22, 22, 29, 0.72);
+  backdrop-filter: blur(20px) saturate(1.4);
+  -webkit-backdrop-filter: blur(20px) saturate(1.4);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 22px;
+  box-shadow:
+    0 8px 32px rgba(0,0,0,.5),
+    inset 0 1px 0 rgba(255,255,255,0.06);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  pointer-events: auto;
+  transform-origin: center bottom;
+  opacity: 0;
+  visibility: hidden;
+}
+.reader-settings-panel.on {
+  visibility: visible;
+  animation: settingsPanelIn 320ms cubic-bezier(.2,.9,.3,1) forwards;
+}
+@keyframes settingsPanelIn {
+  from {
+    transform: translateY(20px) scale(.15);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+                                         }
+
+.rs-head, .rc-head {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  border-bottom: 1px solid #22222e;
+  flex: 0 0 auto;
+}
+/* Главы — крупнее, с воздухом вокруг */
+.rc-head {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 6px 18px 6px;
+  border-bottom: 1px solid rgba(255,255,255,0.15);
+  flex: 0 0 auto;
+  }
+  .rc-head h3 {
+  margin: 0;
+  font-family: 'Great Vibes', cursive;
+  font-size: 26px;
+  font-weight: 500;
+  color: var(--fg);
+  letter-spacing: 0;
+  line-height: 1.2;
+  padding: 0;
+  text-align: center;
+  transform: translateY(2px);
+  }
+/* Настройки — компактнее по вертикали */
+.rs-head {
+  padding: 6px 18px 6px;
+}
+.rs-head h3 {
+  margin: 0;
+  font-family: 'Great Vibes', cursive;
+  font-size: 26px;
+  font-weight: 500;
+  color: var(--fg);
+  letter-spacing: 0;
+  line-height: 1.2;
+  padding: 0;
+  text-align: center;
+  transform: translateY(2px);
+  }
+  
+  
+.rs-body {
+  flex: 1 1 auto; min-height: 0;
+  padding: 16px 20px 22px;
+  overflow-y: auto;
+  scrollbar-width: none;
+  }
+  
+.rs-body::-webkit-scrollbar { display: none; }
+.rs-group {
+  padding: 20px 0;
+  border-bottom: 1px solid #22222e;
+  margin: 0;
+}
+.rs-group:first-child { padding-top: 4px; }
+.rs-group:last-child {
+  border-bottom: 0;
+  padding-bottom: 4px;
+  }
+  
+.rs-group > label {
+  display: block;
+  font-size: 12px; color: var(--fg2);
+  text-transform: uppercase; font-weight: 600; letter-spacing: .3px;
+  margin-bottom: 10px;
+}
+.rs-group .seg button { flex: 1; justify-content: center; }
+
+/* Тоггл в одну строку с подписью */
+.rs-group-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.rs-group-toggle > label {
+  flex: 1;
+  margin-bottom: 0;
+}
+.rs-group-toggle .rs-toggle {
+  flex: 0 0 auto;
+  padding: 0;
+  }
+
+.rs-toggle {
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+  padding: 4px 0;
+}
+.rs-toggle input { display: none; }
+.rs-toggle-track {
+  position: relative;
+  width: 44px; height: 24px;
+  border-radius: 999px;
+  background: var(--bg3);
+  border: 1px solid #26263a;
+  transition: background .2s, border-color .2s;
+  display: block;
+}
+.rs-toggle-thumb {
+  position: absolute;
+  top: 2px; left: 2px;
+  width: 18px; height: 18px;
+  border-radius: 50%;
+  background: #4a4a5e;
+  transition: left .2s, background .2s;
+}
+.rs-toggle input:checked + .rs-toggle-track {
+  background: rgba(124,92,255,.2);
+  border-color: rgba(124,92,255,.55);
+}
+.rs-toggle input:checked + .rs-toggle-track .rs-toggle-thumb {
+  left: 22px;
+  background: var(--acc2);
+  box-shadow: 0 0 6px rgba(124,92,255,.6);
+}
+
+
+
+  /* Кнопка "нотка" — подсветка при активном плеере */
+#readerMusicBtn.lit-music {
+  color: #a48bff;
+}
+#readerMusicBtn.lit-music svg {
+  filter: drop-shadow(0 0 3px #a48bff) drop-shadow(0 0 8px #a48bff);
+                      }
+
+  /* Настройки: группы симметрично между девайдерами */
+.reader-settings-modal .rs-body {
+  padding: 20px;
+}
+.reader-settings-modal .rs-group {
+  padding: 20px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.15);
+  margin: 0;
+                                 }
+  .reader-settings-modal .rs-group:first-child {
+  padding-top: 0;
+}
+.reader-settings-modal .rs-group:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+.reader-settings-modal .rs-group > label {
+  margin-top: 0;
+  margin-bottom: 10px;
+}
+.reader-settings-modal .rs-group-toggle > label {
+  margin-bottom: 0;
+  }
+
+
+
+  /* Пикер меток — горизонтальный, в стиле островка, чуть ниже по высоте */
+.reader-tag-picker-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,.35);
+  z-index: 40;
+  display: none;
+}
+.reader-tag-picker-backdrop.on { display: block; }
+
+.reader-tag-picker {
+  position: absolute;
+  z-index: 41;
+  display: none;
+  flex-direction: row;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 6px;
+  background: rgba(22, 22, 29, 0.72);
+  backdrop-filter: blur(20px) saturate(1.4);
+  -webkit-backdrop-filter: blur(20px) saturate(1.4);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 18px;
+  box-shadow:
+    0 8px 32px rgba(0,0,0,.5),
+    inset 0 1px 0 rgba(255,255,255,0.06);
+  max-width: calc(100vw - 24px);
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  transform-origin: center bottom;
+  opacity: 0;
+}
+.reader-tag-picker::-webkit-scrollbar { display: none; }
+.reader-tag-picker.on {
+  display: flex;
+  animation: tagPickerIn 320ms cubic-bezier(.2,.9,.3,1) forwards;
+}
+@keyframes tagPickerIn {
+  from {
+    transform: translateY(20px) scale(.15);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+
+.reader-tag-picker-item {
+  flex: 0 0 auto;
+  width: 38px;
+  height: 32px;
+  border-radius: 9px;
+  background: transparent;
+  border: 0;
+  color: rgba(232, 232, 239, 0.75);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  padding: 0;
+  font-family: inherit;
+  transition: background .15s, color .15s;
+}
+.reader-tag-picker-item svg { display: block; width: 20px; height: 20px; }
+.reader-tag-picker-item:active { background: rgba(255,255,255,0.08); }
+.reader-tag-picker-item.lit { color: var(--ic); }
+.reader-tag-picker-item.lit svg {
+  filter: drop-shadow(0 0 3px var(--ic)) drop-shadow(0 0 8px var(--ic));
+}
+.reader-tag-picker-item.current {
+  background: rgba(124,92,255,.14);
+  box-shadow: inset 0 0 0 1px rgba(124,92,255,.5), 0 0 6px rgba(124,92,255,.3);
+  }
+
+/* ===== Модалка глав — стиль островка ===== */
+.reader-chapters-panel {
+  position: absolute;
+  width: 360px;
+  max-width: calc(100vw - 24px);
+  max-height: 360px;
+  background: rgba(22, 22, 29, 0.72);
+  backdrop-filter: blur(20px) saturate(1.4);
+  -webkit-backdrop-filter: blur(20px) saturate(1.4);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 22px;
+  box-shadow:
+    0 8px 32px rgba(0,0,0,.5),
+    inset 0 1px 0 rgba(255,255,255,0.06);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  pointer-events: auto;
+  transform-origin: center bottom;
+  opacity: 0;
+  visibility: hidden;
+}
+.reader-chapters-panel.on {
+  visibility: visible;
+  animation: chaptersPanelIn 320ms cubic-bezier(.2,.9,.3,1) forwards;
+}
+@keyframes chaptersPanelIn {
+  from {
+    transform: translateY(20px) scale(.15);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+
+
+.rc-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 6px 0;
+  scrollbar-width: none;
+}
+.rc-list::-webkit-scrollbar { display: none; }
+
+.rc-item {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 11px 18px;
+  font-size: 15px;
+  color: var(--fg);
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  width: 100%;
+  text-align: center;
+  font-family: inherit;
+  transition: background .12s;
+  line-height: 1.25;
+  box-sizing: border-box;
+}
+.rc-item:active { background: rgba(255,255,255,0.06); }
+.rc-item.current {
+  background: rgba(124,92,255,.16);
+  color: #d6caff;
+}
+
+.rc-item-vol {
+  flex: 0 0 auto;
+  font-size: 12.5px;
+  color: var(--fg2);
+  font-weight: 600;
+  letter-spacing: .2px;
+}
+
+.rc-item-title {
+  flex: 0 0 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+  padding-left: 12px;
+  border-left: 1px solid rgba(255,255,255,0.08);
+}
+
+.rc-item.current .rc-item-title { font-weight: 600; }
+.rc-item.current .rc-item-vol { color: var(--acc2); }
+.rc-item.current .rc-item-title {
+  border-left-color: rgba(164, 139, 255, 0.2);
+  }
+
+.reader-settings-panel .rs-head {
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+                             }
+  
+.rs-slider-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.rs-slider {
+  flex: 1;
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  background: rgba(255,255,255,0.15);
+  border-radius: 2px;
+  outline: none;
+  padding: 0;
+  margin: 0;
+}
+.rs-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--acc);
+  cursor: pointer;
+  border: 0;
+  box-shadow: 0 0 6px rgba(124,92,255,.6), 0 0 12px rgba(124,92,255,.3);
+}
+.rs-slider::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--acc);
+  cursor: pointer;
+  border: 0;
+  box-shadow: 0 0 6px rgba(124,92,255,.6);
+}
+.rs-slider::-moz-range-track {
+  height: 4px;
+  background: rgba(255,255,255,0.15);
+  border-radius: 2px;
+}
+.rs-slider-value {
+  flex: 0 0 auto;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--fg);
+  min-width: 38px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  }
+
+  /* ===== Широкий режим шапки (когда название не влезает) ===== */
+.reader-head-bar.wide {
+  padding-bottom: 30px;
+}
+.reader-head-bar.wide .reader-head-inner {
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0;
+  min-height: auto;
+}
+.reader-head-bar.wide .reader-head-info {
+  order: 1;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  max-width: calc(100% - 44px);
+  transform: none;
+}
+.reader-head-bar.wide .reader-head-vol {
+  font-size: 12px;
+}
+.reader-head-bar.wide .reader-head-pos {
+  font-size: 13px;
+}
+.reader-head-bar.wide .reader-head-pos::before {
+  content: '';
+  margin: 0;
+}
+.reader-head-bar.wide .reader-close-btn {
+  order: 2;
+  flex: 0 0 auto;
+  align-self: flex-start;
+  margin-top: -4px;
+}
+.reader-head-bar.wide .reader-head-title {
+  order: 3;
+  position: static;
+  left: auto;
+  top: auto;
+  transform: none;
+  flex: 0 0 100%;
+  width: 100%;
+  max-width: 100%;
+  text-align: center;
+  margin-top: 10px;
+  padding: 0 4px;
+  font-size: 22px;
+  line-height: 1.15;
+  white-space: normal;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  box-sizing: border-box;
+}
+  /* ===== Узкий режим (мобильный) — info сверху, название под ним ===== */
+.reader-head-bar.narrow {
+  padding-bottom: 16px;
+}
+.reader-head-bar.narrow .reader-head-inner {
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0;
+  min-height: 0;
+}
+.reader-head-bar.narrow .reader-head-info {
+  order: 1;
+  width: 100%;
+  max-width: 100%;
+  flex-direction: row;
+  justify-content: center;
+  padding: 0 44px;
+  box-sizing: border-box;
+}
+.reader-head-bar.narrow .reader-head-info .reader-head-vol,
+.reader-head-bar.narrow .reader-head-info .reader-head-pos {
+  font-size: 12.5px;
+  line-height: 1.15;
+}
+.reader-head-bar.narrow .reader-close-btn {
+  position: absolute;
+  right: 8px;
+  top: 4px;
+  margin: 0;
+  transform: none;
+  width: 32px;
+  height: 32px;
+}
+.reader-head-bar.narrow .reader-close-btn svg {
+  width: 20px;
+  height: 20px;
+}
+.reader-head-bar.narrow .reader-head-title {
+  order: 2;
+  position: static;
+  left: auto;
+  top: auto;
+  transform: none;
+  width: 100%;
+  max-width: calc(100% - 88px);
+  margin: 2px auto 0;
+  padding: 1px 6px 2px;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 20px;
+  line-height: 1.3;
+  display: block;
+  box-sizing: border-box;
+      }
+
+#readerDiscMarkBtn.active {
+  color: #ff5c5c;
+}
+#readerDiscMarkBtn.active svg {
+  filter: drop-shadow(0 0 3px #ff5c5c) drop-shadow(0 0 8px #ff5c5c);
+  }

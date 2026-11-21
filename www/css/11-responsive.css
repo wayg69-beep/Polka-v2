@@ -1,0 +1,592 @@
+/* ==========================================================
+   11-responsive.css — Адаптив: все @media
+   ========================================================== */
+
+@media (max-width: 1000px){
+  .view-modal-wrap { gap: 10px; }
+  .view-nav-btn { width: 48px; height: 48px; font-size: 36px; }
+  .view-nav-btn.plus { font-size: 26px; }
+  .view-modal-stage { width: 100%; max-width: 880px; }
+}
+@media (max-width: 700px){
+  .view-modal-wrap {
+    display: block;
+    position: relative;
+    max-width: none;
+  }
+  .view-modal-stage {
+    width: 100%;
+    min-height: 0;
+  }
+  .view-nav-btn {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 42px;
+    height: 42px;
+    font-size: 32px;
+    margin: 0;
+    z-index: 15;
+  }
+  .view-nav-btn.plus { font-size: 24px; }
+  .view-nav-btn:active { transform: translateY(-50%) scale(.88); }
+  .view-nav-left  { left: 4px; }
+  .view-nav-right { right: 4px; }
+}
+
+@media (max-width: 700px) {
+  .view-footer .actions .btn-read-manga {
+    flex: 0 0 auto;
+    padding: 0 14px;
+    font-size: 14px;
+  }
+  }
+
+  
+  @media (max-width:720px){
+  body.sidebar-open .main{ margin-left:var(--sb-closed); }
+  body.sidebar-open .sidebar{ box-shadow:4px 0 24px rgba(0,0,0,.5); }
+  body.sidebar-open .sidebar-backdrop{ display:block; }
+  }
+  @media (max-width:640px){
+    .view-modal{padding:18px}
+    .view-modal-panel{max-height:82vh; border-radius:22px}
+    .view-modal-panel.expanded{ max-height:max(82vh, min(92vh, calc(100dvh - 80px))) }
+    .view-body{padding:22px 20px 14px}
+    .view-footer{padding:12px 20px}
+    .view-header{flex-direction:column; align-items:center; gap:16px}
+    .view-left{flex:0 0 auto; width:100%; max-width:200px; align-items:center}
+    .view-left.square{width:60%; max-width:220px}
+    .view-left .view-cover-h{ width:100%; }
+    .view-links{ justify-content:center; }
+    .view-info{width:100%; text-align:center; padding-top:34px; align-items:center}
+    .view-pills{justify-content:center}
+    .view-title-h{font-size:26px}
+    .view-notes.desc-block{font-size:15px; text-align:left}
+    .view-notes.notes-block{font-size:14px; text-align:left}
+    .section-scroll .card{flex:0 0 132px}
+    .section-scroll .card.music-card{flex:0 0 140px}
+    .sheet{padding:18px}
+    .panel{max-height:85vh; border-radius:22px}
+    .panel > .panel-head{padding:14px 18px 10px}
+    .panel > .panel-head h2{font-size:17px}
+    .edit-body{padding:14px 18px 12px}
+    .edit-footer{padding:10px 18px 16px}
+    .edit-layout{flex-direction:column; gap:16px}
+    .edit-left{flex:0 0 auto; width:100%; max-width:180px; margin:0 auto}
+  }
+
+@media (max-width: 700px){
+  :root{ --sb-closed:0px; }
+header{
+  backdrop-filter:none !important;
+  -webkit-backdrop-filter:none !important;
+  background:var(--bg) !important;
+}
+  /* ===== Карточки короче ===== */
+.card .cover{ aspect-ratio:2/2.7; }
+.card .meta{ padding:5px 8px 6px; }
+.card .title{
+  font-size:11.5px;
+  line-height:1.25;
+  min-height:30px;
+  max-height:30px;
+}
+.card .sub{
+  font-size:10px;
+  margin-top:3px;
+}
+  /* Ужимаем секции под короткие карточки */
+.section{
+  margin-bottom:12px;
+  contain-intrinsic-size:auto 200px;
+}
+.section:last-child{ margin-bottom:0; }
+
+  /* Сайдбар полностью прячем */
+  .sidebar{ display:none !important; }
+  .sidebar-backdrop{ display:none !important; }
+  body.sidebar-open .main{ margin-left:0; }
+  .main{ margin-left:0 !important; }
+
+  /* ===== Нижняя панель (как сайдбар: серый фон + фиолетовые активные) ===== */
+  .bottom-nav{
+    display:flex;
+    position:fixed;
+    left:0; right:0; bottom:0;
+    height:62px;
+    padding:6px 4px calc(6px + env(safe-area-inset-bottom, 0px));
+    background:var(--bg2);
+    border-top:1px solid #22222e;
+    z-index:70;
+    justify-content:space-around;
+    align-items:center;
+  }
+  .bottom-nav-item{
+    flex:1 1 0;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    gap:3px;
+    padding:6px 2px;
+    border:0;
+    background:transparent;
+    color:var(--fg2);
+    font-family:inherit;
+    font-size:10px;
+    font-weight:600;
+    cursor:pointer;
+    border-radius:10px;
+    transition:color .15s, background .15s, box-shadow .15s;
+    min-width:0;
+  }
+  .bottom-nav-item svg{
+    display:block;
+    width:22px; height:22px;
+    flex:0 0 auto;
+    transition:filter .15s;
+  }
+  .bottom-nav-item.on{
+    background:var(--acc);
+    color:#fff;
+    box-shadow:
+      0 0 4px rgba(164,139,255,.65),
+      0 0 12px rgba(124,92,255,.4),
+      0 0 24px rgba(124,92,255,.15);
+  }
+  .bottom-nav-item.on svg{
+    filter:
+      drop-shadow(0 0 3px rgba(255,255,255,.7))
+      drop-shadow(0 0 6px rgba(164,139,255,.6));
+  }
+  .bottom-nav-item.on .bottom-nav-label{ color:#fff; }
+  .bottom-nav-label{
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+    max-width:100%;
+    line-height:1.1;
+  }
+
+  /* ===== Шапка: увеличиваем иконки за счёт поиска ===== */
+header{ padding:calc((env(safe-area-inset-top, 0px) + 6px) * 0.66 + 5px) 10px 6px; }
+  .top{ gap:6px; }
+  h1{ font-size:24px; margin-right:2px; }
+  .search-wrap{ flex:1 1 auto; min-width:40px; }
+  .search{ padding:7px 28px 7px 28px; font-size:13px; }
+  .search-icon{ width:13px; height:13px; left:8px; }
+  .search-clear{ width:20px; height:20px; }
+  .iconbtn{
+    width:38px; height:38px;
+    flex:0 0 38px;
+    border-radius:10px;
+  }
+  .iconbtn svg{ width:18px; height:18px; }
+  .iconbtn.has-avatar .avatar-img{ border-radius:8px; }
+
+  /* Контент — отступ под панель */
+  .content{ padding:10px; padding-bottom:90px; }
+
+  /* ===== Вкладки: центр, без кнопок избр/BL ===== */
+  /* ===== Вкладки: центр, без кнопок избр/BL ===== */
+.status-tabs-row{
+  display:flex;
+  align-items:stretch;
+  min-height:44px;
+  padding:0;
+  margin:-8px 0 10px;
+  border-bottom:1px solid #22222e;
+}
+.status-tabs-row.screens-row .fav-btn,
+.status-tabs-row.screens-row .bl-toggle {
+  display: none !important;
+}
+.fav-btn, .bl-toggle{ display:none !important; }
+.status-tabs-wrap{
+  flex:1 1 auto;
+  min-width:0;
+  position:relative;
+  align-self:stretch;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+.status-tabs{
+  display:flex;
+  width:100%;
+  justify-content:center;
+  gap:0;
+}
+.status-tab{ font-size:13px; padding:6px 9px; }
+.status-tab .cnt{ display:none; }
+
+/* Показываем фильтры в модалке настроек */
+.cat-filters-mobile{ display:block; }
+  .mobile-actions{ display:block; }
+
+  /* ===== Сетка: три карточки в ряд ===== */
+  .grid:not(.sections-mode){
+    grid-template-columns:repeat(3, 1fr) !important;
+    gap:8px;
+    justify-content:stretch;
+  }
+  .grid.sections-mode{ display:block; }
+  .section-scroll .card{ flex:0 0 112px; }
+  .section-scroll .card.music-card{ flex:0 0 122px; }
+  .card .title{ font-size:12px; }
+  .card .sub{ font-size:10.5px; }
+
+  /* ===== FAB + Emergency: над панелью, компактнее ===== */
+  .fab{
+    right:14px;
+    top:auto;
+    bottom:calc(62px + 14px + env(safe-area-inset-bottom, 0px));
+    width:48px; height:48px;
+    border-radius:14px;
+    font-size:22px;
+  }
+  .fab-emergency{
+    right:70px;
+    top:auto;
+    bottom:calc(62px + 14px + env(safe-area-inset-bottom, 0px));
+    width:48px; height:48px;
+    border-radius:14px;
+  }
+  .fab-emergency svg{ width:22px; height:22px; }
+
+  /* ===== Все модалки: отступы сверху/снизу ===== */
+  /* ===== Все модалки: отступы сверху/снизу ===== */
+.modal,
+.view-modal,
+.url-modal,
+.notes-modal,
+.cover-view-modal{
+  padding:20px 12px;
+}
+
+/* Мобилки не тянут backdrop-filter:blur — на каждом кадре пересчёт.
+   Меняем на плотный тёмный фон. Визуально почти то же, без тормозов. */
+.sheet,
+.modal,
+.view-modal,
+.url-modal,
+.notes-modal,
+.cover-view-modal,
+.cloud-modal{
+  backdrop-filter:none !important;
+  -webkit-backdrop-filter:none !important;
+}
+.sheet{ background:rgba(0,0,0,.72) !important; }
+.modal,
+.view-modal{ background:rgba(0,0,0,.78) !important; }
+.url-modal{ background:rgba(0,0,0,.78) !important; }
+/* Было: .notes-modal{ background:rgba(0,0,0,.78) !important; } */
+/* Стало: */
+.notes-modal::before { 
+  background: rgba(0,0,0,.78) !important; 
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+.cover-view-modal::before{
+  backdrop-filter:none !important;
+  -webkit-backdrop-filter:none !important;
+}
+.cover-view-modal.visible::before{
+  background:rgba(0,0,0,.86) !important;
+}
+.cloud-modal{ background:rgba(0,0,0,.82) !important; }
+  
+  .modal-panel,
+  .view-modal-panel{
+    max-height:calc(100svh - 40px);
+  }
+  .sheet{ padding:20px 10px; }
+  .panel{ max-height:calc(100svh - 40px); border-radius:18px; }
+
+  /* ===== Просмотр карточки ===== */
+.view-modal-panel{
+border-radius:18px;
+animation:none !important;
+}
+/* На мобиле отключаем pop у остальных модалок — фризят при открытии.
+   На десктопе анимации остаются. */
+.modal-panel,
+.cloud-panel,
+.notes-panel,
+.url-panel{
+  animation:none !important;
+}
+  .view-modal-panel.expanded{ max-height:calc(100svh - 40px); }
+  .view-body{ padding:18px 14px 12px; }
+.view-footer{ padding:10px 12px; }
+/* Градиент над футером карточки мигает на мобиле — убираем только здесь.
+   На десктопе остаётся, там он не мигает. */
+.view-footer::before{ display:none !important; }
+.view-footer .actions{ justify-content:center; }
+.view-footer .actions .btn{ flex:1 1 0; }
+.view-footer .actions .btn.edit-btn,
+.view-footer .actions .btn.refresh-btn{ 
+  flex: 0 0 44px; 
+  width: 44px;
+  min-width: 44px;
+  max-width: 44px;
+}
+
+  .view-header{
+    flex-direction:column;
+    align-items:center;
+    gap:12px;
+    margin-bottom:12px;
+  }
+  .view-left{
+    flex:0 0 auto !important;
+    width:auto !important;
+    max-width:none !important;
+    align-items:center;
+    align-self:center;
+  }
+  .view-left .view-cover-h{
+    width:190px !important;
+    flex:0 0 auto !important;
+  }
+  .view-left.square .view-cover-h{ width:230px !important; }
+
+  /* ===== Ambient: симметричное размытие по всему окну ===== */
+  .view-cover-wrap{ max-width:100%; }
+  .view-cover-wrap::before{
+    inset:-42px -22px;
+    -webkit-mask-size: calc(100% + 2px) calc(100% + 2px);
+    mask-size: calc(100% + 2px) calc(100% + 2px);
+    -webkit-mask-position: -1px -1px;
+    mask-position: -1px -1px;
+    -webkit-mask-image:none !important;
+    mask-image:none !important;
+    -webkit-mask-composite:initial !important;
+    mask-composite:initial !important;
+    border-radius:40px;
+    opacity:.35;
+  }
+
+  /* Инфо — по центру */
+  .view-info{
+    width:100% !important;
+    text-align:center;
+    padding-top:0;
+    align-items:center;
+    gap:8px;
+  }
+  /* Название | Оригинал одной строкой */
+  .view-title-h{
+    font-size:20px;
+    line-height:1.2;
+    display:flex;
+    flex-wrap:wrap;
+    align-items:baseline;
+    justify-content:center;
+    gap:6px;
+  }
+  .view-title-sep{
+    color:var(--fg2);
+    font-weight:400;
+    opacity:.6;
+  }
+  .view-title-en{
+    font-size:14px;
+    font-weight:500;
+    color:var(--fg2);
+    line-height:1.2;
+  }
+
+.view-subline{
+  font-size:13px;
+  margin-top:0;
+  line-height:1.15;
+  position: relative;
+  top: -2px; /* Поднимаем только текст, оценка не тронется */
+}
+  
+  .view-subline.title-en{ display:none; }
+
+  .view-pills{ justify-content:center; gap:5px; margin-top:2px; }
+  .tags-arrow-btn { align-self: center; width: 32px; height: 32px; }
+.view-links{ 
+  display: flex; 
+  flex-direction: row;
+  align-items: flex-start; 
+  justify-content: center; 
+  flex-wrap: wrap; 
+  height: auto; 
+  gap: 6px; 
+}
+.view-links-label{ 
+  height: auto; 
+  flex: 0 0 auto;
+  line-height: 36px;
+}
+.view-links-btns { 
+  display: flex; 
+  flex-wrap: wrap; 
+  justify-content: center; /* Кнопки строго по центру своего бокса */
+  gap: 6px; 
+  flex: 1; 
+  min-width: 0;
+}
+
+  /* Строка оценки + сердечек + чипсов BL/fav */
+.view-rating-row{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:10px;
+  flex-wrap:wrap;
+  margin-top:2px;
+}
+  /* Фикс артефактов и фризов при развороте тегов */
+.view-rating-row{
+  transform: translateZ(0); /* выталкивает строку в отдельный GPU-слой. Теперь рост тегов снизу не вызывает перерисовку плашек */
+  backface-visibility: hidden;
+}
+
+.view-pill.fav-pill{
+  -webkit-appearance: none; /* убираем дефолтный рендеринг кнопки, из-за которого был баг */
+  appearance: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Теги на мобилке: слева направо, кнопка справа */
+.view-tags-wrap {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 8px;
+  width: 100%;
+}
+.tags-arrow-btn {
+  flex: 0 0 28px;
+  width: 28px;
+  height: 28px;
+  margin: 0;
+  float: none;
+  align-self: flex-start;
+  transform: translateY(-2px);
+  }
+.view-tags {
+  flex: 1;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  text-align: left;
+  position: relative;
+  overflow: hidden;
+  max-height: 26px;
+  margin-top: 0;
+  gap: 5px;
+  transition: max-height 0.3s cubic-bezier(.3,.7,.3,1);
+}
+.view-tag {
+  display: inline-flex;
+  margin: 0;
+}
+/* Позиционирование для псевдоэлемента */
+.view-tag.fade-right {
+  position: relative;
+}
+/* Сам градиент с плавной анимацией */
+.view-tag.fade-right::after {
+  content: '';
+  position: absolute;
+  right: 0; top: 0; bottom: 0;
+  width: 28px;
+  background: linear-gradient(to right, transparent, var(--bg2) 80%);
+  pointer-events: none;
+  border-radius: 0 8px 8px 0;
+  opacity: 1;
+  transition: opacity 0.3s ease; /* <- Скорость исчезновения градиента */
+}
+/* Когда теги открыты — градиент плавно исчезает */
+.view-tags.expanded .view-tag.fade-right::after {
+  opacity: 0;
+}
+.view-rating-row .view-hearts{ margin-top:0; }
+.view-rating-row .view-pill{ margin-top:0; }
+.view-rating{ font-size:14px; }
+
+  .view-notes.desc-block{ font-size:15px; text-align:left; }
+  .view-notes.notes-block{ font-size:14px; text-align:left; }
+
+    /* Форма */
+  .panel > .panel-head{ padding:12px 16px 10px; }
+  .panel > .panel-head h2{ font-size:16px; }
+  .edit-body{ padding:14px 16px 12px; }
+  .edit-footer{ padding:10px 16px 14px; }
+  .edit-layout{ flex-direction:column; gap:14px; }
+  .edit-left{ flex:0 0 auto; width:100%; max-width:160px; margin:0 auto; }
+
+  /* Ускорение рендера карточек на мобиле: content-visibility пропускает
+     layout и отрисовку карточек вне viewport — переходы между вкладками
+     становятся мгновенными. contain-intrinsic-size даёт примерную высоту,
+     чтобы не было прыжков при появлении. */
+  .card{
+    content-visibility: auto;
+    contain-intrinsic-size: auto 200px;
+  }
+  /* backdrop-filter у плашки оценки — 115 blur-контекстов за один тик
+     при переключении вкладок. На мобиле убираем (фон и так тёмный). */
+  .rate{
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    background: rgba(0,0,0,.25);
+  }
+  /* Свечения на мобиле: вместо 3-4 слоёв оставляем по одному.
+   Baseline переключения вкладок: 253 мс → ~120-150 мс (прогноз). */
+.card-status-dot {
+  box-shadow: 0 0 5px var(--dot-c) !important;
+}
+.card-status-line {
+  filter: none !important;
+  box-shadow: 0 0 4px currentColor !important;
+}
+.rate {
+  box-shadow: none !important;
+  text-shadow: 0 0 3px color-mix(in srgb, var(--rate-bright, #fff) 60%, transparent) !important;
+}
+.bl-corner span {
+  text-shadow: 0 0 3px rgba(140,210,255,.6) !important;
+  }
+  /* filter:drop-shadow у флажка избранного — тоже отдельный слой на каждой
+     карточке. На мобиле убираем свечение, цвет остаётся. */
+  .card-fav-flag{
+    filter: none !important;
+  }
+}
+
+@media (max-width: 460px){
+  h1{ font-size:22px; }
+header{ padding:calc((env(safe-area-inset-top, 0px) + 5px) * 0.66 + 5px) 8px 5px; }
+  .content{ padding:8px; padding-bottom:90px; }
+  .iconbtn{ width:36px; height:36px; flex:0 0 36px; }
+  .iconbtn svg{ width:17px; height:17px; }
+  .view-left .view-cover-h{ width:170px !important; }
+  .view-left.square .view-cover-h{ width:210px !important; }
+  .view-title-h{ font-size:18px; }
+  .view-title-en{ font-size:13px; }
+  .section-scroll .card{ flex:0 0 105px; }
+  .section-scroll .card.music-card{ flex:0 0 115px; }
+}
+  /* Фикс мигания шапки карточки при сворачивании тегов (только десктоп) */
+@media (min-width: 701px){
+  .view-title-h,
+  .view-subline,
+  .view-pills{
+    transform: translateZ(0);
+    backface-visibility: hidden;
+  }
+}
+@media (orientation: landscape) and (min-width: 720px) {
+  .reader-pages:not(.horizontal) {
+    padding-left: clamp(16px, var(--reader-side-vw, 22vw), 400px);
+    padding-right: clamp(16px, var(--reader-side-vw, 22vw), 400px);
+  }
+  }

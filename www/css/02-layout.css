@@ -1,0 +1,248 @@
+/* ==========================================================
+   02-layout.css — Каркас: сайдбар, шапка, поиск, main, FAB, нижняя навигация
+   ========================================================== */
+
+  /* ===== SIDEBAR ===== */
+  .sidebar{
+  position:fixed; left:0; top:0;
+  height:100vh; height:100svh;
+  width:var(--sb-closed);
+  background:var(--bg2);
+  border-right:1px solid #22222e;
+  z-index:100;
+  display:flex; flex-direction:column;
+  padding:calc((env(safe-area-inset-top, 0px) + 10px) * 0.66) 8px 14px;
+  transition:width .25s ease;
+  overflow:hidden;
+  }
+  body.sidebar-open .sidebar{ width:var(--sb-open); }
+  .burger{
+    flex:0 0 auto; width:48px; height:48px;
+    background:transparent; border:0; color:var(--fg);
+    border-radius:12px; display:grid; place-items:center;
+    cursor:pointer; font-family:inherit; padding:0;
+    margin-bottom:12px;
+  }
+  .burger:active{ background:var(--bg3); }
+  .nav-list{
+  flex:1; display:flex; flex-direction:column; gap:4px;
+  scrollbar-width:none;
+  }
+  .nav-list::-webkit-scrollbar{display:none}
+  .nav-item{
+  display:flex; align-items:center; gap:14px;
+  padding:11px 0 11px 12px;
+  border-radius:12px; border:0; background:transparent;
+  color:var(--fg2); font-family:inherit;
+  font-size:14px; font-weight:600;
+  cursor:pointer; white-space:nowrap;
+  width:100%; text-align:left;
+  transition:background .15s, color .15s;
+  }
+  .nav-item:active{ background:var(--bg3); }
+  .nav-item.on{
+  background:var(--acc);
+  color:#fff;
+  box-shadow:
+    0 0 4px rgba(164,139,255,.65),
+    0 0 12px rgba(124,92,255,.4),
+    0 0 24px rgba(124,92,255,.15);
+  } 
+  .nav-icon{
+    flex:0 0 24px; width:24px; height:24px;
+    display:grid; place-items:center; color:currentColor;
+  }
+  .nav-icon svg{ display:block; }
+  .nav-label{ opacity:0; transition:opacity .12s ease; }
+  body.sidebar-open .nav-label{ opacity:1; transition-delay:.08s; }
+  .sidebar-bottom{
+    flex:0 0 auto; display:flex; flex-direction:column; gap:4px;
+    margin-top:10px; padding-top:10px;
+    border-top:1px solid #22222e;
+  }
+  .side-action{
+    display:flex; align-items:center; gap:14px;
+    padding:11px 0 11px 12px;
+    border-radius:12px; border:0; background:transparent;
+    color:var(--fg2); font-family:inherit;
+    font-size:13.5px; font-weight:600;
+    cursor:pointer; white-space:nowrap; overflow:hidden;
+    width:100%; text-align:left;
+    transition:background .15s, color .15s;
+  }
+  .side-action:active{ background:var(--bg3); color:var(--fg); }
+  .side-action svg{ flex:0 0 24px; }
+  .side-action-label{ opacity:0; transition:opacity .12s ease; }
+  body.sidebar-open .side-action-label{ opacity:1; transition-delay:.08s; }
+  .sidebar-backdrop{
+    display:none; position:fixed; inset:0;
+    background:rgba(0,0,0,.5);
+    backdrop-filter:blur(2px); -webkit-backdrop-filter:blur(2px);
+    z-index:99;
+  }
+
+  /* ===== MAIN ===== */
+  .main{
+  margin-left:var(--sb-closed);
+  transition:margin-left .25s ease;
+  height:100vh; height:100svh;
+  display:flex; flex-direction:column;
+  overflow:hidden;
+  background:var(--bg);
+}
+body.sidebar-open .main{ margin-left:var(--sb-open); }
+
+  header{
+  flex:0 0 auto; z-index:50;
+  position:relative;
+  background:rgba(14,14,18,.94);
+  backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
+  border-bottom:1px solid #22222e;
+  padding:calc((env(safe-area-inset-top, 0px) + 8px) * 0.66) 16px 8px;
+  }
+  .top{ display:flex; align-items:center; gap:10px; }
+  h1{
+    font-family:'Great Vibes', cursive;
+    font-size:42px;
+    margin:0; flex:0 0 auto;
+    font-weight:400; letter-spacing:0;
+  }
+  .brand{ display:inline-flex; align-items:center; }
+  .brand-text{
+  display:inline-block;
+  color:var(--fg);
+  transform:rotate(-6deg);
+  transform-origin:center;
+}
+.brand-dot{ color:var(--acc2); }
+  .search-wrap{
+    margin-left:auto; position:relative;
+    flex:0 1 340px; min-width:130px;
+  }
+  .search-icon{
+    position:absolute; left:11px; top:50%; transform:translateY(-50%);
+    color:var(--fg2); pointer-events:none; opacity:.7;
+  }
+  .search{
+    width:100%; background:var(--bg3); border:1px solid #26263a;
+    color:var(--fg); padding:9px 36px 9px 36px;
+    border-radius:11px; font-size:14px; outline:none; font-family:inherit;
+  }
+  .search:focus{ border-color:var(--acc); }
+  .search-clear{
+    position:absolute; right:6px; top:50%; transform:translateY(-50%);
+    width:26px; height:26px;
+    border-radius:50%;
+    background:var(--bg3);
+    border:0;
+    color:var(--fg2);
+    cursor:pointer;
+    display:none;
+    align-items:center;
+    justify-content:center;
+    padding:0;
+    font-family:inherit;
+    transition:background .15s, color .15s;
+  }
+  .search-clear.visible{ display:flex; }
+  .search-clear:active{ background:var(--acc); color:#fff; }
+  .search-clear svg{ display:block; }
+
+  .iconbtn{
+    background:var(--bg3); border:1px solid #26263a;
+    color:var(--fg); width:38px; height:38px; border-radius:11px;
+    cursor:pointer; display:grid; place-items:center;
+    position:relative; flex:0 0 auto; font-family:inherit; padding:0;
+  }
+  .iconbtn:active{ background:var(--acc); border-color:var(--acc); }
+  .iconbtn.on{
+  background:var(--acc);
+  border-color:var(--acc);
+  color:#fff;
+  box-shadow:
+    0 0 4px rgba(124,92,255,.55),
+    0 0 10px rgba(124,92,255,.3);
+  }
+
+  .content{
+  flex:1 1 auto; min-height:0;
+  overflow-y:auto; -webkit-overflow-scrolling:touch;
+  overscroll-behavior:contain;
+  overflow-x:hidden;
+  padding:8px 16px; padding-bottom:100px;
+  }
+
+/* Кнопки FAB */
+.fab{
+  position:fixed; right:20px;
+  top:calc(100vh - 82px); top:calc(100svh - 82px);
+  width:58px; height:58px;
+  border-radius:18px; background:var(--acc); color:#fff; border:0;
+  font-size:28px; font-weight:300; cursor:pointer; z-index:60;
+  box-shadow:
+  0 8px 24px rgba(124,92,255,.45),
+  0 0 6px rgba(124,92,255,.5),
+  0 0 16px rgba(124,92,255,.3);
+display:grid; place-items:center
+}
+.fab:active{transform:scale(.94)}
+.fab-emergency{
+  position:fixed;
+  right:90px;
+  top:calc(100vh - 82px);
+  top:calc(100svh - 82px);
+  width:58px; height:58px;
+  border-radius:18px;
+  background:rgba(30,30,40,.5);
+  color:#6a6a7a;
+  border:2px solid #2a2a38;
+  cursor:pointer;
+  z-index:60;
+  display:grid; place-items:center;
+  padding:0;
+  transition:background .2s, border-color .2s, color .2s, box-shadow .2s;
+  backdrop-filter:blur(5px) saturate(1.1);
+-webkit-backdrop-filter:blur(5px) saturate(1.1);
+}
+.fab-emergency:active{ transform:scale(.94); }
+.fab-emergency.on{
+  background:rgba(255,90,90,.10);
+  border-color:#ff5a5a;
+  color:#ff5a5a;
+  box-shadow:
+    0 0 8px rgba(255,90,90,.35),
+    0 0 18px rgba(255,90,90,.20);
+}
+.fab-emergency svg{
+  display:block;
+  filter:
+    drop-shadow(0 0 3px rgba(0,0,0,.55))
+    drop-shadow(0 0 8px rgba(0,0,0,.45))
+    drop-shadow(0 0 14px rgba(0,0,0,.3));
+  transition:filter .2s ease;
+}
+.fab-emergency.on svg{
+  filter:none;
+}
+
+  body.modal-open .content{ overflow:hidden; pointer-events:none; }
+  /* Как только открылась модалка, карточка под ней перестаёт быть «нажатой» и начала бы плавно
+     разжиматься прямо под размытием — это и мигало. Фиксируем её мгновенно (под тёмным фоном не видно). */
+  body.modal-open .card{ transition:none !important; transform:none !important; }
+  body.modal-open .sidebar{ pointer-events:none; }
+  body.modal-open .fab,
+  body.modal-open .fab-emergency{ pointer-events:none; }
+
+/* ============ МОБИЛЬНЫЙ ЛЕЙАУТ ============ */
+.bottom-nav{ display:none; }
+.cat-filters-mobile{ display:none; }
+  .mobile-actions{ display:none; }
+  /* Сдвигаем иконку музыки влево в сайдбаре */
+.nav-item[data-c="music"] .nav-icon svg {
+  transform: translateX(-1.5px); 
+}
+
+/* И в нижней навигации (на мобилке) на всякий случай, чтобы там тоже было идеально */
+.bottom-nav-item[data-c="music"] > svg {
+  transform: translateX(-1.5px);
+}

@@ -1,0 +1,33 @@
+/* ==========================================================
+   01-base.css — Базовое: шрифты, :root, сброс, html/body
+   ========================================================== */
+
+  @font-face {
+  font-family: 'Great Vibes';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('../fonts/GreatVibes-Regular.woff2') format('woff2');
+  }
+  :root{
+    --bg:#0e0e12; --bg2:#16161d; --bg3:#1e1e28;
+    --fg:#e8e8ef; --fg2:#9a9aa8; --acc:#7c5cff; --acc2:#a48bff;
+    --ok:#3ecf8e; --warn:#ffb020; --bad:#ff5c5c;
+    --bl:#7ea6f0; --bl-soft:#c8dcff;
+    --sb-closed:64px;
+    --sb-open:224px;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent}
+button, a, .card, .nav-item, .bottom-nav-item, .status-tab,
+.side-action, .iconbtn, .search-clear, .fav-btn,
+.seg button, .stars button, .view-link-btn, .view-pill,
+.trash-btn, .mi-btn, .wheel-item, .moment-pill,
+.view-nav-btn, .view-close-btn, .btn,
+.section-scroll, .view-tags, .moments-box,
+.view-body, .view-modal-stage{
+  touch-action: manipulation;
+}
+  html,body{margin:0;padding:0;background:var(--bg2);color:var(--fg);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    font-size:15px; line-height:1.4; overscroll-behavior:contain;
+    height:100%; overflow:hidden}
