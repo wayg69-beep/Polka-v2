@@ -318,23 +318,36 @@ checkSlashlibHasChapter0(itemLink) {
     },
   
   async getChapterPages(mangaSlug, chapterSlug) {
-    try {
-      const url = `${this.BASE}/${mangaSlug}/${chapterSlug}`;
-      const res = await nativeFetch(url, {
-        'Accept': 'text/html',
-        'User-Agent': 'Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36'
-      });
-      if (!res.ok) return [];
-      const html = await res.text();
-      const doc = new DOMParser().parseFromString(html, 'text/html');
-      const nd = doc.getElementById('__NEXT_DATA__');
-      if (!nd) return [];
-      const pp = JSON.parse(nd.textContent).props?.pageProps;
-      return pp?.initialChapter?.pages || [];
-    } catch (e) {
-      console.warn('Comizy pages error:', e);
-      return [];
-    }
+  try {
+    const url = `${this.BASE}/${mangaSlug}/${chapterSlug}`;
+    const res = await nativeFetch(url, {
+      'Accept': 'text/html',
+      'User-Agent': 'Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36'
+    });
+    if (!res.ok) return [];
+    const html = await res.text();
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const nd = doc.getElementById('__NEXT_DATA__');
+    if (!nd) return [];
+    const pp = JSON.parse(nd.textContent).props?.pageProps;
+    const raw = pp?.initialChapter?.pages || [];
+    // Нормализуем: абсолютный URL + размеры (если пришли)
+    return raw.map(p => {
+      let abs = String(p.url || p.image || p.src || '').trim();
+      if (!abs) return null;
+      if (!/^https?:\/\//i.test(abs)) {
+        try { abs = new URL(abs, this.BASE).href; } catch (e) { return null; }
+      }
+      return {
+        url: abs,
+        width: p.width || p.w || 0,
+        height: p.height || p.h || 0,
+      };
+    }).filter(Boolean);
+  } catch (e) {
+    console.warn('Comizy pages error:', e);
+    return [];
+  }
   },
 
 _norm(s) {
