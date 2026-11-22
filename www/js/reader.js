@@ -85,6 +85,10 @@ const SlashLibReader = {
     if (el("readerChaptersBtn"))
       el("readerChaptersBtn").onclick = () => this._openChaptersList();
 
+    if (el("readerComizyChaptersBtn"))
+      el("readerComizyChaptersBtn").onclick = () =>
+        this._openComizyChaptersList();
+
     if (el("readerMusicBtn"))
       el("readerMusicBtn").onclick = () => {
         this._closeChaptersList();
@@ -194,6 +198,12 @@ const SlashLibReader = {
     if (cModal)
       cModal.onclick = (e) => {
         if (e.target === cModal) this._closeChaptersList();
+      };
+
+    const ccModal = el("readerComizyChaptersModal");
+    if (ccModal)
+      ccModal.onclick = (e) => {
+        if (e.target === ccModal) this._closeComizyChaptersList();
       };
 
     this._bindProgressBar();
@@ -2033,6 +2043,7 @@ const SlashLibReader = {
       this.updateSettingsUI();
       this._updateIslandNavVisibility();
       this.updateChapterNav();
+      this._updateComizyChaptersBtnVisibility();
       this.updateCounter();
 
       wrap.style.visibility = "hidden";
@@ -2227,10 +2238,166 @@ const SlashLibReader = {
     );
   },
 
+  // ═══ COMIZY CHAPTERS MODAL ═══
+  _getComizyHiddenChapters() {
+    try {
+      const raw = localStorage.getItem("polka_comizy_hidden_chapters");
+      if (!raw) return {};
+      return JSON.parse(raw);
+    } catch (e) {
+      return {};
+    }
+  },
+  _saveComizyHiddenChapters(data) {
+    try {
+      localStorage.setItem(
+        "polka_comizy_hidden_chapters",
+        JSON.stringify(data),
+      );
+    } catch (e) {}
+  },
+  _isComizyChapterHidden(slug, chapterId) {
+    const data = this._getComizyHiddenChapters();
+    const key = String(slug || "").replace(/^comizy:/, "");
+    const hidden = data[key];
+    if (!Array.isArray(hidden)) return false;
+    return hidden.includes(String(chapterId));
+  },
+  _toggleComizyChapterHidden(slug, chapterId) {
+    const data = this._getComizyHiddenChapters();
+    const key = String(slug || "").replace(/^comizy:/, "");
+    if (!data[key]) data[key] = [];
+    const idStr = String(chapterId);
+    const idx = data[key].indexOf(idStr);
+    if (idx >= 0) {
+      data[key].splice(idx, 1);
+    } else {
+      data[key].push(idStr);
+    }
+    this._saveComizyHiddenChapters(data);
+    return idx < 0; // true = now hidden
+  },
+  _updateComizyChaptersBtnVisibility() {
+    const btn = document.getElementById("readerComizyChaptersBtn");
+    if (!btn) return;
+    btn.style.display = this._source === "comizy" ? "" : "none";
+  },
+  _openComizyChaptersList() {
+    const modal = document.getElementById("readerComizyChaptersModal");
+    const panel = document.getElementById("readerComizyChaptersPanel");
+    const list = document.getElementById("readerComizyChaptersList");
+    if (!modal || !panel || !list) return;
+    if (modal.classList.contains("on")) {
+      this._closeComizyChaptersList();
+      return;
+    }
+    this.toggleSettings(false);
+    this._closeChaptersList();
+    const chapters = this._chaptersList || [];
+    const current = this.getCurrentChapterBounds();
+    const currentId = current ? current.chapterId : null;
+    const sorted = chapters
+      .slice()
+      .sort((a, b) => parseFloat(a.number) - parseFloat(b.number));
+    const eyeOpenSVG =
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
+    const eyeClosedSVG =
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
+    list.innerHTML = sorted
+      .map((c) => {
+        const isCurrent = c.id === currentId;
+        const isHidden = this._isComizyChapterHidden(this._fullSlug, c.id);
+        const eyeClass = isHidden ? "rcc-eye hidden" : "rcc-eye";
+        const eyeIcon = isHidden ? eyeClosedSVG : eyeOpenSVG;
+        const chapLabel = c.textual
+          ? c.name || "Доп. " + c.number
+          : "Глава " + c.number;
+        return (
+          '<div class="rcc-item' +
+          (isCurrent ? " current" : "") +
+          '" data-id="' +
+          esc(c.id) +
+          '">' +
+          '<span class="rcc-item-title">' +
+          esc(chapLabel) +
+          "</span>" +
+          '<button type="button" class="' +
+          eyeClass +
+          '" data-eye="' +
+          esc(c.id) +
+          '">' +
+          eyeIcon +
+          "</button>" +
+          "</div>"
+        );
+      })
+      .join("");
+    list.querySelectorAll(".rcc-item").forEach((item) => {
+      const eyeBtn = item.querySelector(".rcc-eye");
+      if (eyeBtn) {
+        eyeBtn.onclick = (e) => {
+          e.stopPropagation();
+          const chapId = eyeBtn.dataset.eye;
+          const nowHidden = this._toggleComizyChapterHidden(
+            this._fullSlug,
+            chapId,
+          );
+          eyeBtn.classList.toggle("hidden", nowHidden);
+          eyeBtn.innerHTML = nowHidden ? eyeClosedSVG : eyeOpenSVG;
+          toast(nowHidden ? "Глава скрыта" : "Глава видна", "success");
+        };
+      }
+      item.onclick = () => {
+        const id = item.dataset.id;
+        const chap = chapters.find((c) => String(c.id) === String(id));
+        if (!chap) return;
+        if (this._isComizyChapterHidden(this._fullSlug, chap.id)) {
+          toast("Глава скрыта. Включи глазик, чтобы открыть", "warn");
+          return;
+        }
+        this._closeComizyChaptersList();
+        this.loadChapter(chap.volume || 1, chap.number, chap.id);
+      };
+    });
+    panel.style.visibility = "hidden";
+    modal.classList.add("on");
+    requestAnimationFrame(() => {
+      const pw = panel.offsetWidth;
+      const ph = panel.offsetHeight;
+      const island = document.getElementById("readerIsland");
+      const ir = island ? island.getBoundingClientRect() : null;
+      let left, top;
+      if (ir) {
+        left = ir.left + ir.width / 2 - pw / 2;
+        left = Math.max(8, Math.min(window.innerWidth - pw - 8, left));
+        top = ir.top - ph - 8;
+        if (top < 8) top = ir.bottom + 8;
+      } else {
+        left = (window.innerWidth - pw) / 2;
+        top = (window.innerHeight - ph) / 2;
+      }
+      panel.style.left = left + "px";
+      panel.style.top = top + "px";
+      panel.style.right = "auto";
+      panel.style.bottom = "auto";
+      panel.style.visibility = "";
+      panel.classList.add("on");
+      const cur = list.querySelector(".rcc-item.current");
+      if (cur) cur.scrollIntoView({ block: "center", behavior: "auto" });
+    });
+  },
+  _closeComizyChaptersList() {
+    const modal = document.getElementById("readerComizyChaptersModal");
+    const panel = document.getElementById("readerComizyChaptersPanel");
+    if (modal) modal.classList.remove("on");
+    if (panel) panel.classList.remove("on");
+  },
+
   close() {
     this._restoreSystemBrightness();
     this._closeTagPicker();
     this._closeChaptersList();
+    this._closeComizyChaptersList();
     this.toggleSettings(false);
     this._stopMusicBtnWatcher();
     this._discToastShown = false;
@@ -2981,7 +3148,8 @@ const SlashLibReader = {
     const oldH = img.offsetHeight;
     img.src = blobUrl;
     img.style.opacity = "1";
-    img.style.aspectRatio = "";
+    // Не сбрасываем aspectRatio — он уже правильный из API
+    // img.style.aspectRatio = '';
     img.style.width = "";
     if (!webtoon) {
       void wrap.scrollHeight;
@@ -3336,41 +3504,49 @@ const SlashLibReader = {
       const remaining = bounds.endIdx - this._currentIndex;
       if (remaining > 2) return;
       if (this._pagesList.length > bounds.endIdx + 1) return;
+
+      // Пропускаем скрытые главы
+      let nextChapter = this._nextChapter;
+      while (
+        nextChapter &&
+        this._isComizyChapterHidden(this._fullSlug, nextChapter.id)
+      ) {
+        const currIdx = this._chaptersList.findIndex(
+          (c) => c.id === nextChapter.id,
+        );
+        nextChapter =
+          currIdx !== -1 && currIdx < this._chaptersList.length - 1
+            ? this._chaptersList[currIdx + 1]
+            : null;
+      }
+      if (!nextChapter) return;
+
       this._autoLoading = true;
       try {
         const mangaSlug = this._fullSlug.replace(/^comizy:/, "");
         const rawPages = await ComizyParser.getChapterPages(
           mangaSlug,
-          this._nextChapter.slug,
+          nextChapter.slug,
         );
         if (!rawPages || !rawPages.length) return;
-        // Фильтр по размеру отключён — только хэш
-        const pagesForFilter = rawPages.map((p) => ({
-          image: "",
-          url: p.url,
-          width: p.width || 0,
-          height: p.height || 0,
-          chapterId: this._nextChapter.id,
-          volume: 1,
-          number: this._nextChapter.number,
-        }));
-        const filterResult = await this._filterDisclaimers(
-          pagesForFilter,
-          0,
-          true,
+        const filtered = rawPages.filter(
+          (p) => !(p.width && p.height && p.width / p.height > 1.2),
         );
-        const filteredPages = filterResult.pages;
-        if (!filteredPages.length) return;
+        if (!filtered.length) return;
         const wrap = document.getElementById("readerPages");
         const nextBlock = document.getElementById("readerNextBlock");
         if (!wrap) return;
         const startIdx = this._pagesList.length;
-        filteredPages.forEach((page, i) => {
+        filtered.forEach((page, i) => {
           const img = document.createElement("img");
           img.alt = "Страница " + (startIdx + i + 1);
           img.style.opacity = "0";
           img.style.transition = "opacity 0.3s ease";
-          img.style.aspectRatio = "2 / 3";
+          if (page.width && page.height) {
+            img.style.aspectRatio = `${page.width} / ${page.height}`;
+          } else {
+            img.style.aspectRatio = "2 / 3";
+          }
           img.style.width = "100%";
           if (nextBlock) wrap.insertBefore(img, nextBlock);
           else wrap.appendChild(img);
@@ -3379,14 +3555,14 @@ const SlashLibReader = {
             url: page.url,
             width: page.width || 0,
             height: page.height || 0,
-            chapterId: this._nextChapter.id,
+            chapterId: nextChapter.id,
             volume: 1,
-            number: this._nextChapter.number,
+            number: nextChapter.number,
           });
         });
         this._reindexReaderImgs();
         const currIdx = this._chaptersList.findIndex(
-          (c) => c.id === this._nextChapter.id,
+          (c) => c.id === nextChapter.id,
         );
         this._nextChapter =
           currIdx !== -1 && currIdx < this._chaptersList.length - 1
@@ -3397,7 +3573,7 @@ const SlashLibReader = {
         this.updateChapterNav();
         this.updateNextBlock();
         this.updateReaderTitle();
-        for (let i = 0; i < Math.min(3, filteredPages.length); i++) {
+        for (let i = 0; i < Math.min(3, filtered.length); i++) {
           try {
             await this.loadPage(startIdx + i);
           } catch (e) {}
@@ -3521,38 +3697,38 @@ const SlashLibReader = {
 
     // ═══ COMIZY ═══
     if (this._source === "comizy") {
+      // Пропускаем скрытые главы
+      let prevChapter = this._prevChapter;
+      while (
+        prevChapter &&
+        this._isComizyChapterHidden(this._fullSlug, prevChapter.id)
+      ) {
+        const currIdx = this._chaptersList.findIndex(
+          (c) => c.id === prevChapter.id,
+        );
+        prevChapter = currIdx > 0 ? this._chaptersList[currIdx - 1] : null;
+      }
+      if (!prevChapter) return;
+
       this._prevLoading = true;
       try {
         const mangaSlug = this._fullSlug.replace(/^comizy:/, "");
         const rawPages = await ComizyParser.getChapterPages(
           mangaSlug,
-          this._prevChapter.slug,
+          prevChapter.slug,
         );
         if (!rawPages || !rawPages.length) return;
-        // Фильтр по размеру отключён — только хэш
-        const pagesForFilter = rawPages.map((p) => ({
-          image: "",
-          url: p.url,
-          width: p.width || 0,
-          height: p.height || 0,
-          chapterId: this._prevChapter.id,
-          volume: 1,
-          number: this._prevChapter.number,
-        }));
-        const filterResult = await this._filterDisclaimers(
-          pagesForFilter,
-          0,
-          true,
+        const filtered = rawPages.filter(
+          (p) => !(p.width && p.height && p.width / p.height > 1.2),
         );
-        const filteredPages = filterResult.pages;
-        if (!filteredPages.length) return;
+        if (!filtered.length) return;
         const wrap = document.getElementById("readerPages");
         if (!wrap) return;
         const imgsBefore = wrap.querySelectorAll("img");
         const curImgBefore = imgsBefore[this._currentIndex];
         const oldScroll = wrap.scrollTop;
         const relOffset = curImgBefore ? oldScroll - curImgBefore.offsetTop : 0;
-        const addedCount = filteredPages.length;
+        const addedCount = filtered.length;
         const firstChild = wrap.firstChild;
         this._restoring = true;
         for (let i = addedCount - 1; i >= 0; i--) {
@@ -3560,18 +3736,22 @@ const SlashLibReader = {
           img.alt = "Страница " + (i + 1);
           img.style.opacity = "0";
           img.style.transition = "opacity 0.3s ease";
-          img.style.aspectRatio = "2 / 3";
+          if (filtered[i].width && filtered[i].height) {
+            img.style.aspectRatio = `${filtered[i].width} / ${filtered[i].height}`;
+          } else {
+            img.style.aspectRatio = "2 / 3";
+          }
           img.style.width = "100%";
           if (firstChild) wrap.insertBefore(img, firstChild);
           else wrap.appendChild(img);
           this._pagesList.unshift({
             image: "",
-            url: filteredPages[i].url,
-            width: filteredPages[i].width || 0,
-            height: filteredPages[i].height || 0,
-            chapterId: this._prevChapter.id,
+            url: filtered[i].url,
+            width: filtered[i].width || 0,
+            height: filtered[i].height || 0,
+            chapterId: prevChapter.id,
             volume: 1,
-            number: this._prevChapter.number,
+            number: prevChapter.number,
           });
         }
         this._reindexReaderImgs();
@@ -3583,7 +3763,7 @@ const SlashLibReader = {
         }
         this._blobUrls = shiftedBlobs;
         const currIdx = this._chaptersList.findIndex(
-          (c) => c.id === this._prevChapter.id,
+          (c) => c.id === prevChapter.id,
         );
         this._prevChapter =
           currIdx > 0 ? this._chaptersList[currIdx - 1] : null;
@@ -3594,7 +3774,7 @@ const SlashLibReader = {
         const allImgs = wrap.querySelectorAll("img");
         for (let i = 0; i < addedCount; i++) {
           if (allImgs[i]) {
-            allImgs[i].style.aspectRatio = "";
+            // Не сбрасываем aspectRatio — он уже правильный
             allImgs[i].style.width = "";
           }
         }
