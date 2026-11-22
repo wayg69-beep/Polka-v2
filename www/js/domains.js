@@ -663,5 +663,6 @@
     db: () => DB,
     DomainsCloud: DomainsCloud
   };
+  window.DomainsCloud = DomainsCloud;
   console.log('[domains] готов, полей:', FIELDS.length, '| патч сети:', PATCHED);
 })();
