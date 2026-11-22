@@ -273,7 +273,7 @@ async function saveTokensToCloud(patch) {
   if (!c || !c.user_id) return false;
   try {
     // Проверяем, есть ли уже профиль
-    const { data: existing, error: selErr } = await sb
+    const { data: existing } = await sb
       .from('profiles')
       .select('id')
       .eq('id', c.user_id)
@@ -281,9 +281,8 @@ async function saveTokensToCloud(patch) {
 
     const row = Object.assign({ id: c.user_id }, patch);
 
-    // Если профиля нет — добавляем обязательные поля с дефолтами
+    // Если профиля нет — добавляем обязательные поля
     if (!existing) {
-      // Берём имя из Supabase-сессии, если есть
       const { data: { session } } = await sb.auth.getSession();
       const email = (session && session.user && session.user.email) || '';
       const metaName = (session && session.user && session.user.user_metadata && session.user.user_metadata.display_name) || '';
@@ -1274,3 +1273,4 @@ const CloudBanner = {
     setInterval(() => this.maybeShow(), 60 * 1000);
   }
 };
+window.sb = sb;
