@@ -1,72 +1,65 @@
 'use strict';
-
 /* ==========================================================
-   refresh.js — Обновление карточки из источников: refreshCard, refreshSlashlibNative
-   ========================================================== */
-
-  
-
+refresh.js — Обновление карточки из источников: refreshCard, refreshSlashlibNative
+========================================================== */
 async function refreshCard(id) {
   const it = items.find(x => x.id === id);
   if(!it) return;
 
   // ═══ ЗАЩИТА: если карточка из Slashlib — только обновляем главы Comizy, не трогаем поля ═══
-const isSlashlibCard = it.link && it.link.includes('shlib.life');
-const isComizyCard = it.link_comizy && it.link_comizy.includes('comizy.io');
+  const isSlashlibCard = it.link && it.link.includes('shlib.life');
+  const isComizyCard = it.link_comizy && it.link_comizy.includes('comizy.io');
 
-// Гибрид: title/cover/desc/tags с Slashlib + главы с Comizy.
-// Обновляем оба источника — иначе пользователь видит обновление только одной части.
-if (isComizyCard && isSlashlibCard) {
-  const token = localStorage.getItem('slashlib_token');
-  if (!token) {
-    toast('Нужно войти в Slashlib', 'error');
-    return;
-  }
-
-  toast('Обновляю со Slashlib и Comizy...', 'success');
-
-  // 1. Главы Comizy по сохранённой ссылке
-  try {
-    const slug = it.link_comizy.split('/').pop();
-    const cDetails = await ComizyParser.getMangaDetails(slug);
-    if (cDetails) {
-      const keepChapter0 = await ComizyParser.checkSlashlibHasChapter0(it.link);
-it.comizyChapters = await ComizyParser.getChapters(cDetails.hid, { keepChapter0 });
+  // Гибрид: title/cover/desc/tags с Slashlib + главы с Comizy.
+  // Обновляем оба источника — иначе пользователь видит обновление только одной части.
+  if (isComizyCard && isSlashlibCard) {
+    const token = localStorage.getItem('slashlib_token');
+    if (!token) {
+      toast('Нужно войти в Slashlib', 'error');
+      return;
     }
-  } catch(e) {
-    console.warn('Comizy chapters refresh failed:', e);
+    toast('Обновляю со Slashlib и Comizy...', 'success');
+    // 1. Главы Comizy по сохранённой ссылке
+    try {
+      const slug = it.link_comizy.split('/').pop();
+      const cDetails = await ComizyParser.getMangaDetails(slug);
+      if (cDetails) {
+        const keepChapter0 = await ComizyParser.checkSlashlibHasChapter0(it.link);
+        it.comizyChapters = await ComizyParser.getChapters(cDetails.hid, { keepChapter0 });
+      }
+    } catch(e) {
+      console.warn('Comizy chapters refresh failed:', e);
+    }
+    // 2. Поля со Slashlib — refreshSlashlibNative делает всё сам:
+    //    тянет данные, обновляет поля, делает auto-search Comizy
+    //    (если найдёт — уточнит link_comizy; если нет — оставит наши свежие главы),
+    //    вызывает save/render/openView и свой тост.
+    return refreshSlashlibNative(it);
   }
-
-  // 2. Поля со Slashlib — refreshSlashlibNative делает всё сам:
-  //    тянет данные, обновляет поля, делает auto-search Comizy
-  //    (если найдёт — уточнит link_comizy; если нет — оставит наши свежие главы),
-  //    вызывает save/render/openView и свой тост.
-  return refreshSlashlibNative(it);
-}
 
   // Если карточка уже из Comizy — обновляем только главы и метаданные
-if (it.link_comizy) {
-  toast('Обновляю из Comizy...', 'success');
-  const slug = it.link_comizy.split('/').pop();
-  const details = await ComizyParser.getMangaDetails(slug);
-  if (details) {
-    const chapters = await ComizyParser.getChaptersFor(details.hid, slug, it.link);
-    it.title = details.title;
-    it.title_en = details.altName || it.title_en;
-    it.year = details.year || it.year;
-    it.description = details.description || it.description;
-    it.cover = details.cover || it.cover;
-    it.tags = details.tags || it.tags;
-    it.country = details.authors || it.country;
-    it.comizyChapters = chapters;
-    it.updatedAt = Date.now();
-    save(); render();
-    if(document.getElementById('viewModal').classList.contains('on')) openView(it.id);
-    toast('Обновлено из Comizy', 'success');
-    return;
+  if (it.link_comizy) {
+    toast('Обновляю из Comizy...', 'success');
+    const slug = it.link_comizy.split('/').pop();
+    const details = await ComizyParser.getMangaDetails(slug);
+    if (details) {
+      const chapters = await ComizyParser.getChaptersFor(details.hid, slug, it.link);
+      it.title = details.title;
+      it.title_en = details.altName || it.title_en;
+      it.year = details.year || it.year;
+      it.description = details.description || it.description;
+      it.cover = details.cover || it.cover;
+      it.tags = details.tags || it.tags;
+      it.country = details.authors || it.country;
+      it.comizyChapters = chapters;
+      it.updatedAt = Date.now();
+      save(); render();
+      if(document.getElementById('viewModal').classList.contains('on')) openView(it.id);
+      toast('Обновлено из Comizy', 'success');
+      return;
+    }
   }
-}
-  
+
   const url = it.link || it.sourceUrl;
   const oldCover = it.cover; // Запоминаем старую обложку для проверки
 
@@ -99,49 +92,48 @@ if (it.link_comizy) {
         if (kinoLink) it.link = kinoLink;
         await autoSearch123Movies(it.title_en, it.year, null, it);
       }
+
       // ═══ ЗАЩИТА + Comizy-автопоиск ═══
-const _isSlashlibCard = it.link && it.link.includes('shlib.life');
-const _isComizyCard = it.link_comizy && it.link_comizy.includes('comizy.io');
-
-if (_isComizyCard && _isSlashlibCard) {
-  // Гибрид: обновляем только главы Comizy
-  toast('Обновляю главы из Comizy...', 'success');
-  try {
-    const slug = it.link_comizy.split('/').pop();
-    const cDetails = await ComizyParser.getMangaDetails(slug);
-    if (cDetails) {
-      it.comizyChapters = await ComizyParser.getChapters(cDetails.hid);
-      it.updatedAt = Date.now();
-      save(); render();
-      if (document.getElementById('viewModal').classList.contains('on')) openView(it.id);
-      toast('Главы обновлены (' + it.comizyChapters.length + ')', 'success');
-      return;
-    }
-  } catch(e) {
-    toast('Ошибка обновления Comizy: ' + e.message, 'error');
-    return;
-  }
-} else if (!_isComizyCard && groupOf(it.type) === 'comic') {
-  // Обычная карточка — ищем Comizy по всем именам Slashlib
-  try {
-    const allSlashNames = [
-      it.title,
-      it.title_en,
-      ...(Array.isArray(it.otherNames) ? it.otherNames : [])
-    ].filter(Boolean);
-    
-    if (allSlashNames.length) {
-      const match = await ComizyParser.searchAndMatchByNames(allSlashNames, it.year);
-      if (match) {
-        it.link_comizy = match.url;
-        it.comizyChapters = await ComizyParser.getChapters(match.hid);
+      const _isSlashlibCard = it.link && it.link.includes('shlib.life');
+      const _isComizyCard = it.link_comizy && it.link_comizy.includes('comizy.io');
+      if (_isComizyCard && _isSlashlibCard) {
+        // Гибрид: обновляем только главы Comizy
+        toast('Обновляю главы из Comizy...', 'success');
+        try {
+          const slug = it.link_comizy.split('/').pop();
+          const cDetails = await ComizyParser.getMangaDetails(slug);
+          if (cDetails) {
+            it.comizyChapters = await ComizyParser.getChapters(cDetails.hid);
+            it.updatedAt = Date.now();
+            save(); render();
+            if (document.getElementById('viewModal').classList.contains('on')) openView(it.id);
+            toast('Главы обновлены (' + it.comizyChapters.length + ')', 'success');
+            return;
+          }
+        } catch(e) {
+          toast('Ошибка обновления Comizy: ' + e.message, 'error');
+          return;
+        }
+      } else if (!_isComizyCard && groupOf(it.type) === 'comic') {
+        // Обычная карточка — ищем Comizy по всем именам Slashlib
+        try {
+          const allSlashNames = [
+            it.title,
+            it.title_en,
+            ...(Array.isArray(it.otherNames) ? it.otherNames : [])
+          ].filter(Boolean);
+          if (allSlashNames.length) {
+            const match = await ComizyParser.searchAndMatchByNames(allSlashNames, it.year);
+            if (match) {
+              it.link_comizy = match.url;
+              it.comizyChapters = await ComizyParser.getChapters(match.hid);
+            }
+          }
+        } catch(e) { console.warn('Comizy auto-search error', e); }
       }
-    }
-  } catch(e) { console.warn('Comizy auto-search error', e); }
-}
-// ═══ /ЗАЩИТА ═══
+      // ═══ /ЗАЩИТА ═══
 
-const searchName = it.title_en || it.title;
+      const searchName = it.title_en || it.title;
       const isSeries = (it.type === 'series' || it.type === 'drama');
       if (isSeries) {
         await autoSearchEZTV(it.imdbId, searchName, null, it);
@@ -149,7 +141,6 @@ const searchName = it.title_en || it.title;
         const ytsRes = await autoSearchYTS(searchName, it.year, null, it);
         if (!ytsRes) await autoSearchTorrentClaw(searchName, it.year, null, it, false);
       }
-      
       it.updatedAt = Date.now();
       save(); render();
       if(document.getElementById('viewModal').classList.contains('on')) openView(it.id);
@@ -161,19 +152,16 @@ const searchName = it.title_en || it.title;
   }
 
   toast('Обновляю данные...', 'success');
-  
   try {
     if (url.includes('shlib.life')) {
       const win = window.open(url + (url.includes('?') ? '&' : '?') + 'polka_bridge=detail', '_blank');
       if(!win) throw new Error('Заблокировано всплывающее окно');
-      
       const handler = (e) => {
         if (!e.data || e.data.type !== 'POLKA_SLASHLIB_DETAIL_RESULT') return;
         window.removeEventListener('message', handler);
         if(win && !win.closed) win.close();
         const d = e.data.data;
         if(!d) { toast('Ошибка обновления: нет данных', 'error'); return; }
-        
         it.title = d.title || it.title;
         it.title_en = d.title_en || it.title_en;
         it.year = d.year || it.year;
@@ -183,36 +171,29 @@ const searchName = it.title_en || it.title;
         it.pages = d.pages || it.pages;
         it.bl = d.bl || it.bl;
         it.projectStatus = d.projectStatus !== undefined ? d.projectStatus : it.projectStatus;
-        
         // Добавлено обновление обложки для веба
         if (d.cover) it.cover = d.cover;
         clearCoverCache();
-
         it.updatedAt = Date.now();
         save(); render();
         if(document.getElementById('viewModal').classList.contains('on')) openView(it.id);
         toast('Обновлено', 'success');
       };
       window.addEventListener('message', handler);
-      
       setTimeout(() => {
         window.removeEventListener('message', handler);
         if(win && !win.closed) win.close();
       }, 10000);
       return;
     }
-
     if (url.includes('kinogo.')) {
       const proxyUrl = 'https://polka-proxy.foress-tfiree.workers.dev/?url=' + encodeURIComponent(url);
       const res = await fetch(proxyUrl);
       if (!res.ok) throw new Error('HTTP ' + res.status);
-      
       const html = await res.text();
       const doc = new DOMParser().parseFromString(html, 'text/html');
-      
       const getText = (el) => el ? el.textContent.trim().replace(/\s+/g, ' ') : '';
       const getMeta = (sel) => doc.querySelector(sel)?.getAttribute('content') || '';
-
       const fullTitle = getText(doc.querySelector('h1'));
       let cleanTitle = cleanKinogoTitle(fullTitle);
       if (cleanTitle) {
@@ -222,9 +203,7 @@ const searchName = it.title_en || it.title;
           it.title = cleanTitle;
         }
       }
-      
       it.title_en = getText(doc.querySelector('.pmovie__original-title')) || it.title_en;
-
       let description = getMeta('meta[property="og:description"]') || getMeta('meta[name="description"]');
       const possibleDescSelectors = ['.b-text', '.pmovie__text', '.pmovie__desc', '.full-text', '[itemprop="description"]', '.desc-text', '#full-desc'];
       for (const sel of possibleDescSelectors) {
@@ -235,7 +214,6 @@ const searchName = it.title_en || it.title;
         }
       }
       it.description = description || it.description;
-
       let scrapedCover = getMeta('meta[property="og:image"]');
       if (!scrapedCover) {
         const img = doc.querySelector('.pmovie__poster img, .poster img');
@@ -246,31 +224,24 @@ const searchName = it.title_en || it.title;
         }
       }
       if (scrapedCover && !it.cover) it.cover = scrapedCover;
-
       const yearMatch = fullTitle.match(/\((\d{4})\)/);
       if (yearMatch) it.year = yearMatch[1] || it.year;
-
       const tags = [];
       doc.querySelectorAll('a[href*="/tags/"], a[href*="/tag/"], [itemprop="genre"] a, .pmovie__tags a').forEach(a => {
-          const t = a.textContent.trim();
-          if(t && t.length < 30 && !tags.includes(t)) tags.push(t);
+        const t = a.textContent.trim();
+        if(t && t.length < 30 && !tags.includes(t)) tags.push(t);
       });
       it.tags = tags.length ? tags : it.tags;
-
       try {
         const titleRu = (it.title || '').trim();
         const titleEn = (it.title_en || '').trim();
         const yearStr = (it.year || '').trim();
-        
         let query = titleRu;
         if (titleEn && titleEn.length > 2 && !/[\u0400-\u04FF]/.test(titleEn)) query = titleEn;
-        
         let yearParam = yearStr ? `&year=${yearStr}` : '';
         let tmdbUrl = `https://api.themoviedb.org/3/search/movie?api_key=${TMDB_KEY}&language=ru-RU&query=${encodeURIComponent(query)}${yearParam}`;
-        
         let tmdbRes = await fetch('https://polka-proxy.foress-tfiree.workers.dev/?url=' + encodeURIComponent(tmdbUrl));
         let tmdbJson = await tmdbRes.json();
-
         if (!tmdbJson.results || tmdbJson.results.length === 0) {
           tmdbUrl = `https://api.themoviedb.org/3/search/movie?api_key=${TMDB_KEY}&language=ru-RU&query=${encodeURIComponent(query)}`;
           tmdbRes = await fetch('https://polka-proxy.foress-tfiree.workers.dev/?url=' + encodeURIComponent(tmdbUrl));
@@ -281,7 +252,6 @@ const searchName = it.title_en || it.title;
           tmdbRes = await fetch('https://polka-proxy.foress-tfiree.workers.dev/?url=' + encodeURIComponent(tmdbUrl));
           tmdbJson = await tmdbRes.json();
         }
-
         if (tmdbJson.results && tmdbJson.results.length > 0) {
           const best = tmdbJson.results[0];
           if (best.poster_path && !it.customCover) {
@@ -296,41 +266,34 @@ const searchName = it.title_en || it.title;
           }
         }
       } catch(err) { console.warn('[Kinogo Refresh] TMDB failed:', err); }
-
       if (it.title_en) {
-         try {
-           const q = encodeURIComponent(it.title_en.trim());
-           const apiUrl = `https://ww8.123moviesfree.net/searching?q=${q}&limit=40&offset=0`;
-           const movieProxy = 'https://polka-proxy.foress-tfiree.workers.dev/?url=' + encodeURIComponent(apiUrl);
-           const mRes = await fetch(movieProxy);
-           if (mRes.ok) {
-             const mJson = await mRes.json();
-             if (mJson.data && mJson.data.length) {
-               const bestM = mJson.data.find(item => item.t.toLowerCase() === it.title_en.toLowerCase() && (it.year ? String(item.y) === String(it.year) : true)) || mJson.data[0];
-               const typePath = bestM.d === 'm' ? 'movie' : 'season';
-               it.link_sub = `https://ww8.123moviesfree.net/${typePath}/${bestM.s}/`;
-             }
-           }
-         } catch(e) { console.warn('[Kinogo Refresh] 123movies failed', e); }
+        try {
+          const q = encodeURIComponent(it.title_en.trim());
+          const apiUrl = `https://ww8.123moviesfree.net/searching?q=${q}&limit=40&offset=0`;
+          const movieProxy = 'https://polka-proxy.foress-tfiree.workers.dev/?url=' + encodeURIComponent(apiUrl);
+          const mRes = await fetch(movieProxy);
+          if (mRes.ok) {
+            const mJson = await mRes.json();
+            if (mJson.data && mJson.data.length) {
+              const bestM = mJson.data.find(item => item.t.toLowerCase() === it.title_en.toLowerCase() && (it.year ? String(item.y) === String(it.year) : true)) || mJson.data[0];
+              const typePath = bestM.d === 'm' ? 'movie' : 'season';
+              it.link_sub = `https://ww8.123moviesfree.net/${typePath}/${bestM.s}/`;
+            }
+          }
+        } catch(e) { console.warn('[Kinogo Refresh] 123movies failed', e); }
       }
-      
     } else {
       const html = await fetchProxied(url);
       const doc = new DOMParser().parseFromString(html, 'text/html');
-
       if (url.includes('dorama.land')) {
         const fullUrl = url;
-        
         const h2 = doc.querySelector('h2.about-serial-header__title');
         const rawTitle = h2 ? cleanDoramaText(h2.textContent) : (doc.querySelector('h1') ? cleanDoramaText(doc.querySelector('h1').textContent) : it.title);
-        
         let title = rawTitle.replace(/\s*[\(\[]?\s*(?:сериал|фильм|дорама|дорама-сериал|мини-дорама|лакорн).*/i, '').replace(/\s*[\(\[]?\s*\d{4}\s*[\)\]]?/i, '').replace(/\s*смотреть онлайн.*$/i, '').replace(/\(\s*\)/g, '').trim();
         if (!title) title = it.title;
-        
         let country = it.country;
         const countryEl = doc.querySelector('[itemprop="countryOfOrigin"]');
         if (countryEl) country = cleanDoramaText(countryEl.textContent).split('\n')[0].trim();
-        
         let description = '';
         const descEl = doc.querySelector('[itemprop="description"]');
         if (descEl) {
@@ -346,7 +309,6 @@ const searchName = it.title_en || it.title;
           const metaDesc = doc.querySelector('meta[itemprop="description"]');
           if (metaDesc) description = cleanDoramaText(metaDesc.getAttribute('content') || '');
         }
-        
         const rawGenres = [];
         doc.querySelectorAll('[itemprop="genre"]').forEach(el => {
           const links = el.querySelectorAll('a');
@@ -356,19 +318,15 @@ const searchName = it.title_en || it.title;
             if (text) text.split(/[,;]+/).forEach(c => c.split(/\s*\/\s*/).forEach(p => { const t = cleanDoramaText(p); if (t) rawGenres.push(t); }));
           }
         });
-        
         const isBl = /яой|яои|yaoi|слэш|слеш|slash|boys?.?love|боярс|\bbl\b|shounen.?ai|сенен.?ай/i.test(rawGenres.join(' '));
-        
         let sTags = [];
         rawGenres.forEach(c => c.split(/\s*\/\s*/).forEach(p => {
           const t = cleanDoramaText(p);
           if (t) sTags.push(t);
         }));
         sTags = [...new Set(sTags)].filter(g => !/^(яой|яои|yaoi|слэш|слеш|slash|bl|boys?\s*love|boys-love|boyslove|боярс)$/i.test(g));
-        
         const statusEl = doc.querySelector('.about-serial__status');
         if (statusEl) it.projectStatus = normalizeProjectStatus(statusEl.textContent);
-
         let doramaYear = '';
         const dateEl = doc.querySelector('meta[itemprop="dateCreated"]');
         if (dateEl) { const m = (dateEl.getAttribute('content') || '').match(/\d{4}/); if (m) doramaYear = m[0]; }
@@ -379,14 +337,12 @@ const searchName = it.title_en || it.title;
           const ym = bodyText.match(/Год[:\s]*(\d{4})/i) || bodyText.match(/(\d{4})\s*год/i);
           if (ym) doramaYear = ym[1];
         }
-        
         let titleOrig = '';
         const spans = doc.querySelectorAll('span.font-light-18');
         for (const sp of spans) {
           const t = cleanDoramaText(sp.textContent);
           if (/[\u3000-\u9fff\uac00-\ud7af]/.test(t)) { titleOrig = t; break; }
         }
-        
         let altTitles = [];
         const altEl = doc.querySelector('[itemprop="alternativeHeadline"]');
         if (altEl) {
@@ -405,7 +361,6 @@ const searchName = it.title_en || it.title;
         if (altBlockText) {
           altBlockText.split(/\s*\/\s*/).forEach(s => { const t = cleanDoramaText(s); if (t && t.length > 1 && !altTitles.includes(t)) altTitles.push(t); });
         }
-        
         let tmdb = null;
         if (it.tmdbId) {
           const details = await tmdbDetailsDorama(it.tmdbId, it.type === 'movie' ? 'movie' : 'tv');
@@ -426,28 +381,23 @@ const searchName = it.title_en || it.title;
           const siteData = { title, titleOrig, year: doramaYear, country, altTitles };
           tmdb = await findInTmdbDorama(siteData);
         }
-        
         if (!doramaYear && tmdb && tmdb.details) {
           const d = tmdb.details;
           const tmdbYearStr = (d.first_air_date || d.release_date || '').substring(0, 4);
           if (tmdbYearStr) doramaYear = tmdbYearStr;
         }
-        
         let cover = it.cover;
         let titleEn = '';
         let tmdbAltTitles = [];
         let newAltCovers = [];
-
         if (tmdb && tmdb.details) {
           const d = tmdb.details;
           it.tmdbId = d.id;
           if (!it.customCover && d.poster_path) {
             cover = TMDB_IMG + '/w780' + d.poster_path;
           }
-          
           const baseLang = (d.original_language || 'en').split('-')[0];
           newAltCovers = await fetchAllTmdbPosters(d.id, 'tv', baseLang);
-          
           if (d.alternative_titles) {
             const altList = d.alternative_titles.titles || d.alternative_titles.results || [];
             const enAlt = altList.find(x => {
@@ -462,10 +412,9 @@ const searchName = it.title_en || it.title;
               return true;
             });
             if (enAlt) titleEn = enAlt.title || enAlt.name || '';
-            
-            altList.forEach(x => { 
-              const t = (x.title || x.name || '').trim(); 
-              if (t && !t.toLowerCase().includes('season') && !/\d+$/.test(t)) tmdbAltTitles.push(t); 
+            altList.forEach(x => {
+              const t = (x.title || x.name || '').trim();
+              if (t && !t.toLowerCase().includes('season') && !/\d+$/.test(t)) tmdbAltTitles.push(t);
             });
           }
           if (!titleEn && d.translations) {
@@ -475,7 +424,6 @@ const searchName = it.title_en || it.title;
           if (!titleEn) titleEn = d.original_title || d.original_name || '';
           if (d.external_ids?.imdb_id) it.imdbId = d.external_ids.imdb_id;
         }
-        
         const allNames = [];
         const seenNames = new Set();
         const pushName = (n) => {
@@ -490,17 +438,14 @@ const searchName = it.title_en || it.title;
         if (titleOrig) pushName(titleOrig);
         tmdbAltTitles.forEach(pushName);
         if (titleEn) pushName(titleEn);
-        
         if (it.parentId) {
           const parentSeasons = getSeasons(it.parentId);
           const isMultiSeason = parentSeasons.length > 1;
-          
           let sKisskhUrl = '';
           if (allNames.length) {
             const kisskhS = await findSeasonOnKisskh(allNames, doramaYear, it.seasonNumber, isMultiSeason, country);
             if (kisskhS) sKisskhUrl = kisskhS.url;
           }
-          
           it.title = title;
           if (titleEn) it.title_en = titleEn + ' ' + toRoman(it.seasonNumber);
           it.description = description;
@@ -512,7 +457,6 @@ const searchName = it.title_en || it.title;
           if (sKisskhUrl) it.link_sub = sKisskhUrl;
           it.updatedAt = Date.now();
           toast('Сезон обновлён', 'success');
-          
         } else {
           const seasonLinksRaw = [];
           const seenSeasonUrls = new Set();
@@ -543,19 +487,15 @@ const searchName = it.title_en || it.title;
             seenSeasonUrls.add(fullSeasonUrl);
             seasonLinksRaw.push({ number: num, url: fullSeasonUrl });
           };
-
           doc.querySelectorAll('[class*="serial-seasons"] a[href]').forEach(a => tryCollectSeasonLink(a, true));
           doc.querySelectorAll('a.serial-seasons__link[href]').forEach(a => tryCollectSeasonLink(a, true));
           if (seasonLinksRaw.length < 2) doc.querySelectorAll('a[href*="-sezon"]').forEach(a => tryCollectSeasonLink(a, false));
-          
           const isMultiSeason = seasonLinksRaw.length > 1;
-          
           let mainKisskhUrl = it.link_sub || '';
           if (allNames.length) {
             const kisskh = await findSeasonOnKisskh(allNames, doramaYear, 1, isMultiSeason, country);
             if (kisskh) mainKisskhUrl = kisskh.url;
           }
-          
           it.title = title;
           if (titleEn) it.title_en = titleEn;
           it.country = country;
@@ -570,14 +510,12 @@ const searchName = it.title_en || it.title;
           it.link = fullUrl;
           if (mainKisskhUrl) it.link_sub = mainKisskhUrl;
           it.updatedAt = Date.now();
-          
           const tmdbSeasonsMap = new Map();
           if (tmdb && tmdb.details && Array.isArray(tmdb.details.seasons)) {
             tmdb.details.seasons.forEach(s => {
               if (s.season_number > 0) tmdbSeasonsMap.set(s.season_number, s);
             });
           }
-          
           for (const s of seasonLinksRaw) {
             const sNum = parseInt(s.number, 10) || 0;
             let seasonItem = items.find(x =>
@@ -586,11 +524,9 @@ const searchName = it.title_en || it.title;
             if (!seasonItem) {
               seasonItem = items.find(x => x.parentId === it.id && x.sourceUrl && x.sourceUrl === s.url);
             }
-                
             try {
               const sHtml = await fetchProxied(s.url);
               const sDoc = new DOMParser().parseFromString(sHtml, 'text/html');
-              
               let sTitle = '';
               const metaName = sDoc.querySelector('meta[itemprop="name"]');
               if (metaName) sTitle = (metaName.getAttribute('content') || '').trim();
@@ -602,10 +538,8 @@ const searchName = it.title_en || it.title;
                 sTitle = sTitle.replace(/\s*[\(\[]?\s*(?:сериал|фильм|дорама|дорама-сериал|мини-дорама|лакорн).*/i, '').replace(/\s*[\(\[]?\s*\d{4}\s*[\)\]]?/i, '').replace(/\s*смотреть онлайн.*$/i, '').replace(/\(\s*\)/g, '').trim();
               }
               if (!sTitle) sTitle = 'Сезон ' + s.number;
-                  
               let sTitleEn = '';
               if (titleEn) sTitleEn = titleEn + ' ' + toRoman(s.number);
-                  
               let sDesc = '';
               const descEl = sDoc.querySelector('[itemprop="description"]');
               if (descEl) {
@@ -621,18 +555,15 @@ const searchName = it.title_en || it.title;
                 const metaDesc = sDoc.querySelector('meta[itemprop="description"]');
                 if (metaDesc) sDesc = cleanDoramaText(metaDesc.getAttribute('content') || '');
               }
-                  
               let sYear = '';
               const metaDate = sDoc.querySelector('meta[itemprop="dateCreated"]');
               if (metaDate) { const ym = (metaDate.getAttribute('content') || '').match(/\d{4}/); if (ym) sYear = ym[0]; }
-                  
               let sTags = [];
               let sBl = false;
               const metaGenre = sDoc.querySelector('meta[itemprop="genre"]');
               if (metaGenre) {
                 const genresStr = metaGenre.getAttribute('content') || '';
                 sBl = /яой|yaoi|слэш|slash|boys?.?love|боярс|\bbl\b|shounen.?ai|сенен.?ай/i.test(genresStr);
-                
                 const rawS = [];
                 genresStr.split(/[,;]+/).forEach(c => c.split(/\s*\/\s*/).forEach(p => {
                   const t = cleanDoramaText(p);
@@ -640,21 +571,17 @@ const searchName = it.title_en || it.title;
                 }));
                 sTags = [...new Set(rawS)].filter(g => !/^(яой|яои|yaoi|слэш|слеш|slash|bl|boys?\s*love|boys-love|boyslove|боярс)$/i.test(g));
               }
-                  
               let sCover = '';
               const tmdbS = tmdbSeasonsMap.get(s.number);
               if (tmdbS && tmdbS.poster_path) sCover = TMDB_IMG + '/w780' + tmdbS.poster_path;
-                  
               let sKisskhUrl = '';
               if (allNames.length) {
                 const kisskhS = await findSeasonOnKisskh(allNames, sYear || doramaYear, s.number, isMultiSeason);
                 if (kisskhS) sKisskhUrl = kisskhS.url;
               }
-                  
               let sProjectStatus = '';
               const sStatusEl2 = sDoc.querySelector('.about-serial__status');
               if (sStatusEl2) sProjectStatus = normalizeProjectStatus(sStatusEl2.textContent);
-
               if (seasonItem) {
                 seasonItem.title = sTitle;
                 if (sTitleEn) seasonItem.title_en = sTitleEn;
@@ -698,7 +625,6 @@ const searchName = it.title_en || it.title;
               console.warn('[refresh seasons] ошибка для ' + s.url, e.message);
             }
           }
-          
           const freshSeasons = getSeasons(it.id);
           if (freshSeasons.length > 0 && freshSeasons[0].year) {
             it.year = freshSeasons[0].year;
@@ -715,7 +641,6 @@ const searchName = it.title_en || it.title;
         if(genreEls.length) it.tags = Array.from(genreEls).map(a => a.textContent.trim()).filter(Boolean);
         const descEl = doc.querySelector('.b_biblio_book_annotation');
         if(descEl) it.description = descEl.textContent.replace(/\s+/g, ' ').trim();
-        
       } else if (url.includes('knigi.ws')) {
         const titleEl = doc.querySelector('h1');
         if(titleEl) it.title = titleEl.textContent.trim().replace(/\s*-\s*читать онлайн.*$/i, '').trim();
@@ -728,22 +653,18 @@ const searchName = it.title_en || it.title;
         if(yearMatch) it.year = yearMatch[1];
         const ogDesc = doc.querySelector('meta[property="og:description"]');
         if(ogDesc) it.description = ogDesc.getAttribute('content');
-        
       } else if (url.includes('ficbook.net')) {
         // 1. Название
         const titleEl = doc.querySelector('h1');
         if(titleEl) it.title = titleEl.textContent.trim();
-      
         // 2. Автор (ищем через dl -> dt -> a, без картинок)
         let author = '';
         const authorDl = Array.from(doc.querySelectorAll('dl.fanfic-inline-info')).find(dl => dl.querySelector('dt')?.textContent.includes('Автор'));
         if (authorDl) author = authorDl.querySelector('dd a[href^="/authors/"]')?.textContent.trim() || '';
         if (author) it.country = author;
-      
         // 3. Описание
         const descEl = doc.querySelector('.fanfic-description-text, .description.word-break');
         if (descEl) it.description = descEl.textContent.trim();
-      
         // 4. Страницы (из блока "Размер")
         let pages = '';
         const sizeDl = Array.from(doc.querySelectorAll('dl.fanfic-inline-info')).find(dl => dl.querySelector('dt')?.textContent.includes('Размер'));
@@ -752,7 +673,6 @@ const searchName = it.title_en || it.title;
           if (pageMatch) pages = pageMatch[1];
         }
         if (pages) it.pages = pages;
-      
         // 5. Год (из блока "Дата обновления")
         let year = '';
         const dateDl = Array.from(doc.querySelectorAll('dl.fanfic-inline-info')).find(dl => dl.querySelector('dt')?.textContent.includes('Дата обновления'));
@@ -761,7 +681,6 @@ const searchName = it.title_en || it.title;
           if (yearMatch) year = yearMatch[0];
         }
         if (year) it.year = year;
-      
         // 6. Обложка (в высоком качестве d_, а не m_)
         let cover = '';
         const pictureEl = doc.querySelector('picture.fanfic-hat-cover-picture');
@@ -776,21 +695,17 @@ const searchName = it.title_en || it.title;
         }
         // Если пользователь не ставил свою обложку, обновляем её
         if (cover && !it.customCover) it.cover = cover;
-      
         // 7. Теги (исправлен баг с пустыми тегами)
         const tags = [];
         doc.querySelectorAll('.tags a.tag, a[href*="/tags/"]').forEach(a => {
-            const t = a.textContent.trim();
-            if (t && !tags.includes(t)) tags.push(t);
+          const t = a.textContent.trim();
+          if (t && !tags.includes(t)) tags.push(t);
         });
         if (tags.length) it.tags = tags;
-      
         // 8. Проверка на BL
         it.bl = isYaoiTags(tags) || /слэш|slash/i.test(it.tags.join(' '));
-        
-        // Функция clearCoverCache() вызывается ниже по коду `refreshCard`, 
+        // Функция clearCoverCache() вызывается ниже по коду `refreshCard`,
         // так что если обложка сменилась, кэш сам почистится.
-        
       } else if (url.includes('fanfics.me')) {
         const titleEl = doc.querySelector('.FicTable_Title h4 a');
         if(titleEl) it.title = titleEl.textContent.trim();
@@ -800,12 +715,10 @@ const searchName = it.title_en || it.title;
         throw new Error('Источник не поддерживается для обновления');
       }
     }
-     // Глобальная проверка кэша обложки перед сохранением
+    // Глобальная проверка кэша обложки перед сохранением
     clearCoverCache();
-
     const searchName = it.title_en || it.title;
     const isSeriesType = (it.type === 'series' || it.type === 'drama');
-    
     if (searchName) {
       try {
         const tempDraft = { link_extras: it.link_extras };
@@ -820,111 +733,64 @@ const searchName = it.title_en || it.title;
         if (tempDraft.link_extras) it.link_extras = tempDraft.link_extras;
       } catch(e) { console.warn('[Refresh] Download search failed', e); }
     }
-
     it.updatedAt = Date.now();
     save();
     render();
     if(document.getElementById('viewModal').classList.contains('on')) openView(it.id);
     toast('Обновлено', 'success');
-    
   } catch (e) {
     console.error(e);
     toast('Ошибка обновления: ' + e.message, 'error');
   }
 }
-  
+
 /**
- * 2. Обновление существующей карточки
+ * Обновление существующей карточки
  */
 async function refreshSlashlibNative(it) {
   const baseUrl = it.link || it.sourceUrl || '';
-  const m = baseUrl.match(/\/manga\/([^\/?#]+)/);
+  const m = baseUrl.match(/\/manga\/([^/?#]+)/);
   if (!m) { toast('Не удалось определить slug из ссылки', 'error'); return; }
-  
   const slug = m[1];
   const token = localStorage.getItem('slashlib_token');
   if (!token) { toast('Нужно войти в Slashlib', 'error'); return; }
-
   toast('Обновляю из Slashlib API…', 'success');
-
   try {
     const fields = ['background', 'eng_name', 'otherNames', 'summary', 'releaseDate', 'country', 'authors', 'genres', 'tags'];
     const query = fields.map((f, i) => `fields[${i}]=${f}`).join('&');
     const apiUrl = `https://hapi.hentaicdn.org/api/manga/${slug}?${query}`;
-
     const res = await fetch(apiUrl, {
       headers: { 'Authorization': 'Bearer ' + token, 'Accept': 'application/json', 'Site-Id': '2' }
     });
-
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const json = await res.json();
     const d = json.data;
     if (!d) throw new Error('Пустой ответ API');
 
     const oldCover = it.cover;
-
     it.title = d.rus_name || d.name || it.title;
     it.title_en = d.eng_name || it.title_en;
     it.country = d.authors ? d.authors.map(a => a.name).join(', ') : it.country;
-    
-    // ПАРСИНГ ГОДА
-    const getYear = (raw) => {
-      if (!raw) return '';
-      const m = String(raw).match(/\b(\d{4})\b/);
-      return m ? m[1] : String(raw);
-    };
-    if (d.releaseDate) it.year = getYear(d.releaseDate);
 
-    // ПАРСИНГ ОПИСАНИЯ
-    const getSummaryText = (summary) => {
-      if (!summary) return '';
-      if (typeof summary === 'string') return summary;
-      const walk = (node) => {
-        if (!node) return '';
-        if (node.type === 'text') return node.text || '';
-        if (node.type === 'hardBreak') return '\n';
-        if (Array.isArray(node.content)) {
-          let txt = node.content.map(walk).join('');
-          if (node.type === 'paragraph') txt += '\n';
-          return txt;
-        }
-        return '';
-      };
-      return walk(summary).replace(/\n{3,}/g, '\n\n').trim();
-    };
-    if (d.summary) it.description = getSummaryText(d.summary);
+    if (d.releaseDate) it.year = slashlibYear(d.releaseDate);
+    if (d.summary) it.description = slashlibSummaryText(d.summary);
 
     const allTags = [];
     if (d.genres) d.genres.forEach(g => allTags.push(g.name));
     if (d.tags) d.tags.forEach(t => allTags.push(t.name));
     if (allTags.length) it.tags = allTags;
-
     it.bl = isYaoiTags(it.tags);
+
     if (!it.customCover && d.cover && d.cover.default) {
       it.cover = d.cover.default;
     }
 
-    if (d.status && d.status.label) {
-      const s = d.status.label.toLowerCase();
-      if (s.includes('онгоинг') || s.includes('выходит')) it.projectStatus = 'ongoing';
-      else if (s.includes('завершен')) it.projectStatus = 'completed';
-      else if (s.includes('анонс')) it.projectStatus = 'announced';
-    }
+    const pStatus = parseSlashlibStatus(d.status);
+    if (pStatus) it.projectStatus = pStatus;
 
     // ЗАПРОС ГЛАВ
-    try {
-      const chRes = await fetch(`https://api.cdnlibs.org/api/manga/${slug}/chapters?limit=500`, {
-        headers: { 'Authorization': 'Bearer ' + token, 'Accept': 'application/json', 'Site-Id': '2' }
-      });
-      if (chRes.ok) {
-        const chJson = await chRes.json();
-        if (chJson.meta && chJson.meta.total) {
-          it.pages = String(chJson.meta.total);
-        } else if (Array.isArray(chJson.data)) {
-          it.pages = String(chJson.data.length);
-        }
-      }
-    } catch(e) { console.warn('Не удалось получить главы:', e); }
+    const chapterCount = await fetchSlashlibChapterCount(slug, token);
+    if (chapterCount) it.pages = chapterCount;
 
     if (oldCover && oldCover !== it.cover) {
       CoverCache.deleteKey(it.id + '_card');
@@ -936,41 +802,32 @@ async function refreshSlashlibNative(it) {
       _manualUrlsOk.delete(oldCover);
     }
 
-    // --- Автопоиск ссылки на Comizy ---
-// Используем РУССКОЕ (it.title) + АНГЛИЙСКОЕ (it.title_en) названия.
-// НЕ ПЕРЕЗАПИСЫВАЕМ поля карточки.
-// --- Автопоиск ссылки на Comizy (exact match по всем именам Slashlib) ---
-try {
-  // d — это ответ Slashlib API в этой функции; берём все имена
-  const slashOtherNames = Array.isArray(d.otherNames)
-    ? d.otherNames.map(n => typeof n === 'string' ? n : (n && n.name)).filter(Boolean)
-    : [];
-  
-  const allSlashNames = [
-    d.rus_name, d.name, d.eng_name,
-    ...slashOtherNames
-  ].filter(Boolean);
-  
-  // Сохраняем в карточке, чтобы использовать при следующем refreshCard
-  it.otherNames = slashOtherNames;
-  
-  const match = await ComizyParser.searchAndMatchByNames(allSlashNames, it.year);
-  if (match) {
-    it.link_comizy = match.url;
-    const keepChapter0 = await ComizyParser.checkSlashlibHasChapter0(it.link);
-it.comizyChapters = await ComizyParser.getChapters(match.hid, { keepChapter0 });
-  }
-} catch(e) { console.warn('Comizy auto-search error', e); }
-    
-it.updatedAt = Date.now();
-save(); 
-render();
+    // --- Автопоиск ссылки на Comizy (exact match по всем именам Slashlib) ---
+    try {
+      const slashOtherNames = Array.isArray(d.otherNames)
+        ? d.otherNames.map(n => typeof n === 'string' ? n : (n && n.name)).filter(Boolean)
+        : [];
+      const allSlashNames = [
+        d.rus_name, d.name, d.eng_name,
+        ...slashOtherNames
+      ].filter(Boolean);
+      // Сохраняем в карточке, чтобы использовать при следующем refreshCard
+      it.otherNames = slashOtherNames;
+      const match = await ComizyParser.searchAndMatchByNames(allSlashNames, it.year);
+      if (match) {
+        it.link_comizy = match.url;
+        const keepChapter0 = await ComizyParser.checkSlashlibHasChapter0(it.link);
+        it.comizyChapters = await ComizyParser.getChapters(match.hid, { keepChapter0 });
+      }
+    } catch(e) { console.warn('Comizy auto-search error', e); }
 
-if (document.getElementById('viewModal').classList.contains('on')) {
-  openView(it.id);
-}
-toast('Обновлено через API Slashlib', 'success');
-
+    it.updatedAt = Date.now();
+    save();
+    render();
+    if (document.getElementById('viewModal').classList.contains('on')) {
+      openView(it.id);
+    }
+    toast('Обновлено через API Slashlib', 'success');
   } catch(e) {
     console.error('Slashlib API Error:', e);
     toast('Ошибка API: ' + e.message, 'error');
