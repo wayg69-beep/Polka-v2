@@ -271,26 +271,31 @@ async function saveProfile(patch, silent){
 async function saveTokensToCloud(patch) {
   const c = cloudGet();
   if (!c || !c.user_id) return false;
-  try {
-    // Проверяем, есть ли уже профиль
-    const { data: existing } = await sb
-      .from('profiles')
-      .select('id')
-      .eq('id', c.user_id)
-      .maybeSingle();
-
-    const row = Object.assign({ id: c.user_id }, patch);
-
-    // Если профиля нет — добавляем обязательные поля
-    if (!existing) {
+  
+  // АВТОМАТИЧЕСКИ берём display_name из cloudGet(), если его нет в patch
+  const row = Object.assign(
+    { 
+      id: c.user_id,
+      display_name: c.display_name || ''  // <-- БЕРЁМ ИЗ cloudGet()
+    }, 
+    patch
+  );
+  
+  // Если display_name всё ещё пустой (в cloudGet() его нет) — берём из сессии
+  if (!row.display_name) {
+    try {
       const { data: { session } } = await sb.auth.getSession();
-      const email = (session && session.user && session.user.email) || '';
-      const metaName = (session && session.user && session.user.user_metadata && session.user.user_metadata.display_name) || '';
-      row.display_name = metaName || email || 'User';
-      row.avatar = '';
-      row.admin = false;
+      if (session && session.user) {
+        row.display_name = session.user.user_metadata?.display_name || 
+                          session.user.email || 
+                          '';
+      }
+    } catch (e) {
+      console.warn('[tokens] failed to get session:', e);
     }
-
+  }
+  
+  try {
     const { error } = await sb.from('profiles').upsert(row);
     if (error) throw error;
     return true;
