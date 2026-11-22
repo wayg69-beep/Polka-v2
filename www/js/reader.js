@@ -3758,7 +3758,7 @@ const SlashLibReader = {
         }
         // ... остальная часть оригинальной Comizy-ветки без изменений
         // (reindex, обновление prev/next, восстановление скролла, loadPage первых 3)
-        s._reindexReaderImgs();
+        this._reindexReaderImgs();
         setTimeout(() => {
           this._restoring = false;
         }, 200);
