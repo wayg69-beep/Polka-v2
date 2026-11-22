@@ -255,7 +255,7 @@ async function getSlashlibToken(forceLogin, onStatus) {
     };
 
     try {
-      await plugin.openInWebView({ url: 'https://v2.shlib.life' });
+      await plugin.openInWebView({ url: 'https://v2.shlib.life' }, 'clearcache=yes,clearsessioncache=yes');
       plugin.addListener('browserPageLoaded', async () => {
         try {
           await plugin.executeScript({ script: injectBanner });
