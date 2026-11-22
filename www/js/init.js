@@ -239,6 +239,10 @@ onDataChanged = () => Cloud.markDirty();
 // Инициализация после загрузки
 CloudUI.init();
 Cloud.startPeriodic();
+// Домены: периодический pull из Supabase
+if (typeof DomainsCloud !== 'undefined') {
+  DomainsCloud.startPeriodic();
+}
 Cloud.updateStatusDot();
 
 // То, что не успели отправить в прошлый раз
@@ -315,6 +319,16 @@ setInterval(() => { Cloud.pullInbox(true); }, 60 * 1000);
 document.addEventListener('visibilitychange', () => {
   if(document.visibilityState === 'visible'){
     Cloud.pullInbox(true);
+  document.addEventListener('visibilitychange', () => {
+  if(document.visibilityState === 'visible'){
+    Cloud.pullInbox(true);
+    Cloud.syncIfStale();
+    if (typeof DiscHashesCloud !== 'undefined') DiscHashesCloud.pullAndMerge();
+    if (typeof DomainsCloud !== 'undefined') DomainsCloud.syncIfStale();
+  } else if(Cloud._dirty && Cloud.isReady()){
+    Cloud.sync(false);
+  }
+});
     Cloud.syncIfStale();
     if (typeof DiscHashesCloud !== 'undefined') DiscHashesCloud.pullAndMerge();
   } else if(Cloud._dirty && Cloud.isReady()){
