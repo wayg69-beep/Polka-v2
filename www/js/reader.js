@@ -979,26 +979,28 @@ const SlashLibReader = {
         }
       }
     }
-    for (let i = 0; i < Math.min(2, pages.length); i++) {
-      if (discard.has(i)) continue;
-      const d = await this._probeImageInfoCached(pages[i]);
-      if (!d) break;
-      if (knownHashes.has(d.hash) || isDiscBySize(d)) {
-        discard.add(i);
-      } else {
-        break;
-      }
-    }
-    for (let i = pages.length - 1; i >= Math.max(0, pages.length - 2); i--) {
-      if (i < 0 || discard.has(i)) continue;
-      const d = await this._probeImageInfoCached(pages[i]);
-      if (!d) break;
-      if (knownHashes.has(d.hash) || isDiscBySize(d)) {
-        discard.add(i);
-      } else {
-        break;
-      }
-    }
+    // Проверяем первые N кадров — у Comizy дисклеймер может быть на любой
+// из первых позиций, включая 2-4. Не делаем break на первом «не дисклеймере»,
+// чтобы поймать случаи «титульник → дисклеймер → глава».
+const CHECK_HEAD = 7;
+for (let i = 0; i < Math.min(CHECK_HEAD, pages.length); i++) {
+  if (discard.has(i)) continue;
+  const d = await this._probeImageInfoCached(pages[i]);
+  if (!d) continue;
+  if (knownHashes.has(d.hash) || isDiscBySize(d)) {
+    discard.add(i);
+  }
+}
+    const CHECK_TAIL = 5;
+for (let i = pages.length - 1; i >= Math.max(0, pages.length - CHECK_TAIL); i--) {
+  if (i < 0 || discard.has(i)) continue;
+  const d = await this._probeImageInfoCached(pages[i]);
+  if (!d) continue;
+  if (knownHashes.has(d.hash) || isDiscBySize(d)) {
+    discard.add(i);
+  }
+}
+    
     if (!discard.size) {
       return { pages, removedFromStart: 0, allFiltered: false, warnings: [] };
     }
@@ -2017,9 +2019,10 @@ const SlashLibReader = {
         img.style.transition = "opacity 0.3s ease";
         if (this._settings.mode === "WEBTOON") {
           if (page.width && page.height) {
-            img.style.aspectRatio = `${page.width} / ${page.height}`;
+  img.style.aspectRatio = `${page.width} / ${page.height}`;
+} else {
+  img.style.aspectRatio = "2 / 3";
           }
-          img.style.width = "100%";
         }
         wrap.appendChild(img);
       });
@@ -3145,58 +3148,55 @@ const SlashLibReader = {
 
   // Ставит картинку и компенсирует скролл, если реальная высота отличается
   // от высоты заглушки (иначе контент над экраном «сдвигает» позицию вниз)
-  _setPageSrc(wrap, img, blobUrl) {
-    const webtoon = this._settings.mode === "WEBTOON";
-    const oldH = img.offsetHeight;
-    img.src = blobUrl;
-    img.style.opacity = "1";
-    img.style.width = "";
+_setPageSrc(wrap, img, blobUrl) {
+  const webtoon = this._settings.mode === "WEBTOON";
+  const oldH = img.offsetHeight;
+  img.src = blobUrl;
+  img.style.opacity = "1";
+  img.style.width = "";
 
-    // Обновляем aspect-ratio по реальным размерам — лечит кривую ширину
-    const fixRatio = () => {
-      if (img.naturalWidth > 0 && img.naturalHeight > 0) {
-        const want = `${img.naturalWidth} / ${img.naturalHeight}`;
-        const page = this._pagesList[img.dataset.index | 0];
-        if (!page || !page.width || !page.height) {
-          img.style.aspectRatio = want;
-        }
-      }
-    };
-
-    if (!webtoon) {
-      if (img.complete && img.naturalHeight) fixRatio();
-      else img.addEventListener("load", fixRatio, { once: true });
-      void wrap.scrollHeight;
-      return;
+  // Перезаписываем aspect-ratio по реальным размерам картинки.
+  // API Comizy часто врёт (отдаёт 1000×1365 для 1080×1080) — это лечит.
+  const fixRatio = () => {
+    if (img.naturalWidth > 0 && img.naturalHeight > 0) {
+      img.style.aspectRatio = `${img.naturalWidth} / ${img.naturalHeight}`;
     }
+  };
 
-    const fix = () => {
-      if (!img.isConnected) return;
-      fixRatio();
-      const a = this._anchor;
-      if (a && Date.now() - a.t < 8000 && (this._userScrolledAt || 0) < a.t) {
-        const ai = wrap.querySelectorAll("img")[a.idx];
-        if (ai && ai.offsetHeight > 0) {
-          wrap.scrollTop = Math.max(
-            0,
-            ai.offsetTop + a.ratio * ai.offsetHeight,
-          );
-          return;
-        }
+  if (!webtoon) {
+    if (img.complete && img.naturalHeight) fixRatio();
+    else img.addEventListener("load", fixRatio, { once: true });
+    void wrap.scrollHeight;
+    return;
+  }
+
+  const fix = () => {
+    if (!img.isConnected) return;
+    fixRatio();
+    const a = this._anchor;
+    if (a && Date.now() - a.t < 8000 && (this._userScrolledAt || 0) < a.t) {
+      const ai = wrap.querySelectorAll("img")[a.idx];
+      if (ai && ai.offsetHeight > 0) {
+        wrap.scrollTop = Math.max(
+          0,
+          ai.offsetTop + a.ratio * ai.offsetHeight,
+        );
+        return;
       }
-      const d = img.offsetHeight - oldH;
-      if (!d || oldH <= 0) return;
-      const top = img.offsetTop,
-        cur = wrap.scrollTop;
-      let adj = 0;
-      if (top + oldH <= cur) adj = d;
-      else if (top < cur) adj = (d * (cur - top)) / oldH;
-      if (adj) wrap.scrollTop = cur + adj;
-    };
-    if (img.complete && img.naturalHeight) fix();
-    else img.addEventListener("load", fix, { once: true });
-  },
-
+    }
+    const d = img.offsetHeight - oldH;
+    if (!d || oldH <= 0) return;
+    const top = img.offsetTop,
+      cur = wrap.scrollTop;
+    let adj = 0;
+    if (top + oldH <= cur) adj = d;
+    else if (top < cur) adj = (d * (cur - top)) / oldH;
+    if (adj) wrap.scrollTop = cur + adj;
+  };
+  if (img.complete && img.naturalHeight) fix();
+  else img.addEventListener("load", fix, { once: true });
+},
+  
   bindGestures() {
     const wrap = document.getElementById("readerPages");
     const stage = document.getElementById("readerStage");
