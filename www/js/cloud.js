@@ -271,8 +271,27 @@ async function saveProfile(patch, silent){
 async function saveTokensToCloud(patch) {
   const c = cloudGet();
   if (!c || !c.user_id) return false;
-  const row = Object.assign({ id: c.user_id }, patch);
   try {
+    // Проверяем, есть ли уже профиль
+    const { data: existing, error: selErr } = await sb
+      .from('profiles')
+      .select('id')
+      .eq('id', c.user_id)
+      .maybeSingle();
+
+    const row = Object.assign({ id: c.user_id }, patch);
+
+    // Если профиля нет — добавляем обязательные поля с дефолтами
+    if (!existing) {
+      // Берём имя из Supabase-сессии, если есть
+      const { data: { session } } = await sb.auth.getSession();
+      const email = (session && session.user && session.user.email) || '';
+      const metaName = (session && session.user && session.user.user_metadata && session.user.user_metadata.display_name) || '';
+      row.display_name = metaName || email || 'User';
+      row.avatar = '';
+      row.admin = false;
+    }
+
     const { error } = await sb.from('profiles').upsert(row);
     if (error) throw error;
     return true;
