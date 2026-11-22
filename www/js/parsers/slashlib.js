@@ -1,8 +1,97 @@
 'use strict';
-
 /* ==========================================================
-   slashlib.js — Slashlib: токен, API, поиск, подгрузка деталей, заполнение формы
-   ========================================================== */
+slashlib.js — Slashlib: токен, API, поиск, подгрузка деталей, заполнение формы
+========================================================== */
+
+// ============ ОБЩИЕ ХЕЛПЕРЫ ============
+
+// Статус проекта из ответа API.
+// Поддерживает {id, label}, {id, name}, строку и число.
+// Нормализует ё→е, чтобы «Завершён» ловился так же, как «Завершен».
+function parseSlashlibStatus(raw) {
+  let id = null;
+  let label = '';
+  if (typeof raw === 'number') {
+    id = raw;
+  } else if (typeof raw === 'string') {
+    label = raw;
+  } else if (raw && typeof raw === 'object') {
+    if (raw.id != null) id = Number(raw.id);
+    label = String(raw.label || raw.name || '');
+  }
+  const s = label.toLowerCase().replace(/ё/g, 'е').trim();
+  if (s.includes('заверш')) return 'completed';
+  if (s.includes('онгоинг') || s.includes('выходит') || s.includes('продолжает') || s.includes('ongoing')) return 'ongoing';
+  if (s.includes('анонс') || s.includes('скоро')) return 'announced';
+  if (s.includes('приостанов') || s.includes('заморож')) return 'paused';
+  // Фолбэк по id справочника LibAPI
+  if (id === 1) return 'ongoing';
+  if (id === 2) return 'completed';
+  if (id === 3) return 'announced';
+  if (id === 4) return 'paused';
+  return '';
+}
+
+// Описание: plain-строка или дерево блоков
+function slashlibSummaryText(summary) {
+  if (!summary) return '';
+  if (typeof summary === 'string') return summary;
+  const walk = (node) => {
+    if (!node) return '';
+    if (node.type === 'text') return node.text || '';
+    if (node.type === 'hardBreak') return '\n';
+    if (Array.isArray(node.content)) {
+      let txt = node.content.map(walk).join('');
+      if (node.type === 'paragraph') txt += '\n';
+      return txt;
+    }
+    return '';
+  };
+  return walk(summary).replace(/\n{3,}/g, '\n\n').trim();
+}
+
+// Год: только 4 цифры
+function slashlibYear(raw) {
+  if (!raw) return '';
+  const m = String(raw).match(/\b(\d{4})\b/);
+  return m ? m[1] : String(raw);
+}
+
+// Количество глав
+async function fetchSlashlibChapterCount(slug, token) {
+  try {
+    const chRes = await fetch(`https://api.cdnlibs.org/api/manga/${slug}/chapters?limit=500`, {
+      headers: { 'Authorization': 'Bearer ' + token, 'Accept': 'application/json', 'Site-Id': '2' }
+    });
+    if (chRes.ok) {
+      const chJson = await chRes.json();
+      if (chJson.meta && chJson.meta.total) return String(chJson.meta.total);
+      if (Array.isArray(chJson.data)) return String(chJson.data.length);
+    }
+  } catch(e) { console.warn('Не удалось получить главы:', e); }
+  return '';
+}
+
+// Автопоиск Comizy по всем именам Slashlib (exact match)
+async function findComizyForSlashlib(d, yearStr) {
+  try {
+    if (typeof ComizyParser === 'undefined') return null;
+    const otherNames = Array.isArray(d.otherNames)
+      ? d.otherNames.map(n => typeof n === 'string' ? n : (n && n.name)).filter(Boolean)
+      : [];
+    const allNames = [d.rus_name, d.name, d.eng_name, ...otherNames].filter(Boolean);
+    if (!allNames.length) return null;
+    const match = await ComizyParser.searchAndMatchByNames(allNames, yearStr);
+    if (!match) return null;
+    const link = 'https://v2.shlib.life/ru/manga/' + d.slug_url;
+    const keepChapter0 = await ComizyParser.checkSlashlibHasChapter0(link);
+    const chapters = await ComizyParser.getChapters(match.hid, { keepChapter0 });
+    return { url: match.url, chapters: chapters || [] };
+  } catch(e) {
+    console.warn('Comizy auto-search error', e);
+    return null;
+  }
+}
 
 // ============ API SLASHLIB (БЕЗ UI) ============
 async function getSlashlibTokenSafe() {
@@ -44,69 +133,29 @@ async function fetchSlashlibDetailsApi(slug, token) {
     if (d.genres) d.genres.forEach(g => allTags.push(g.name));
     if (d.tags) d.tags.forEach(t => allTags.push(t.name));
 
-    const getSummaryText = (summary) => {
-      if (!summary) return '';
-      if (typeof summary === 'string') return summary;
-      const walk = (node) => {
-        if (!node) return '';
-        if (node.type === 'text') return node.text || '';
-        if (node.type === 'hardBreak') return '\n';
-        if (Array.isArray(node.content)) {
-          let txt = node.content.map(walk).join('');
-          if (node.type === 'paragraph') txt += '\n';
-          return txt;
-        }
-        return '';
-      };
-      return walk(summary).replace(/\n{3,}/g, '\n\n').trim();
-    };
-    const desc = getSummaryText(d.summary);
-
-    const getYear = (raw) => {
-      if (!raw) return '';
-      const m = String(raw).match(/\b(\d{4})\b/);
-      return m ? m[1] : String(raw);
-    };
-    const yearStr = getYear(d.releaseDate);
-
-    let pStatus = '';
-    if (d.status && d.status.label) {
-      const s = d.status.label.toLowerCase();
-      if (s.includes('онгоинг') || s.includes('выходит')) pStatus = 'ongoing';
-      else if (s.includes('завершен')) pStatus = 'completed';
-      else if (s.includes('анонс')) pStatus = 'announced';
-    }
-
-    let chapterCount = '';
-    try {
-      const chRes = await fetch(`https://api.cdnlibs.org/api/manga/${slug}/chapters?limit=500`, {
-        headers: { 'Authorization': 'Bearer ' + token, 'Accept': 'application/json', 'Site-Id': '2' }
-      });
-      if (chRes.ok) {
-        const chJson = await chRes.json();
-        if (chJson.meta && chJson.meta.total) chapterCount = String(chJson.meta.total);
-        else if (Array.isArray(chJson.data)) chapterCount = String(chJson.data.length);
-      }
-    } catch(e) {}
+    const desc = slashlibSummaryText(d.summary);
+    const yearStr = slashlibYear(d.releaseDate);
+    const pStatus = parseSlashlibStatus(d.status);
+    const chapterCount = await fetchSlashlibChapterCount(slug, token);
 
     const otherNames = Array.isArray(d.otherNames)
-  ? d.otherNames.map(n => typeof n === 'string' ? n : (n && n.name)).filter(Boolean)
-  : [];
+      ? d.otherNames.map(n => typeof n === 'string' ? n : (n && n.name)).filter(Boolean)
+      : [];
 
-return {
-  title: d.rus_name || d.name,
-  title_en: d.eng_name || '',
-  otherNames,
-  cover: d.cover ? d.cover.default : '',
-  description: desc,
-  country: d.authors ? d.authors.map(a => a.name).join(', ') : '',
-  tags: allTags,
-  year: yearStr,
-  pages: chapterCount,
-  link: 'https://v2.shlib.life/ru/manga/' + d.slug_url,
-  bl: isYaoiTags(allTags),
-  projectStatus: pStatus
-};
+    return {
+      title: d.rus_name || d.name,
+      title_en: d.eng_name || '',
+      otherNames,
+      cover: d.cover ? d.cover.default : '',
+      description: desc,
+      country: d.authors ? d.authors.map(a => a.name).join(', ') : '',
+      tags: allTags,
+      year: yearStr,
+      pages: chapterCount,
+      link: 'https://v2.shlib.life/ru/manga/' + d.slug_url,
+      bl: isYaoiTags(allTags),
+      projectStatus: pStatus
+    };
   } catch (e) {
     return null;
   }
@@ -116,7 +165,6 @@ return {
  * Открывает ВИДИМЫЙ InAppBrowser и ждёт, пока пользователь войдёт.
  * Забирает токен из объекта 'auth' в localStorage.
  */
-
 async function getSlashlibToken(forceLogin, onStatus) {
   if (!forceLogin) {
     let cached = null, valid = null;
@@ -182,43 +230,37 @@ async function getSlashlibToken(forceLogin, onStatus) {
       if (settled) return;
       settled = true;
       if (pollTimer) clearInterval(pollTimer);
-
       try {
         const res = await plugin.executeScript({ script: extractTokenScript });
         if (res && res.result) realToken = JSON.parse(res.result);
       } catch(e) {}
-
       try { await plugin.close(); } catch(e) {}
-
       if (onStatus) onStatus(realToken ? 'Проверяю вход…' : 'Токен не найден');
-
       if (realToken) {
-  try {
-    localStorage.setItem('slashlib_token', realToken);
-    localStorage.setItem('slashlib_token_valid', '1');
-  } catch (e) {}
-  // Синхронизируем в облако, если залогинена
-  if (typeof Cloud !== 'undefined' && Cloud.isReady()) {
-    saveTokensToCloud({
-      slashlib_token: realToken,
-      slashlib_token_valid: '1'
-    });
-  }
-  resolve(realToken);
-} else {
-  resolve(null);
+        try {
+          localStorage.setItem('slashlib_token', realToken);
+          localStorage.setItem('slashlib_token_valid', '1');
+        } catch (e) {}
+        // Синхронизируем в облако, если залогинена
+        if (typeof Cloud !== 'undefined' && Cloud.isReady()) {
+          saveTokensToCloud({
+            slashlib_token: realToken,
+            slashlib_token_valid: '1'
+          });
+        }
+        resolve(realToken);
+      } else {
+        resolve(null);
       }
     };
 
     try {
       await plugin.openInWebView({ url: 'https://v2.shlib.life' });
-
       plugin.addListener('browserPageLoaded', async () => {
         try {
           await plugin.executeScript({ script: injectBanner });
         } catch(e){}
       });
-
       pollTimer = setInterval(async () => {
         if (settled) return;
         try {
@@ -232,14 +274,14 @@ async function getSlashlibToken(forceLogin, onStatus) {
           }
         } catch(e) {}
       }, 2000);
-
     } catch(e) {
-       console.error(e);
-       finish();
+      console.error(e);
+      finish();
     }
   });
 }
-  /**
+
+/**
  * Рисует кнопку «Войти в Slashlib» с обработкой ошибок.
  */
 function renderSlashlibLoginPrompt(resultsEl, input, errorMsg) {
@@ -255,21 +297,17 @@ function renderSlashlibLoginPrompt(resultsEl, input, errorMsg) {
       'Войти в Slashlib' +
     '</button></div>';
   resultsEl.innerHTML = html;
-
   const btn = resultsEl.querySelector('#slashlibLoginBtn');
   if (!btn) return;
-
   btn.onclick = async () => {
     resultsEl.innerHTML =
       '<div class="tmdb-status">Открываю Slashlib…<br>' +
       '<small style="opacity:0.7;margin-top:6px;display:inline-block;">' +
         'Войди в аккаунт, потом тапни «Я вошёл ✓» вверху страницы.' +
       '</small></div>';
-
     const token = await getSlashlibToken(true, (msg) => {
       if (msg) resultsEl.innerHTML = '<div class="tmdb-status">' + esc(msg) + '</div>';
     });
-
     if (token) {
       resultsEl.innerHTML =
         '<div class="tmdb-status">Вход выполнен ✓<br>' +
@@ -283,7 +321,7 @@ function renderSlashlibLoginPrompt(resultsEl, input, errorMsg) {
   };
 }
 
-  /**
+/**
  * Открывает модалку поиска. Если валидного токена нет — показывает кнопку «Войти».
  */
 function openSlashlibModal() {
@@ -291,23 +329,19 @@ function openSlashlibModal() {
   const input = document.getElementById('slashlibQuery');
   const results = document.getElementById('slashlibResults');
   if (!modal || !input || !results) return;
-
   input.value = '';
-
   let hasValid = false;
   try {
     const t = localStorage.getItem('slashlib_token');
     const v = localStorage.getItem('slashlib_token_valid');
     if (t && v === '1') hasValid = true;
   } catch (e) {}
-
   if (hasValid) {
     results.innerHTML = '<div class="tmdb-status">Введи название и нажми Enter</div>';
     setTimeout(() => { try { input.focus(); } catch (e) {} }, 60);
   } else {
     renderSlashlibLoginPrompt(results, input);
   }
-
   modal.classList.add('on');
 }
 
@@ -315,36 +349,30 @@ function closeSlashlibModal() {
   document.getElementById('slashlibModal').classList.remove('on');
 }
 
-  /**
+/**
  * Тихий поиск с Bearer-токеном. Никаких окон.
  */
 async function runSlashlibSearch() {
   const input = document.getElementById('slashlibQuery');
   const results = document.getElementById('slashlibResults');
   if (!input || !results) return;
-
   const q = input.value.trim();
   if (!q) { results.innerHTML = '<div class="tmdb-status">Введи название</div>'; return; }
-
   let token = null;
   try {
     const t = localStorage.getItem('slashlib_token');
     const v = localStorage.getItem('slashlib_token_valid');
     if (t && v === '1') token = t;
   } catch (e) {}
-
   if (!token) {
     renderSlashlibLoginPrompt(results, input);
     return;
   }
-
   results.innerHTML = '<div class="tmdb-status">Ищу на Slashlib…</div>';
-
   try {
     const url =
       'https://api.cdnlibs.org/api/manga?site_id[]=2&page=1&limit=60' +
       '&sort_by=last_chapter_at&q=' + encodeURIComponent(q);
-
     const res = await fetch(url, {
       headers: {
         'Site-Id': '2',
@@ -352,7 +380,6 @@ async function runSlashlibSearch() {
         'Authorization': 'Bearer ' + token
       }
     });
-
     if (!res.ok) {
       if (res.status === 401) {
         try {
@@ -364,10 +391,8 @@ async function runSlashlibSearch() {
       }
       throw new Error('HTTP ' + res.status);
     }
-
     const json = await res.json();
     const list = (json && json.data) || [];
-
     if (list.length >= 30) {
       const qLow = q.toLowerCase();
       const anyMatch = list.some((r) => {
@@ -383,14 +408,11 @@ async function runSlashlibSearch() {
         return;
       }
     }
-
     if (!list.length) {
       results.innerHTML = '<div class="tmdb-status">Ничего не найдено</div>';
       return;
     }
-
     window._slashlibCache = list;
-
     results.innerHTML = list.map((r, idx) => {
       const cover = (r.cover && r.cover.thumbnail) ? r.cover.thumbnail : '';
       const title = r.rus_name || r.name || 'Без названия';
@@ -406,7 +428,6 @@ async function runSlashlibSearch() {
           '</div></div>'
       );
     }).join('');
-
     results.querySelectorAll('.tmdb-result').forEach((el) => {
       el.onclick = () => {
         const idx = +el.dataset.idx;
@@ -420,9 +441,8 @@ async function runSlashlibSearch() {
   }
 }
 
-    
 /**
- * 1. Заполнение формы (при клике на результат поиска)
+ * Заполнение формы (при клике на результат поиска)
  */
 async function loadSlashlibDetailsNative(r, resultsEl, token) {
   if (!r || !r.slug_url) {
@@ -430,12 +450,10 @@ async function loadSlashlibDetailsNative(r, resultsEl, token) {
     return;
   }
   resultsEl.innerHTML = '<div class="tmdb-status">Загружаю данные через API…</div>';
-
   try {
     const fields = ['background', 'eng_name', 'otherNames', 'summary', 'releaseDate', 'country', 'authors', 'genres', 'tags'];
     const query = fields.map((f, i) => `fields[${i}]=${f}`).join('&');
     const apiUrl = `https://hapi.hentaicdn.org/api/manga/${r.slug_url}?${query}`;
-
     const res = await fetch(apiUrl, {
       headers: { 'Authorization': 'Bearer ' + token, 'Accept': 'application/json', 'Site-Id': '2' }
     });
@@ -448,60 +466,23 @@ async function loadSlashlibDetailsNative(r, resultsEl, token) {
     if (d.genres) d.genres.forEach(g => allTags.push(g.name));
     if (d.tags) d.tags.forEach(t => allTags.push(t.name));
 
-    // ПАРСИНГ ОПИСАНИЯ (все блоки + переносы)
-    const getSummaryText = (summary) => {
-      if (!summary) return '';
-      if (typeof summary === 'string') return summary;
-      const walk = (node) => {
-        if (!node) return '';
-        if (node.type === 'text') return node.text || '';
-        if (node.type === 'hardBreak') return '\n';
-        if (Array.isArray(node.content)) {
-          let txt = node.content.map(walk).join('');
-          if (node.type === 'paragraph') txt += '\n';
-          return txt;
-        }
-        return '';
-      };
-      return walk(summary).replace(/\n{3,}/g, '\n\n').trim();
-    };
-    const desc = getSummaryText(d.summary);
+    const desc = slashlibSummaryText(d.summary);
+    const yearStr = slashlibYear(d.releaseDate);
+    const pStatus = parseSlashlibStatus(d.status);
+    const chapterCount = await fetchSlashlibChapterCount(r.slug_url, token);
 
-    // ПАРСИНГ ГОДА (только 4 цифры)
-    const getYear = (raw) => {
-      if (!raw) return '';
-      const m = String(raw).match(/\b(\d{4})\b/);
-      return m ? m[1] : String(raw);
-    };
-    const yearStr = getYear(d.releaseDate);
+    const otherNames = Array.isArray(d.otherNames)
+      ? d.otherNames.map(n => typeof n === 'string' ? n : (n && n.name)).filter(Boolean)
+      : [];
 
-    let pStatus = '';
-    if (d.status && d.status.label) {
-      const s = d.status.label.toLowerCase();
-      if (s.includes('онгоинг') || s.includes('выходит')) pStatus = 'ongoing';
-      else if (s.includes('завершен')) pStatus = 'completed';
-      else if (s.includes('анонс')) pStatus = 'announced';
-    }
-
-    // ЗАПРОС ГЛАВ
-    let chapterCount = '';
-    try {
-      const chRes = await fetch(`https://api.cdnlibs.org/api/manga/${r.slug_url}/chapters?limit=500`, {
-        headers: { 'Authorization': 'Bearer ' + token, 'Accept': 'application/json', 'Site-Id': '2' }
-      });
-      if (chRes.ok) {
-        const chJson = await chRes.json();
-        if (chJson.meta && chJson.meta.total) {
-          chapterCount = String(chJson.meta.total);
-        } else if (Array.isArray(chJson.data)) {
-          chapterCount = String(chJson.data.length);
-        }
-      }
-    } catch(e) { console.warn('Не удалось получить главы:', e); }
+    // --- Автопоиск Comizy (как при обновлении карточки) ---
+    resultsEl.innerHTML = '<div class="tmdb-status">Ищу главы на Comizy…</div>';
+    const comizy = await findComizyForSlashlib(d, yearStr);
 
     fillSlashlibForm({
       title: d.rus_name || d.name,
       title_en: d.eng_name || '',
+      otherNames,
       cover: d.cover ? d.cover.default : '',
       description: desc,
       country: d.authors ? d.authors.map(a => a.name).join(', ') : '',
@@ -510,33 +491,31 @@ async function loadSlashlibDetailsNative(r, resultsEl, token) {
       pages: chapterCount,
       link: 'https://v2.shlib.life/ru/manga/' + d.slug_url,
       bl: isYaoiTags(allTags),
-      projectStatus: pStatus
+      projectStatus: pStatus,
+      link_comizy: comizy ? comizy.url : '',
+      comizyChapters: comizy ? comizy.chapters : []
     });
 
     const modal = document.getElementById('slashlibModal');
     if (modal) modal.classList.remove('on');
-    toast('Заполнено через API Slashlib', 'success');
-
+    toast(comizy
+      ? 'Заполнено: Slashlib + Comizy (' + comizy.chapters.length + ' гл.)'
+      : 'Заполнено через API Slashlib', 'success');
   } catch(e) {
     resultsEl.innerHTML = '<div class="tmdb-status">Ошибка API: ' + esc(String(e.message)) + '</div>';
   }
 }
-  
 
-
-
-  /**
+/**
  * Заполнение формы полученными данными.
  */
 function fillSlashlibForm(d) {
   const panel = document.getElementById('panel');
   if (!panel) return;
-
   const setVal = (id, val) => {
     const el = panel.querySelector('#' + id);
     if (el && val) el.value = val;
   };
-
   setVal('f_title', d.title);
   setVal('f_title_en', d.title_en);
   setVal('f_year', d.year);
@@ -546,7 +525,6 @@ function fillSlashlibForm(d) {
   setVal('f_tags', (d.tags || []).join(', '));
   setVal('f_description', d.description);
   setVal('f_pages', d.pages);
-
   if (d.cover) setCoverPreview(d.cover);
 
   const segType = panel.querySelector('#f_type');
@@ -557,10 +535,11 @@ function fillSlashlibForm(d) {
       comicBtn.classList.add('on');
     }
   }
+
   const draft = window._currentDraft;
   if (draft) draft.type = 'comic';
-
   if (draft) draft.projectStatus = d.projectStatus || '';
+
   const segProj = panel.querySelector('#f_project_status');
   if (segProj) {
     segProj.querySelectorAll('button').forEach((b) => {
@@ -576,12 +555,25 @@ function fillSlashlibForm(d) {
     if (no) no.classList.remove('on');
     if (draft) draft.bl = true;
   }
+
+  // --- Comizy: ссылка + главы в форму и драфт ---
+  if (d.link_comizy) {
+    setVal('f_link_comizy', d.link_comizy);
+    if (draft) draft.link_comizy = d.link_comizy;
+  }
+  if (Array.isArray(d.comizyChapters) && d.comizyChapters.length) {
+    if (draft) draft.comizyChapters = d.comizyChapters;
+    const chField = panel.querySelector('#f_comizy_chapters');
+    if (chField) {
+      try { chField.value = JSON.stringify(d.comizyChapters); } catch(e) {}
+    }
+  }
+  if (Array.isArray(d.otherNames) && d.otherNames.length && draft) {
+    draft.otherNames = d.otherNames;
+  }
 }
 
-
-  
-  
-  document.getElementById('slashlibClose').onclick = closeSlashlibModal;
+document.getElementById('slashlibClose').onclick = closeSlashlibModal;
 document.getElementById('slashlibModal').onclick = (e) => {
   if(e.target.id === 'slashlibModal') closeSlashlibModal();
 };
