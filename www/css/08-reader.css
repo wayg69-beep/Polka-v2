@@ -347,6 +347,7 @@ body.reader-open-bg {
 .reader-pages:not(.horizontal) img {
   width: calc(100% * var(--reader-zoom, 1));
   max-width: none;
+  object-fit: initial;
 }
 
 .reader-pages img {
@@ -354,7 +355,6 @@ body.reader-open-bg {
   width: 100%;
   max-width: 100%;
   height: auto;
-  object-fit: contain;
   margin: 0 auto;
   user-select: none;
   -webkit-user-drag: none;
