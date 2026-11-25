@@ -477,7 +477,10 @@ async function loadSlashlibDetailsNative(r, resultsEl, token) {
 
     // --- Автопоиск Comizy (как при обновлении карточки) ---
     resultsEl.innerHTML = '<div class="tmdb-status">Ищу главы на Comizy…</div>';
-    const comizy = await findComizyForSlashlib(d, yearStr);
+    const _cd = window._currentDraft;
+    const comizy = (_cd && (_cd.comizyLocked || _cd.comizyOff))
+      ? null
+      : await findComizyForSlashlib(d, yearStr);
 
     fillSlashlibForm({
       title: d.rus_name || d.name,
@@ -557,11 +560,12 @@ function fillSlashlibForm(d) {
   }
 
   // --- Comizy: ссылка + главы в форму и драфт ---
-  if (d.link_comizy) {
+  if (d.link_comizy && !(draft && (draft.comizyLocked || draft.comizyOff))) {
     setVal('f_link_comizy', d.link_comizy);
     if (draft) draft.link_comizy = d.link_comizy;
+    if (window._refreshComizyHint) window._refreshComizyHint();
   }
-  if (Array.isArray(d.comizyChapters) && d.comizyChapters.length) {
+  if (Array.isArray(d.comizyChapters) && d.comizyChapters.length && !(draft && (draft.comizyLocked || draft.comizyOff))) {
     if (draft) draft.comizyChapters = d.comizyChapters;
     const chField = panel.querySelector('#f_comizy_chapters');
     if (chField) {

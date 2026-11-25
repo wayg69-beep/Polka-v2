@@ -712,6 +712,8 @@ async function pickComizyResult(idx) {
     draft.type = "comic";
     draft.link_comizy = details.url;
     draft.comizyChapters = chapters;
+    draft.comizyLocked = true;
+    draft.comizyOff = false;
     draft.bl = isBlComizy;
     if (details.status === "Ongoing") draft.projectStatus = "ongoing";
     else if (details.status === "Completed" || details.status === "Finished")
@@ -744,6 +746,7 @@ async function pickComizyResult(idx) {
     });
   }
 
+  if (window._refreshComizyHint) window._refreshComizyHint();
   closeComizyModal();
   toast("Заполнено с Comizy", "success");
 
