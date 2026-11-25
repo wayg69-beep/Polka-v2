@@ -114,7 +114,7 @@ async function refreshCard(id) {
           toast('Ошибка обновления Comizy: ' + e.message, 'error');
           return;
         }
-      } else if (!_isComizyCard && groupOf(it.type) === 'comic') {
+      } else if (!_isComizyCard && !it.comizyOff && !it.comizyLocked && groupOf(it.type) === 'comic') {
         // Обычная карточка — ищем Comizy по всем именам Slashlib
         try {
           const allSlashNames = [
@@ -813,11 +813,15 @@ async function refreshSlashlibNative(it) {
       ].filter(Boolean);
       // Сохраняем в карточке, чтобы использовать при следующем refreshCard
       it.otherNames = slashOtherNames;
-      const match = await ComizyParser.searchAndMatchByNames(allSlashNames, it.year);
-      if (match) {
-        it.link_comizy = match.url;
-        const keepChapter0 = await ComizyParser.checkSlashlibHasChapter0(it.link);
-        it.comizyChapters = await ComizyParser.getChapters(match.hid, { keepChapter0 });
+      // Ссылку закрепили руками (comizyLocked) или убрали (comizyOff) — автопоиск её не трогает.
+      // Главы закреплённой ссылки уже обновил refreshCard.
+      if (!it.comizyLocked && !it.comizyOff) {
+        const match = await ComizyParser.searchAndMatchByNames(allSlashNames, it.year);
+        if (match) {
+          it.link_comizy = match.url;
+          const keepChapter0 = await ComizyParser.checkSlashlibHasChapter0(it.link);
+          it.comizyChapters = await ComizyParser.getChapters(match.hid, { keepChapter0 });
+        }
       }
     } catch(e) { console.warn('Comizy auto-search error', e); }
 

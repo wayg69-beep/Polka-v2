@@ -110,7 +110,11 @@ function buildEditorHTML(draft, isEdit){
       '<label>Ссылка (читать)</label>' +
       '<input type="text" id="f_link" value="' + esc(draft.link||'') + '" placeholder="https://…" autocomplete="off">' +
       '<label>Ссылка на Comizy</label>' +
-      '<input type="text" id="f_link_comizy" value="' + esc(draft.link_comizy||'') + '" placeholder="https://comizy.io/…" autocomplete="off">';
+      '<div class="comizy-link-row">' +
+        '<input type="text" id="f_link_comizy" value="' + esc(draft.link_comizy||'') + '" placeholder="https://comizy.io/…" autocomplete="off" autocapitalize="off" spellcheck="false">' +
+        '<button type="button" class="comizy-refresh-btn" id="btnComizyRefresh" title="Обновить главы / найти автоматически">🔄</button>' +
+      '</div>' +
+      '<div class="comizy-link-hint" id="comizyLinkHint"></div>';
           
 } else if(group === 'book'){
     let blField = '';
@@ -304,6 +308,8 @@ function openForm(id){
     if(typeof draft.hearts !== 'number') draft.hearts = 0;
     if(typeof draft.link_comizy !== 'string') draft.link_comizy = '';
     if(!Array.isArray(draft.comizyChapters)) draft.comizyChapters = [];
+    draft.comizyLocked = !!draft.comizyLocked;
+    draft.comizyOff = !!draft.comizyOff;
   } else {
     draft = {
       id: null, title: '', title_en: '', type: defaultTypeForCategory(), status: 'want',
@@ -368,6 +374,7 @@ const segProj   = panel.querySelector('#f_project_status');
     const lne = getVal('f_link_extras'); if(lne !== undefined) target.link_extras = lne;
     const lcm = getVal('f_link_comizy'); if(lcm !== undefined) target.link_comizy = lcm;
     const cmch = getVal('f_comizy_chapters'); if(cmch !== undefined) target.comizyChapters = JSON.parse(cmch || '[]');
+    if(target !== draft){ target.comizyLocked = !!draft.comizyLocked; target.comizyOff = !!draft.comizyOff; }
     const statusOn = segStatus.querySelector('button.on');
     if(statusOn) target.status = statusOn.dataset.v;
     const ratingOn = stars.querySelector('button.on[data-v]');
@@ -717,7 +724,153 @@ else if (source === 'kinogo') openKinogoModal(); // <-- Добавить эту 
   panel.querySelector('#closeForm').onclick = closeAndReturn;
   panel.querySelector('#btnCancel').onclick = closeAndReturn;
 
+  // ═══ Ссылка на Comizy: ручная правка, «убрать», кнопка обновить ═══
+  // comizyLocked — ссылку задали руками: автопоиск её больше не меняет.
+  // comizyOff    — ссылку убрали: автопоиск её не возвращает (только кнопка 🔄 здесь).
+  const cmInput = panel.querySelector('#f_link_comizy');
+  const cmBtn   = panel.querySelector('#btnComizyRefresh');
+  const cmHint  = panel.querySelector('#comizyLinkHint');
+  const cmField = panel.querySelector('#f_comizy_chapters');
+  const cmSlugOf = (v) => {
+    const m = String(v || '').trim().match(/comizy\.io\/([^\/?#\s]+)/i);
+    return m ? m[1] : '';
+  };
+  if (cmInput && cmBtn) {
+    const cmSetChapters = (list) => {
+      draft.comizyChapters = Array.isArray(list) ? list : [];
+      if (cmField) { try { cmField.value = JSON.stringify(draft.comizyChapters); } catch (e) {} }
+    };
+    const cmUpdateHint = () => {
+      if (!cmHint) return;
+      let t = '', cls = '';
+      if (draft._comizyBusy) { t = 'Загружаю…'; }
+      else if (draft.comizyLocked && draft.link_comizy) { t = '📌 Закреплена вручную — при обновлении не меняется'; cls = 'locked'; }
+      else if (draft.comizyOff && !draft.link_comizy) { t = 'Ссылка убрана — автоматически не подтянется. Вернуть: 🔄'; cls = 'off'; }
+      else if (draft.link_comizy) { t = 'Найдена автоматически. Чтобы закрепить — исправь ссылку вручную'; }
+      cmHint.textContent = t;
+      cmHint.className = 'comizy-link-hint ' + cls;
+    };
+    window._refreshComizyHint = cmUpdateHint;
+
+    const cmBusy = (on) => {
+      draft._comizyBusy = !!on;
+      cmBtn.disabled = !!on;
+      cmBtn.classList.toggle('spin', !!on);
+      cmUpdateHint();
+    };
+
+    // Загружает главы по slug и закрепляет (или нет) ссылку
+    const cmLoadBySlug = async (slug, lock) => {
+      cmBusy(true);
+      try {
+        const details = await ComizyParser.getMangaDetails(slug);
+        if (!details || !details.hid) throw new Error('Не нашёл мангу по этой ссылке');
+        let keep0 = true;
+        try { keep0 = await ComizyParser.checkSlashlibHasChapter0(panel.querySelector('#f_link')?.value || draft.link); } catch (e) {}
+        const chapters = await ComizyParser.getChapters(details.hid, { keepChapter0: keep0 });
+        draft.link_comizy = 'https://comizy.io/' + slug;
+        cmInput.value = draft.link_comizy;
+        cmSetChapters(chapters);
+        if (lock !== undefined) { draft.comizyLocked = !!lock; draft.comizyOff = false; }
+        toast('Comizy: «' + details.title + '», глав ' + chapters.length, 'success');
+        return true;
+      } catch (e) {
+        toast('Comizy: ' + (e.message || e), 'error');
+        return false;
+      } finally {
+        cmBusy(false);
+      }
+    };
+
+    // Применить то, что лежит в поле (после ручной правки)
+    const cmApplyInput = async () => {
+      if (draft._comizyBusy) return;
+      const v = cmInput.value.trim();
+      if (!v) {
+        if (draft.link_comizy || !draft.comizyOff) {
+          draft.link_comizy = '';
+          cmSetChapters([]);
+          draft.comizyLocked = false;
+          draft.comizyOff = true;
+          cmUpdateHint();
+        }
+        return;
+      }
+      const slug = cmSlugOf(v);
+      if (!slug) {
+        toast('Ссылка должна вести на comizy.io', 'warn');
+        cmInput.value = draft.link_comizy || '';
+        return;
+      }
+      if (slug === cmSlugOf(draft.link_comizy)) {
+        // Та же манга: просто закрепляем (человек подтвердил ссылку руками)
+        draft.link_comizy = 'https://comizy.io/' + slug;
+        cmInput.value = draft.link_comizy;
+        draft.comizyLocked = true; draft.comizyOff = false;
+        cmUpdateHint();
+        return;
+      }
+      const prev = draft.link_comizy || '';
+      const ok = await cmLoadBySlug(slug, true);
+      if (!ok) cmInput.value = prev;
+    };
+    cmInput.addEventListener('change', cmApplyInput);
+    cmInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); cmInput.blur(); }
+    });
+
+    cmBtn.onclick = async (e) => {
+      e.preventDefault();
+      if (draft._comizyBusy) return;
+      const v = cmInput.value.trim();
+      const slug = cmSlugOf(v);
+      if (v && !slug) { toast('Ссылка должна вести на comizy.io', 'warn'); return; }
+
+      // 1) В поле есть ссылка — перечитываем главы по ней (замок сохраняем / ставим, если ссылка новая)
+      if (slug) {
+        const isSame = slug === cmSlugOf(draft.link_comizy);
+        const prev = draft.link_comizy || '';
+        const ok = await cmLoadBySlug(slug, isSame ? undefined : true);
+        if (!ok && !isSame) cmInput.value = prev;
+        return;
+      }
+
+      // 2) Поле пустое — автопоиск по названиям (возвращает ссылку, снимает «убрано»)
+      const title   = panel.querySelector('#f_title')?.value || draft.title || '';
+      const titleEn = panel.querySelector('#f_title_en')?.value || draft.title_en || '';
+      const names = [title, titleEn, ...(Array.isArray(draft.otherNames) ? draft.otherNames : [])].filter(Boolean);
+      if (!names.length) { toast('Сначала заполни название', 'warn'); return; }
+      const year = panel.querySelector('#f_year')?.value || draft.year || '';
+      cmBusy(true);
+      let match = null;
+      try { match = await ComizyParser.searchAndMatchByNames(names, year); }
+      catch (err) { console.warn('Comizy auto-search error', err); }
+      cmBusy(false);
+      if (!match) { toast('На Comizy ничего подходящего не нашлось', 'warn'); return; }
+      await cmLoadBySlug(match.slug, false);
+    };
+
+    cmUpdateHint();
+  }
+
+  // Подождать, пока ссылка Comizy догрузится, чтобы не сохранить «пол-состояния»
+  const cmGuardPending = () => {
+    if (draft._comizyBusy) { toast('Подожди, загружаю главы Comizy…', 'warn'); return true; }
+    if (cmInput) {
+      const cur = cmInput.value.trim();
+      const saved = draft.link_comizy || '';
+      const changed = cur === '' ? !!saved : cmSlugOf(cur) !== cmSlugOf(saved);
+      if (changed) {
+        cmInput.dispatchEvent(new Event('change'));
+        toast('Проверяю ссылку Comizy — нажми «Сохранить» ещё раз', 'warn');
+        return true;
+      }
+    }
+    return false;
+  };
+
   panel.querySelector('#btnSave').onclick = () => {
+  if (cmGuardPending()) return;
   // Запоминаем старую обложку и id ДО readInto — чтобы понять, изменилась ли она
 
 const oldCover = isEdit ? (items.find(x => x.id === draft.id)?.cover || '') : '';
@@ -731,6 +884,7 @@ if(!Array.isArray(draft.altCovers)) draft.altCovers = [];
     
 const pendingSeasons = Array.isArray(draft._pendingSeasons) ? draft._pendingSeasons.slice() : [];
 delete draft._pendingSeasons;
+delete draft._comizyBusy;
   const title = (draft.title || '').trim();
   if(!title){ toast('Нужно название'); panel.querySelector('#f_title').focus(); return; }
   draft.title = title;

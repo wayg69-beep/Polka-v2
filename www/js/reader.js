@@ -2141,7 +2141,11 @@ const SlashLibReader = {
             ]);
             this.restoreScroll(progress);
           } else {
-            await currentPromise;
+            // не держим чёрный экран дольше 6 с, даже если кадр качается долго
+            await Promise.race([
+              currentPromise.catch(() => {}),
+              new Promise((r) => setTimeout(r, 6000)),
+            ]);
           }
           wrap.style.visibility = "visible";
           requestAnimationFrame(() =>
@@ -2240,18 +2244,22 @@ const SlashLibReader = {
   },
 
   _preloadAround(idx) {
-    const isComizy = this._source === "comizy";
-    const AHEAD = isComizy ? 5 : 2;
+    if (!this._pagesList.length) return;
+    // Comizy — 5 кадров вперёд, SlashLib — 3; назад по 2
+    const AHEAD = this._source === "comizy" ? 5 : 3;
     const BEHIND = 2;
     const list = [];
-    // Сначала то, что впереди (ближайшие первыми), потом то, что позади
-    for (let i = idx + 1; i <= Math.min(this._pagesList.length - 1, idx + AHEAD); i++)
+    // Сначала ближайшие вперёд, потом текущий и те, что позади
+    for (
+      let i = idx + 1;
+      i <= Math.min(this._pagesList.length - 1, idx + AHEAD);
+      i++
+    )
       if (!this._blobUrls[i]) list.push(i);
     for (let i = idx; i >= Math.max(0, idx - BEHIND); i--)
       if (!this._blobUrls[i]) list.push(i);
     if (!list.length) return;
-    if (isComizy) this.loadPagesBatch(list, 3).catch(() => {});
-    else list.forEach((i) => this.loadPage(i));
+    this.loadPagesBatch(list, 3).catch(() => {});
   },
 
   async loadPagesBatch(indices, limit) {
@@ -3023,167 +3031,166 @@ const SlashLibReader = {
     const img = wrap ? wrap.querySelectorAll("img")[idx] : null;
     if (!img) return Promise.resolve();
     if (img._loadingPromise) return img._loadingPromise;
-    const pr = this._loadPageImpl(idx).finally(() => {
+    // После неудачи не долбим сервер чаще раза в 3 с — повтор сделает сторож/скролл
+    if (img._failedAt && Date.now() - img._failedAt < 3000)
+      return Promise.resolve();
+    const pr = this._loadPageImpl(idx, img).finally(() => {
       img._loadingPromise = null;
     });
     img._loadingPromise = pr;
     return pr;
   },
 
-  async _loadPageImpl(idx) {
+  // Скачивает картинку: по списку зеркал, с таймаутами и до 3 кругов повторов.
+  // Возвращает Blob или null. Раньше один сбой = кадр чёрный навсегда.
+  async _fetchImageBlob(urls, headers, mime, mySession) {
+    const CHttp = window.Capacitor?.Plugins?.CapacitorHttp;
+    if (!CHttp) return null;
+    const ROUNDS = 3;
+    for (let round = 0; round < ROUNDS; round++) {
+      let allPermanent = true; // все ответы 404/401/410 — повторять бессмысленно
+      for (const tryUrl of urls) {
+        if (this._sessionId !== mySession) return null;
+        try {
+          const r = await Promise.race([
+            CHttp.get({
+              url: tryUrl,
+              headers,
+              responseType: "arraybuffer",
+              connectTimeout: 12000,
+              readTimeout: 30000,
+            }),
+            // страховка: плагин мог «повиснуть» без ответа
+            new Promise((_, rej) =>
+              setTimeout(() => rej(new Error("timeout")), 35000),
+            ),
+          ]);
+          if (this._sessionId !== mySession) return null;
+          if (r.status === 200 && r.data) {
+            let b64 = r.data;
+            if (typeof b64 === "string" && b64.startsWith("data:image"))
+              b64 = b64.split(",")[1];
+            const bin = atob(b64);
+            const bytes = new Uint8Array(bin.length);
+            for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+            return new Blob([bytes], { type: mime });
+          }
+          if (![404, 401, 410].includes(r.status)) allPermanent = false;
+          console.warn("[loadPage]", tryUrl, "HTTP", r.status);
+        } catch (e) {
+          allPermanent = false;
+          console.warn("[loadPage]", tryUrl, "ERR", e && e.message);
+        }
+      }
+      if (allPermanent) break;
+      if (round < ROUNDS - 1)
+        await new Promise((r) => setTimeout(r, 700 * (round + 1)));
+    }
+    return null;
+  },
+
+  _markPageFailed(img, mySession) {
+    img._failedAt = Date.now();
+    img._fails = (img._fails || 0) + 1;
+    img.alt = "Не удалось загрузить страницу";
+    img.style.opacity = "0.3";
+    // Сторож: пока рядом есть незагруженные кадры — пробуем снова сами,
+    // даже если пользователь стоит на месте и не скроллит
+    if (img._fails <= 8) {
+      setTimeout(() => {
+        if (this._sessionId !== mySession || !img.isConnected) return;
+        this._preloadAround(this._currentIndex);
+      }, 3300);
+    }
+  },
+
+  async _loadPageImpl(idx, img) {
     if (this._blobUrls[idx]) return;
     const wrap = document.getElementById("readerPages");
-    if (!wrap) return;
-    const imgs = wrap.querySelectorAll("img");
-    const img = imgs[idx];
-    if (!img) return;
+    if (!wrap || !img) return;
 
     const pageInfo = this._pagesList[idx];
     if (!pageInfo) return;
 
     const mySession = this._sessionId;
-    const CHttp = window.Capacitor?.Plugins?.CapacitorHttp;
-    if (!CHttp) {
+    if (!window.Capacitor?.Plugins?.CapacitorHttp) {
       console.warn("[loadPage] Нет CapacitorHttp");
       return;
     }
 
-    // ═══ COMIZY ═══
+    let blob = null;
+
     if (this._source === "comizy") {
+      // ═══ COMIZY ═══
       const url = String(pageInfo.url || "").trim();
       if (!url) return;
-
-      const headers = {
-        Referer: "https://comizy.io/",
-        Origin: "https://comizy.io",
-        "User-Agent": "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36",
-        Accept: "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
-      };
-
-      let blob = null;
-      try {
-        const r = await CHttp.get({
-          url,
-          headers,
-          responseType: "arraybuffer",
-        });
-        if (this._sessionId !== mySession) return;
-        if (r.status === 200 && r.data) {
-          let b64 = r.data;
-          if (b64.startsWith("data:image")) b64 = b64.split(",")[1];
-          const bin = atob(b64);
-          const bytes = new Uint8Array(bin.length);
-          for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-          blob = new Blob([bytes], { type: "image/webp" });
-        } else {
-          console.warn("[loadPage comizy]", url, "HTTP", r.status);
-        }
-      } catch (e) {
-        console.warn("[loadPage comizy]", url, "ERR", e.message);
-      }
-
-      if (!blob) {
-        const cur = wrap.querySelectorAll("img")[idx];
-        if (cur) {
-          cur.alt = "Не удалось загрузить страницу";
-          cur.style.opacity = "0.3";
-        }
-        return;
-      }
-
-      const blobUrl = URL.createObjectURL(blob);
-      if (this._sessionId !== mySession || !img.isConnected) {
-        URL.revokeObjectURL(blobUrl);
-        return;
-      }
-      // Индекс берём у самого элемента: он мог сдвинуться, пока кадр качался
-      const realIdx = Number(img.dataset.index);
-      this._blobUrls[Number.isFinite(realIdx) ? realIdx : idx] = blobUrl;
-      this._setPageSrc(wrap, img, blobUrl);
-      return;
-    }
-
-    // ═══ SLASHLIB (как было) ═══
-    let path;
-    const rawUrl = String(pageInfo.url || "").trim();
-    if (rawUrl) {
-      if (/^https?:\/\//i.test(rawUrl)) path = rawUrl;
-      else path = rawUrl.replace(/^\/+/, "");
+      blob = await this._fetchImageBlob(
+        [url],
+        {
+          Referer: "https://comizy.io/",
+          Origin: "https://comizy.io",
+          "User-Agent": "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36",
+          Accept: "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
+        },
+        "image/webp",
+        mySession,
+      );
     } else {
-      const raw = String(pageInfo.image || "").replace(/^\/+/, "");
-      path = `manga/${this._shortSlug}/chapters/${pageInfo.chapterId}/${raw}`;
-    }
-
-    const domains = [
-      "https://img3.hentaicdn.org",
-      "https://img3.cdnlibs.link",
-      "https://img3.cdnlibs.org",
-    ];
-
-    const token = localStorage.getItem("slashlib_token");
-    const headers = {
-      Authorization: "Bearer " + token,
-      Origin: "https://v2.shlib.life",
-      Referer: "https://v2.shlib.life/",
-      "Site-Id": "2",
-      Accept: "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
-    };
-
-    let blob = null;
-    for (const base of domains) {
-      if (this._sessionId !== mySession) return;
-      const tryUrl = path.startsWith("http") ? path : `${base}/${path}`;
-      try {
-        const r = await CHttp.get({
-          url: tryUrl,
-          headers,
-          responseType: "arraybuffer",
-        });
-        if (this._sessionId !== mySession) return;
-        if (r.status === 200 && r.data) {
-          let b64 = r.data;
-          if (b64.startsWith("data:image")) b64 = b64.split(",")[1];
-          const bin = atob(b64);
-          const bytes = new Uint8Array(bin.length);
-          for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-          blob = new Blob([bytes], { type: "image/png" });
-          break;
-        }
-        console.warn(
-          "[loadPage]",
-          tryUrl,
-          "HTTP",
-          r.status,
-          "— пробую следующее зеркало",
-        );
-      } catch (e) {
-        console.warn(
-          "[loadPage]",
-          tryUrl,
-          "ERR",
-          e.message,
-          "— пробую следующее зеркало",
-        );
+      // ═══ SLASHLIB ═══
+      let path;
+      const rawUrl = String(pageInfo.url || "").trim();
+      if (rawUrl) {
+        if (/^https?:\/\//i.test(rawUrl)) path = rawUrl;
+        else path = rawUrl.replace(/^\/+/, "");
+      } else {
+        const raw = String(pageInfo.image || "").replace(/^\/+/, "");
+        path = `manga/${this._shortSlug}/chapters/${pageInfo.chapterId}/${raw}`;
       }
+      const domains = [
+        "https://img3.hentaicdn.org",
+        "https://img3.cdnlibs.link",
+        "https://img3.cdnlibs.org",
+      ];
+      const urls = path.startsWith("http")
+        ? [path]
+        : domains.map((base) => `${base}/${path}`);
+      const token = localStorage.getItem("slashlib_token");
+      blob = await this._fetchImageBlob(
+        urls,
+        {
+          Authorization: "Bearer " + token,
+          Origin: "https://v2.shlib.life",
+          Referer: "https://v2.shlib.life/",
+          "Site-Id": "2",
+          Accept: "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
+        },
+        "image/png",
+        mySession,
+      );
     }
 
+    if (this._sessionId !== mySession) return;
     if (!blob) {
-      if (img) {
-        img.alt = "Не удалось загрузить страницу";
-        img.style.opacity = "0.3";
-      }
+      this._markPageFailed(img, mySession);
       return;
     }
 
     const blobUrl = URL.createObjectURL(blob);
-    const currentImgs = wrap.querySelectorAll("img");
-    const currentImg = currentImgs[idx];
-    if (!currentImg) {
+    if (!img.isConnected) {
       URL.revokeObjectURL(blobUrl);
       return;
     }
-    this._blobUrls[idx] = blobUrl;
-    this._setPageSrc(wrap, currentImg, blobUrl);
+    // Индекс берём у самого элемента: он мог сдвинуться, пока кадр качался
+    // (например, при подгрузке предыдущей главы сверху)
+    const realIdx = Number(img.dataset.index);
+    const key = Number.isFinite(realIdx) ? realIdx : idx;
+    if (this._blobUrls[key]) {
+      URL.revokeObjectURL(this._blobUrls[key]);
+    }
+    this._blobUrls[key] = blobUrl;
+    img._failedAt = 0;
+    img._fails = 0;
+    this._setPageSrc(wrap, img, blobUrl);
   },
 
   // Ставит картинку и компенсирует скролл, если реальная высота отличается
@@ -3304,7 +3311,6 @@ _setPageSrc(wrap, img, blobUrl) {
       if (this._settings.mode === "WEBTOON") {
         const threshold = wrap.scrollTop + window.innerHeight / 3;
         for (let i = 0; i < imgs.length; i++) {
-          if (!imgs[i].src) continue;
           if (imgs[i].offsetTop <= threshold) {
             idx = i;
             found = true;
@@ -3312,7 +3318,6 @@ _setPageSrc(wrap, img, blobUrl) {
         }
       } else {
         for (let i = 0; i < imgs.length; i++) {
-          if (!imgs[i].src) continue;
           if (imgs[i].offsetLeft <= wrap.scrollLeft + 100) {
             idx = i;
             found = true;
@@ -3327,9 +3332,16 @@ _setPageSrc(wrap, img, blobUrl) {
         this.updateCounter();
         this.updateChapterNav();
         this.updateReaderTitle();
-        // Предзагрузка: Comizy — 5 кадров вперёд, 2 назад; SlashLib — ±2
-        this._preloadAround(idx);
         this.checkNextChapterUI();
+      }
+      // Предзагрузка — на КАЖДЫЙ скролл (с троттлингом), а не только при смене кадра:
+      // иначе, если кадр не скачался, а текущий индекс не меняется, догрузка не запускалась никогда
+      {
+        const nowT = Date.now();
+        if (nowT - (this._lastPreloadAt || 0) > 120) {
+          this._lastPreloadAt = nowT;
+          this._preloadAround(this._currentIndex);
+        }
       }
       this.checkAutoLoad();
       this.checkPrevLoad();
@@ -3692,7 +3704,9 @@ _setPageSrc(wrap, img, blobUrl) {
         img.alt = "Страница " + (startIdx + i + 1);
         img.style.opacity = "0";
         img.style.transition = "opacity 0.3s ease";
-        img.style.aspectRatio = "2 / 3";
+        // Размер заглушки — по данным API: тогда подмена на реальный кадр не двигает ленту
+        img.style.aspectRatio =
+          page.width && page.height ? `${page.width} / ${page.height}` : "2 / 3";
         img.style.width = "100%";
         if (nextBlock) wrap.insertBefore(img, nextBlock);
         else wrap.appendChild(img);
@@ -3846,10 +3860,15 @@ _setPageSrc(wrap, img, blobUrl) {
         }
         this._blobUrls = shiftedBlobs;
 
+        if (this._anchor) this._anchor.idx += addedCount;
+
         // Сразу возвращаем скролл на тот же кадр (заглушки уже имеют высоту)
         const imgsNow = wrap.querySelectorAll("img");
         const curNow = imgsNow[this._currentIndex];
         if (curNow) wrap.scrollTop = curNow.offsetTop + relOffset;
+          setTimeout(() => {
+          this._restoring = false;
+        }, 250);
 
         // Следующий «предыдущий» — тот, что перед только что добавленной главой
         const ci = this._chaptersList.findIndex(
@@ -3866,14 +3885,7 @@ _setPageSrc(wrap, img, blobUrl) {
         await this.loadPagesBatch(idxs, 4);
         if (this._sessionId !== mySession) return;
 
-        const imgsAfter = wrap.querySelectorAll("img");
-        const curAfter = imgsAfter[this._currentIndex];
-        if (curAfter) wrap.scrollTop = curAfter.offsetTop + relOffset;
         this._reindexReaderImgs();
-
-        setTimeout(() => {
-          this._restoring = false;
-        }, 200);
       } catch (e) {
         console.warn("[Comizy PrevLoad]", e);
         this._restoring = false;
@@ -3883,6 +3895,8 @@ _setPageSrc(wrap, img, blobUrl) {
       return;
     }
 
+    if (Date.now() - (this._prevFailAt || 0) < 4000) return;
+    const mySession = this._sessionId;
     this._prevLoading = true;
     try {
       const token = localStorage.getItem("slashlib_token");
@@ -3897,7 +3911,11 @@ _setPageSrc(wrap, img, blobUrl) {
       );
       const chapJson = await chapRes.json();
       const chapData = chapJson.data;
-      if (!chapData || !chapData.pages || !chapData.pages.length) return;
+      if (this._sessionId !== mySession) return;
+      if (!chapData || !chapData.pages || !chapData.pages.length) {
+        this._prevFailAt = Date.now();
+        return;
+      }
 
       // Фильтруем дисклеймеры в подгружаемой главе — тихо, без тостов
       const filterResult = await this._filterDisclaimers(
@@ -3905,16 +3923,26 @@ _setPageSrc(wrap, img, blobUrl) {
         0,
         true,
       );
+      if (this._sessionId !== mySession) return;
       const filteredPages = filterResult.pages;
-      if (!filteredPages.length) return;
+      if (!filteredPages.length) {
+        // Глава целиком из дисклеймеров — идём к предыдущей
+        const ci = this._chaptersList.findIndex(
+          (c) => String(c.id) === String(chapData.id),
+        );
+        this._prevChapter = ci > 0 ? this._chaptersList[ci - 1] : null;
+        this.updateChapterNav();
+        return;
+      }
 
       const wrap = document.getElementById("readerPages");
       if (!wrap) return;
 
       const imgsBefore = wrap.querySelectorAll("img");
       const curImgBefore = imgsBefore[this._currentIndex];
-      const oldScroll = wrap.scrollTop;
-      const relOffset = curImgBefore ? oldScroll - curImgBefore.offsetTop : 0;
+      const relOffset = curImgBefore
+        ? wrap.scrollTop - curImgBefore.offsetTop
+        : 0;
 
       const addedCount = filteredPages.length;
       const firstChild = wrap.firstChild;
@@ -3922,13 +3950,16 @@ _setPageSrc(wrap, img, blobUrl) {
       this._restoring = true;
 
       // Вставляем в ОБРАТНОМ порядке — каждая вставка идёт в начало,
-      // поэтому чтобы итоговый порядок был [P0, P1, P2, old...], начинаем с последней
+      // поэтому итоговый порядок будет [P0, P1, P2, old...]
       for (let i = addedCount - 1; i >= 0; i--) {
         const img = document.createElement("img");
         img.alt = "Страница " + (i + 1);
         img.style.opacity = "0";
         img.style.transition = "opacity 0.3s ease";
-        img.style.aspectRatio = "2 / 3";
+        img.style.aspectRatio =
+          filteredPages[i].width && filteredPages[i].height
+            ? `${filteredPages[i].width} / ${filteredPages[i].height}`
+            : "2 / 3";
         img.style.width = "100%";
         if (firstChild) wrap.insertBefore(img, firstChild);
         else wrap.appendChild(img);
@@ -3944,48 +3975,49 @@ _setPageSrc(wrap, img, blobUrl) {
         });
       }
 
-      // КРИТИЧНО: пересчитать dataset.index у всех img, чтобы старые индексы были валидны
+      // КРИТИЧНО: всё, что хранит индексы, сдвигаем СИНХРОННО в один тик
       this._reindexReaderImgs();
-
       this._currentIndex += addedCount;
-      this.updateReaderTitle();
-
+      if (this._anchor) this._anchor.idx += addedCount;
       const shiftedBlobs = {};
       for (const [key, url] of Object.entries(this._blobUrls)) {
         shiftedBlobs[parseInt(key, 10) + addedCount] = url;
       }
       this._blobUrls = shiftedBlobs;
 
-      const currIdx = this._chaptersList.findIndex((c) => c.id === chapData.id);
+      // Сразу возвращаем позицию (заглушки уже имеют высоту)
+      {
+        const cur = wrap.querySelectorAll("img")[this._currentIndex];
+        if (cur) wrap.scrollTop = cur.offsetTop + relOffset;
+      }
+
+      const currIdx = this._chaptersList.findIndex(
+        (c) => String(c.id) === String(chapData.id),
+      );
       this._prevChapter = currIdx > 0 ? this._chaptersList[currIdx - 1] : null;
+      this.updateReaderTitle();
       this.updateChapterNav();
       this.updateCounter();
 
-      const indices = Array.from({ length: addedCount }, (_, i) => i);
-      await this.loadPagesBatch(indices, 4);
-
-      const allImgs = wrap.querySelectorAll("img");
-      for (let i = 0; i < addedCount; i++) {
-        if (allImgs[i]) {
-          allImgs[i].style.aspectRatio = "";
-          allImgs[i].style.width = "";
-        }
-      }
-
-      const imgsAfter = wrap.querySelectorAll("img");
-      const curImgAfter = imgsAfter[this._currentIndex];
-      if (curImgAfter) {
-        wrap.scrollTop = curImgAfter.offsetTop + relOffset;
-      }
-
-      // Финальная страховка: пересчитать индексы после всех вставок
-      this._reindexReaderImgs();
-
+      // Лента готова — не блокируем скролл дольше нескольких сотен мс
       setTimeout(() => {
         this._restoring = false;
-      }, 200);
+      }, 250);
+
+      // Грузим только нижние кадры новой главы (ближайшие к чтению),
+      // остальные подтянет предзагрузка по мере скролла вверх
+      const idxs = [];
+      for (let i = addedCount - 1; i >= Math.max(0, addedCount - 4); i--)
+        idxs.push(i);
+      await this.loadPagesBatch(idxs, 4);
+      if (this._sessionId !== mySession) return;
+
+      // Финального «возврата» скролла нет: он дёргал ленту, если человек уже листал
+      // (инерция). Разницу высот при подмене заглушек компенсирует _setPageSrc.
+      this._reindexReaderImgs();
     } catch (e) {
       console.warn("[PrevLoad chapter]", e);
+      this._prevFailAt = Date.now();
       this._restoring = false;
     } finally {
       this._prevLoading = false;
