@@ -517,3 +517,42 @@ input::placeholder, textarea::placeholder{ color:#5a5a6e; opacity:1; }
   color:#fff;
   font-weight:600;
 }
+
+
+/* ===== Ссылка на Comizy: поле + кнопка обновить ===== */
+.comizy-link-row{
+  display:flex;
+  gap:8px;
+  align-items:stretch;
+}
+.comizy-link-row input{ flex:1; min-width:0; }
+.comizy-refresh-btn{
+  flex:0 0 auto;
+  width:44px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  background:var(--bg3);
+  border:1px solid #26263a;
+  color:var(--fg2);
+  border-radius:10px;
+  font-size:16px;
+  line-height:1;
+  cursor:pointer;
+  padding:0;
+  transition:background .15s, border-color .15s, opacity .15s;
+}
+.comizy-refresh-btn:active{ background:#242436; border-color:var(--acc); }
+.comizy-refresh-btn:disabled{ opacity:.5; pointer-events:none; }
+.comizy-refresh-btn.spin{ animation:comizyRefreshSpin .9s linear infinite; }
+@keyframes comizyRefreshSpin{ to{ transform:rotate(360deg); } }
+.comizy-link-hint{
+  min-height:0;
+  margin-top:6px;
+  font-size:12px;
+  line-height:1.3;
+  color:var(--fg2);
+}
+.comizy-link-hint:empty{ display:none; }
+.comizy-link-hint.locked{ color:#a48bff; }
+.comizy-link-hint.off{ color:#ff9a6b; }
