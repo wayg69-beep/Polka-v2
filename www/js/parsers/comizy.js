@@ -673,6 +673,25 @@ async function pickComizyResult(idx) {
 
   const chapters = await ComizyParser.getChapters(details.hid);
 
+  // Карточка уже привязана к другому источнику (Slashlib и т.п.) — это правка ссылки Comizy,
+  // а не создание карточки: подкладываем только ссылку и главы, поля карточки не переписываем.
+  const _d0 = window._currentDraft;
+  if (_d0 && (_d0.link || _d0.sourceUrl)) {
+    const _panel = document.getElementById("panel");
+    const _lnk = _panel.querySelector("#f_link_comizy");
+    const _chf = _panel.querySelector("#f_comizy_chapters");
+    if (_lnk) _lnk.value = details.url;
+    if (_chf) _chf.value = JSON.stringify(chapters);
+    _d0.link_comizy = details.url;
+    _d0.comizyChapters = chapters;
+    _d0.comizyLocked = true;
+    _d0.comizyOff = false;
+    if (window._refreshComizyHint) window._refreshComizyHint();
+    closeComizyModal();
+    toast("Ссылка Comizy подставлена, поля карточки не тронуты", "success");
+    return;
+  }
+
   const panel = document.getElementById("panel");
   const setVal = (id, val) => {
     const el = panel.querySelector("#" + id);
