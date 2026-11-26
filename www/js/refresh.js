@@ -6,41 +6,44 @@ async function refreshCard(id) {
   const it = items.find(x => x.id === id);
   if(!it) return;
 
-  // ═══ ЗАЩИТА: если карточка из Slashlib — только обновляем главы Comizy, не трогаем поля ═══
+  const comizySlugOf = (u) => (String(u || '').match(/comizy\.io\/([^\/?#\s]+)/i) || [])[1] || '';
+  const primaryUrl = it.link || it.sourceUrl || '';
   const isSlashlibCard = it.link && it.link.includes('shlib.life');
-  const isComizyCard = it.link_comizy && it.link_comizy.includes('comizy.io');
+  const hasComizy = !!(it.link_comizy && comizySlugOf(it.link_comizy));
 
-  // Гибрид: title/cover/desc/tags с Slashlib + главы с Comizy.
-  // Обновляем оба источника — иначе пользователь видит обновление только одной части.
-  if (isComizyCard && isSlashlibCard) {
-    const token = localStorage.getItem('slashlib_token');
-    if (!token) {
-      toast('Нужно войти в Slashlib', 'error');
-      return;
-    }
-    toast('Обновляю со Slashlib и Comizy...', 'success');
-    // 1. Главы Comizy по сохранённой ссылке
+  // ═══ Comizy — только ДОБАВКА к карточке с другим основным источником (Slashlib и т.п.) ═══
+  // Ссылку Comizy можно подложить/исправить руками, но карточка от этого «карточкой Comizy» не становится:
+  // обновляем только главы по сохранённой ссылке, поля (название, обложка, описание…) не трогаем.
+  if (hasComizy && primaryUrl) {
     try {
-      const slug = it.link_comizy.split('/').pop();
-      const cDetails = await ComizyParser.getMangaDetails(slug);
-      if (cDetails) {
-        const keepChapter0 = await ComizyParser.checkSlashlibHasChapter0(it.link);
-        it.comizyChapters = await ComizyParser.getChapters(cDetails.hid, { keepChapter0 });
+      const cDetails = await ComizyParser.getMangaDetails(comizySlugOf(it.link_comizy));
+      if (cDetails && cDetails.hid) {
+        const keepChapter0 = await ComizyParser.checkSlashlibHasChapter0(primaryUrl);
+        const fresh = await ComizyParser.getChapters(cDetails.hid, { keepChapter0 });
+        if (fresh && fresh.length) it.comizyChapters = fresh;
       }
-    } catch(e) {
+    } catch (e) {
       console.warn('Comizy chapters refresh failed:', e);
     }
-    // 2. Поля со Slashlib — refreshSlashlibNative делает всё сам:
-    //    тянет данные, обновляет поля, делает auto-search Comizy
-    //    (если найдёт — уточнит link_comizy; если нет — оставит наши свежие главы),
-    //    вызывает save/render/openView и свой тост.
-    return refreshSlashlibNative(it);
+    if (isSlashlibCard) {
+      const token = localStorage.getItem('slashlib_token');
+      if (!token) {
+        save();
+        toast('Нужно войти в Slashlib', 'error');
+        return;
+      }
+      toast('Обновляю со Slashlib и Comizy...', 'success');
+      // refreshSlashlibNative: поля со Slashlib; автопоиск Comizy там пропускается,
+      // если ссылку закрепили руками (comizyLocked) или убрали (comizyOff)
+      return refreshSlashlibNative(it);
+    }
+    // иной основной источник — дальше обычное обновление по нему (главы Comizy уже свежие)
   }
 
-  // Если карточка уже из Comizy — обновляем только главы и метаданные
-  if (it.link_comizy) {
+  // Карточка целиком из Comizy (другой ссылки на источник нет) — обновляем из Comizy
+  if (hasComizy && !primaryUrl) {
     toast('Обновляю из Comizy...', 'success');
-    const slug = it.link_comizy.split('/').pop();
+    const slug = comizySlugOf(it.link_comizy);
     const details = await ComizyParser.getMangaDetails(slug);
     if (details) {
       const chapters = await ComizyParser.getChaptersFor(details.hid, slug, it.link);

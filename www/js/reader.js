@@ -54,7 +54,38 @@ const SlashLibReader = {
   _inited: false,
   _userScrolledAt: 0,
 
+  // Приводит настройки к рабочему виду. Умолчания: вертикальное листание,
+  // русский язык (если для тайтла нет русского источника — читалка сама уходит на английский),
+  // переход по главам «Авто». Значения пользователя не трогаем, дописываем только недостающее/битое.
+  _normalizeSettings() {
+    if (!this._settings || typeof this._settings !== "object")
+      this._settings = {};
+    const st = this._settings;
+    let changed = false;
+    if (st.mode !== "WEBTOON" && st.mode !== "LEFT_TO_RIGHT") {
+      st.mode = "WEBTOON";
+      changed = true;
+    }
+    if (st.nextChapter !== "auto" && st.nextChapter !== "button") {
+      st.nextChapter = "auto";
+      changed = true;
+    }
+    if (st.language !== "ru" && st.language !== "en") {
+      st.language = "ru";
+      changed = true;
+    }
+    if (typeof st.doubleTapZoom !== "boolean") {
+      st.doubleTapZoom = false;
+      changed = true;
+    }
+    if (changed) this.saveSettings();
+  },
+
   init() {
+    // Раньше init() вызывался дважды (init.js и view.js), и повторный вызов
+    // перечитывал пустое хранилище и затирал настройки по умолчанию → читалка «без настроек».
+    if (this._inited) return;
+    this._inited = true;
     try {
       this._settings = JSON.parse(
         localStorage.getItem("polka_reader_settings") || "{}",
@@ -62,13 +93,7 @@ const SlashLibReader = {
     } catch (e) {
       this._settings = {};
     }
-    if (this._inited) return;
-    this._inited = true;
-    if (!this._settings.mode) this._settings.mode = "WEBTOON";
-    if (!this._settings.nextChapter) this._settings.nextChapter = "button";
-    if (typeof this._settings.doubleTapZoom !== "boolean")
-      this._settings.doubleTapZoom = false;
-    if (!this._settings.language) this._settings.language = "ru";
+    this._normalizeSettings();
 
     const el = (id) => document.getElementById(id);
 
