@@ -239,7 +239,11 @@ async function nativeFetch(url, headers = {}) {
     ok: res.status >= 200 && res.status < 300,
     status: res.status,
     text: async () => (typeof res.data === 'string' ? res.data : JSON.stringify(res.data)),
-    json: async () => (typeof res.data === 'string' ? JSON.parse(res.data) : res.data)
+    json: async () => {
+      if (typeof res.data !== 'string') return res.data;
+      if (!res.data.trim()) throw new Error('Пустой ответ сервера (HTTP ' + res.status + ')');
+      return JSON.parse(res.data);
+    }
   };
 }
 

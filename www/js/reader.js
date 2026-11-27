@@ -3693,6 +3693,8 @@ _setPageSrc(wrap, img, blobUrl) {
     if (remaining > 2) return;
 
     if (this._pagesList.length > bounds.endIdx + 1) return;
+    // После сбоя сети не долбим API на каждый скролл
+    if (Date.now() - (this._autoFailAt || 0) < 4000) return;
 
     this._autoLoading = true;
     try {
@@ -3706,6 +3708,7 @@ _setPageSrc(wrap, img, blobUrl) {
           Referer: "https://v2.shlib.life/",
         },
       );
+      if (!chapRes.ok) throw new Error("HTTP " + chapRes.status);
       const chapJson = await chapRes.json();
       const chapData = chapJson.data;
       if (!chapData || !chapData.pages || !chapData.pages.length) return;
@@ -3768,6 +3771,7 @@ _setPageSrc(wrap, img, blobUrl) {
       }
     } catch (e) {
       console.warn("[AutoLoad chapter]", e);
+      this._autoFailAt = Date.now();
     } finally {
       this._autoLoading = false;
     }
@@ -3934,6 +3938,7 @@ _setPageSrc(wrap, img, blobUrl) {
           Referer: "https://v2.shlib.life/",
         },
       );
+      if (!chapRes.ok) throw new Error("HTTP " + chapRes.status);
       const chapJson = await chapRes.json();
       const chapData = chapJson.data;
       if (this._sessionId !== mySession) return;
