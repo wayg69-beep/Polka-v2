@@ -637,7 +637,7 @@
 
     startPeriodic() {
       if (this._periodic) return;
-      this._periodic = setInterval(() => { this.pull(); }, this.PULL_INTERVAL);
+      this._periodic = setInterval(() => { if (!document.hidden) this.pull(); }, this.PULL_INTERVAL);
       console.log('[DomainsCloud] periodic pull started');
     },
 

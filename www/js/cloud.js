@@ -716,7 +716,8 @@ return JSON.parse(text);
   // Раз в 5 минут проверяем, есть ли что отправить
   startPeriodic(){
     setInterval(() => {
-      if(this._dirty && this.isReady()) this.sync(false);
+      // В свёрнутом состоянии не лезем в сеть (отправка уже ушла при сворачивании); догоним при возврате
+      if(!document.hidden && this._dirty && this.isReady()) this.sync(false);
     }, 5 * 60 * 1000);
   },
 

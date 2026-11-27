@@ -313,29 +313,22 @@ setTimeout(() => {
 setTimeout(() => { Cloud.pullInbox(true); }, 1500);
 
 // И раз в минуту, пока приложение открыто
-setInterval(() => { Cloud.pullInbox(true); }, 60 * 1000);
+setInterval(() => { if (!document.hidden) Cloud.pullInbox(true); }, 60 * 1000);
 
-// И при возврате на страницу (например, из браузера)
+// И при возврате на страницу (например, из браузера) — ОДИН обработчик.
+// Раньше второй обработчик был вложен в первый и плодил копии при каждом возврате в приложение.
 document.addEventListener('visibilitychange', () => {
   if(document.visibilityState === 'visible'){
     Cloud.pullInbox(true);
-  document.addEventListener('visibilitychange', () => {
-  if(document.visibilityState === 'visible'){
-    Cloud.pullInbox(true);
     Cloud.syncIfStale();
+    if(Cloud._dirty && Cloud.isReady()) Cloud.sync(false);
     if (typeof DiscHashesCloud !== 'undefined') DiscHashesCloud.pullAndMerge();
     if (typeof DomainsCloud !== 'undefined') DomainsCloud.syncIfStale();
   } else if(Cloud._dirty && Cloud.isReady()){
     Cloud.sync(false);
   }
 });
-    Cloud.syncIfStale();
-    if (typeof DiscHashesCloud !== 'undefined') DiscHashesCloud.pullAndMerge();
-  } else if(Cloud._dirty && Cloud.isReady()){
-    Cloud.sync(false);
-  }
-});
-    
+
 CloudBanner.init();
 Player.init();
 
