@@ -921,10 +921,10 @@ const SlashLibReader = {
       const arr = Array.from(set).slice(-300);
       localStorage.setItem("polka_reader_disc_hashes", JSON.stringify(arr));
       console.log("[reader] hash added:", hash, "| pool size:", arr.length);
-      if (typeof DiscHashesCloud !== "undefined")
-        DiscHashesCloud.pushDebounced();
+      if (typeof DiscHashesCloud !== "undefined") DiscHashesCloud.pushDebounced();
+      else console.error("[reader] DiscHashesCloud не загружен — хэш останется только на устройстве");
     } catch (e) {
-      console.warn("[reader] _addDiscHash FAILED:", e);
+      console.error("[reader] _addDiscHash FAILED:", e);
     }
   },
 
@@ -937,9 +937,13 @@ const SlashLibReader = {
         "polka_reader_disc_hashes",
         JSON.stringify(Array.from(set)),
       );
-      if (typeof DiscHashesCloud !== "undefined")
+      if (typeof DiscHashesCloud !== "undefined") {
+        DiscHashesCloud.noteRemoved(hash);
         DiscHashesCloud.pushDebounced();
-    } catch (e) {}
+      }
+    } catch (e) {
+      console.error("[reader] _removeDiscHash FAILED:", e);
+    }
   },
 
   async _filterDisclaimers(pages, depth, silent) {

@@ -152,6 +152,21 @@ function describeCloudError(e){
   const DiscHashesCloud = {
   _pushTimer: null,
   _busy: false,
+  _pushing: false,
+  _again: false,
+  _DIRTY_KEY: 'polka_disc_dirty',
+
+  // «Грязный» флаг переживает перезапуск приложения: если отправка не дошла
+  // (нет сети / приложение закрыли раньше таймера) — повторим при следующем запуске
+  _setDirty(v) {
+    try {
+      if (v) localStorage.setItem(this._DIRTY_KEY, '1');
+      else localStorage.removeItem(this._DIRTY_KEY);
+    } catch(e) {}
+  },
+  _isDirty() {
+    try { return localStorage.getItem(this._DIRTY_KEY) === '1'; } catch(e) { return false; }
+  },
 
   _localSet() {
     try {
@@ -170,79 +185,217 @@ function describeCloudError(e){
     } catch(e) {}
   },
 
+  // ───────── Видимость: всё пишем в консоль (Eruda) с префиксом [disc_hashes] ─────────
+  // ✅ info — успех, ⚠ warn — не критично/нет входа, ❌ error — реальный сбой.
+  // Состояние последней операции: DiscHashesCloud.last, полный отчёт: await discDiag()
+  last: { pull: null, push: null },
+  _lastToastAt: 0,
+
+  _say(level, ...args) {
+    try { console[level]('[disc_hashes]', ...args); } catch(e) {}
+  },
+  _fail(where, e) {
+    const msg = String((e && (e.message || e.code || e.details)) || e || 'неизвестная ошибка');
+    this._say('error', '❌ ' + where + ' не удалось:', msg, e && e.hint ? ('| hint: ' + e.hint) : '', e && e.code ? ('| code: ' + e.code) : '');
+    // Тост — не чаще раза в минуту, чтобы не спамить при плохой сети
+    if (Date.now() - this._lastToastAt > 60000 && typeof toast === 'function') {
+      this._lastToastAt = Date.now();
+      toast('Хэши дисклеймеров не ушли в облако: ' + msg.slice(0, 90), 'error');
+    }
+    return msg;
+  },
+
+  // Хэши, удалённые пользователем (отмена пометки): чтобы слияние с облаком их не воскресило
+  _REMOVED_KEY: 'polka_disc_removed',
+  _removedSet() {
+    try {
+      const arr = JSON.parse(localStorage.getItem(this._REMOVED_KEY) || '[]');
+      return new Set(Array.isArray(arr) ? arr.filter(h => typeof h === 'string' && h) : []);
+    } catch(e) { return new Set(); }
+  },
+  noteRemoved(hash) {
+    if (!hash) return;
+    try {
+      const r = this._removedSet(); r.add(hash);
+      localStorage.setItem(this._REMOVED_KEY, JSON.stringify(Array.from(r).slice(-300)));
+    } catch(e) {}
+  },
+  _clearRemoved() { try { localStorage.removeItem(this._REMOVED_KEY); } catch(e) {} },
+
+  async _fetchCloud(uid) {
+    const { data, error } = await sb
+      .from('profiles')
+      .select('disc_hashes')
+      .eq('id', uid)
+      .maybeSingle();
+    if (error) throw error;
+    return {
+      exists: !!data,
+      arr: (data && Array.isArray(data.disc_hashes)) ? data.disc_hashes.filter(h => typeof h === 'string' && h) : []
+    };
+  },
+
   async pullAndMerge() {
     if (this._busy) return;
     this._busy = true;
+    let needPush = false;
     try {
       const { data: { session } } = await sb.auth.getSession();
-      if (!session) return;
+      if (!session) {
+        this.last.pull = { at: Date.now(), ok: false, error: 'нет сессии облака' };
+        this._say('warn', '⚠ нет входа в облако — хэши только на этом устройстве (локально: ' + this._localSet().size + (this._isDirty() ? ', ЕСТЬ неотправленные' : '') + ')');
+        return;
+      }
 
-      const { data, error } = await sb
-        .from('profiles')
-        .select('disc_hashes')
-        .eq('id', session.user.id)
-        .maybeSingle();
-      if (error) throw error;
-
-      const cloudArr = (data && Array.isArray(data.disc_hashes)) ? data.disc_hashes : [];
+      const cloud = await this._fetchCloud(session.user.id);
+      const removed = this._removedSet();
+      const cloudSet = new Set(cloud.arr);
       const localSet = this._localSet();
       const before = localSet.size;
 
-      cloudArr.forEach(h => {
-        if (typeof h === 'string' && h) localSet.add(h);
-      });
+      cloudSet.forEach(h => { if (!removed.has(h)) localSet.add(h); });
+      removed.forEach(h => localSet.delete(h));
 
-      if (localSet.size !== before) {
-        this._saveLocal(localSet);
-        console.log('[disc_hashes] merged from cloud:', cloudArr.length, '→ local total:', localSet.size);
-      }
+      if (localSet.size !== before) this._saveLocal(localSet);
 
-      if (localSet.size > cloudArr.length) {
-        this._pushNow();
-      }
+      needPush = this._isDirty()
+        || removed.size > 0
+        || Array.from(localSet).some(h => !cloudSet.has(h));
+
+      this.last.pull = { at: Date.now(), ok: true, cloud: cloudSet.size, local: localSet.size, rowExists: cloud.exists };
+      this._say('info', '✅ pull: в облаке ' + cloudSet.size + ', локально ' + localSet.size
+        + (cloud.exists ? '' : ' (строки профиля в облаке НЕТ)')
+        + (needPush ? ' → нужно отправить' : ' → синхронно'));
     } catch(e) {
-      console.warn('[disc_hashes] pull failed:', e.message);
+      this.last.pull = { at: Date.now(), ok: false, error: String(e && e.message || e) };
+      this._fail('pull', e);
     } finally {
       this._busy = false;
     }
+    if (needPush) this._pushNow();
   },
 
   pushDebounced() {
+    this._setDirty(true);
+    this._say('info', '⏳ изменение хэшей, отправка через 1.5 с (локально: ' + this._localSet().size + ')');
     clearTimeout(this._pushTimer);
-    this._pushTimer = setTimeout(() => this._pushNow(), 3000);
+    this._pushTimer = setTimeout(() => {
+      this._pushTimer = null;
+      this._pushNow();
+    }, 1500);
   },
 
   async _pushNow() {
+    // Одна отправка за раз; если за это время хэши менялись — отправим ещё раз
+    if (this._pushing) { this._again = true; return; }
+    this._pushing = true;
     try {
       const { data: { session } } = await sb.auth.getSession();
-      if (!session) return;
+      if (!session) {
+        // флаг dirty остаётся — отправим после входа
+        this.last.push = { at: Date.now(), ok: false, error: 'нет сессии облака' };
+        this._say('warn', '⚠ push отложен: нет входа в облако (хэши ждут в очереди, локально ' + this._localSet().size + ')');
+        return;
+      }
+      const uid = session.user.id;
 
-      const arr = Array.from(this._localSet()).slice(-300);
+      // 1. Сначала читаем облако и ОБЪЕДИНЯЕМ: раньше push заменял массив в базе локальным
+      //    и, если pull не успел отработать (нет сети при старте), затирал хэши с других устройств.
+      const cloud = await this._fetchCloud(uid);
+      const removed = this._removedSet();
+      const merged = new Set(cloud.arr);
+      this._localSet().forEach(h => merged.add(h));
+      removed.forEach(h => merged.delete(h));
+      const arr = Array.from(merged).slice(-300);
 
+      // 2. Запись
       const { data, error } = await sb
         .from('profiles')
         .update({ disc_hashes: arr })
-        .eq('id', session.user.id)
+        .eq('id', uid)
         .select('id');
-
       if (error) throw error;
 
+      let how = 'update';
       if (!data || !data.length) {
+        // Строки профиля нет (или RLS не дал обновить) — создаём
         const c = (typeof cloudGet === 'function' ? cloudGet() : null) || {};
-        const displayName = c.display_name || 'User';
-        await sb.from('profiles').insert([{
-          id: session.user.id,
-          display_name: displayName,
+        const ins = await sb.from('profiles').insert([{
+          id: uid,
+          display_name: c.display_name || 'User',
           disc_hashes: arr
         }]);
+        if (ins.error) {
+          if (ins.error.code === '23505')
+            throw new Error('строка профиля есть, но UPDATE для неё запрещён (проверь RLS-политику UPDATE на profiles): ' + ins.error.message);
+          throw ins.error;
+        }
+        how = 'insert';
       }
 
-      console.log('[disc_hashes] pushed:', arr.length);
+      // 3. Проверка чтением: база могла «принять» запрос, но ничего не сохранить (RLS / триггер)
+      const back = await this._fetchCloud(uid);
+      const backSet = new Set(back.arr);
+      const missing = arr.filter(h => !backSet.has(h));
+      if (missing.length) {
+        throw new Error('база приняла запрос, но не сохранила ' + missing.length + ' из ' + arr.length + ' хэшей (проверь RLS-политику UPDATE для profiles)');
+      }
+
+      this._saveLocal(new Set(arr));
+      this._clearRemoved();
+      this._setDirty(false);
+      this.last.push = { at: Date.now(), ok: true, count: arr.length, how, verified: true };
+      this._say('info', '✅ push (' + how + '): в базе ' + arr.length + ' хэшей, проверено чтением');
     } catch(e) {
-      console.warn('[disc_hashes] push failed:', e.message);
+      // Флаг dirty остаётся → повтор при следующем запуске / изменении
+      this.last.push = { at: Date.now(), ok: false, error: String(e && (e.message || e.code) || e) };
+      this._fail('push', e);
+    } finally {
+      this._pushing = false;
+      if (this._again) {
+        this._again = false;
+        this._pushNow();
+      }
     }
+  },
+
+  // Полный отчёт: await discDiag()  — в консоли Eruda
+  async diagnose() {
+    const rep = { local: this._localSet().size, dirty: this._isDirty(), removedPending: this._removedSet().size,
+      timerPending: !!this._pushTimer, session: false, cloudRow: null, cloud: null,
+      onlyLocal: 0, onlyCloud: 0, last: this.last };
+    try {
+      const { data: { session } } = await sb.auth.getSession();
+      rep.session = !!session;
+      if (session) {
+        const cloud = await this._fetchCloud(session.user.id);
+        const cs = new Set(cloud.arr), ls = this._localSet();
+        rep.cloudRow = cloud.exists; rep.cloud = cs.size;
+        rep.onlyLocal = Array.from(ls).filter(h => !cs.has(h)).length;
+        rep.onlyCloud = Array.from(cs).filter(h => !ls.has(h)).length;
+      }
+    } catch(e) { rep.error = String(e && (e.message || e.code) || e); }
+    const verdict = !rep.session ? '⚠ нет входа в облако'
+      : rep.error ? '❌ ошибка чтения облака'
+      : rep.cloudRow === false ? '❌ строки профиля в облаке нет'
+      : rep.onlyLocal ? '❌ ' + rep.onlyLocal + ' хэш(ей) есть только на устройстве (не в облаке)'
+      : '✅ всё в облаке';
+    this._say(rep.session && !rep.error && rep.onlyLocal === 0 && rep.cloudRow !== false ? 'info' : 'error', 'ДИАГНОСТИКА: ' + verdict, rep);
+    return rep;
   }
 };
+window.discDiag = () => DiscHashesCloud.diagnose();
+
+// Приложение уходит в фон — отправляем сразу, не дожидаясь таймера
+// (иначе хэш, отмеченный перед сворачиванием, мог не успеть уйти в базу)
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'hidden') return;
+  if (DiscHashesCloud._pushTimer) {
+    clearTimeout(DiscHashesCloud._pushTimer);
+    DiscHashesCloud._pushTimer = null;
+    DiscHashesCloud._pushNow();
+  }
+});
 
   
 // Записывает профиль (имя/аватарку) в таблицу profiles. upsert — чтобы строка создалась, если её нет.
