@@ -1521,6 +1521,23 @@ const SlashLibReader = {
     });
   },
 
+  // Следующая глава после chapterId (у Comizy пропускаем скрытые)
+  _findChapterAfter(chapterId) {
+    const list = this._chaptersList || [];
+    const i = list.findIndex((c) => String(c.id) === String(chapterId));
+    if (i < 0) return null;
+    for (let k = i + 1; k < list.length; k++) {
+      const c = list[k];
+      if (
+        this._source === "comizy" &&
+        this._isComizyChapterHidden(this._fullSlug, c.id)
+      )
+        continue;
+      return c;
+    }
+    return null;
+  },
+
   _bindDiscMarkTap() {
     const wrap = document.getElementById("readerPages");
     if (!wrap || wrap._discMarkBound) return;
@@ -1572,27 +1589,41 @@ const SlashLibReader = {
         const btn = document.getElementById("readerDiscMarkBtn");
         if (btn) btn.classList.remove("active");
 
-        // Запоминаем главу и позицию, чтобы вернуться туда же
-        const bounds = this.getCurrentChapterBounds();
-        const savedPage = bounds ? bounds.pageInChapter - 1 : 0;
-        const savedVol = bounds ? bounds.volume : 1;
-        const savedNum = bounds ? bounds.number : 1;
-        const savedChapId = bounds ? bounds.chapterId : null;
+        // Куда встать после перезагрузки главы:
+        //  • ниже отмеченной рекламы (первый кадр после неё, переживший фильтр);
+        //  • реклама была в конце главы → начало СЛЕДУЮЩЕЙ главы;
+        //  • следующей главы нет → последний кадр этой главы. Никогда не начало.
+        const adKey = page.url || page.image;
+        const chapId = page.chapterId;
+        const chapVol = page.volume;
+        const chapNum = page.number;
+        const laterKeys = [];
+        for (
+          let j = targetIdx + 1;
+          j < this._pagesList.length && this._pagesList[j].chapterId === chapId;
+          j++
+        ) {
+          const pj = this._pagesList[j];
+          laterKeys.push(pj.url || pj.image);
+        }
+        const nextCh = this._findChapterAfter(chapId);
 
         toast("Дисклеймер запомнен", "success", "Отменить", () => {
           this._removeDiscHash(info.hash);
-          if (savedChapId)
-            this.loadChapter(savedVol, savedNum, savedChapId, {
-              page: savedPage,
-              offset: 0,
-            });
+          // Отмена: встаём на сам кадр, который снова появится
+          this.loadChapter(chapVol, chapNum, chapId, { pageKeys: [adKey] });
           toast("Отменено", "warn");
         });
 
-        if (savedChapId) {
-          this.loadChapter(savedVol, savedNum, savedChapId, {
-            page: savedPage,
-            offset: 0,
+        if (!laterKeys.length && nextCh) {
+          // Реклама была последним кадром главы — сразу следующая глава
+          this.loadChapter(nextCh.volume, nextCh.number, nextCh.id, null);
+        } else {
+          this.loadChapter(chapVol, chapNum, chapId, {
+            pageKeys: laterKeys,
+            onMissing: nextCh
+              ? { volume: nextCh.volume, number: nextCh.number, id: nextCh.id }
+              : null,
           });
         }
       },
@@ -1983,8 +2014,44 @@ const SlashLibReader = {
         return;
       }
 
+      // Позиционирование по КЛЮЧУ кадра (после отметки дисклеймера): первый из pageKeys,
+      // что пережил фильтрацию. Не по индексу — индексы «плывут» от удалённых кадров.
+      let _keyResolved = false;
+      if (progress && Array.isArray(progress.pageKeys)) {
+        for (const k of progress.pageKeys) {
+          const ki = pagesList.findIndex((p) => (p.url || p.image) === k);
+          if (ki >= 0) {
+            progress.page = ki;
+            progress.offset = 0;
+            progress.intraPageRatio = 0;
+            delete progress.chapterRatio;
+            _keyResolved = true;
+            break;
+          }
+        }
+        if (!_keyResolved) {
+          if (progress.onMissing) {
+            // Ниже отмеченной рекламы кадров не осталось — идём в следующую главу
+            const nx = progress.onMissing;
+            toast("Это конец главы — открываю следующую", "success");
+            setTimeout(() => {
+              this.loadChapter(nx.volume, nx.number, nx.id, null);
+            }, 60);
+            return;
+          }
+          // Следующей главы нет — остаёмся на последнем кадре, но не в начале
+          progress.page = pagesList.length - 1;
+          progress.offset = 0;
+          progress.intraPageRatio = 0;
+          delete progress.chapterRatio;
+          _keyResolved = true;
+        }
+      }
+
       // Если прогресс указывал на страницу после дисклеймеров — сдвигаем на число удалённых
-      if (progress && typeof progress.chapterRatio === "number") {
+      if (_keyResolved) {
+        // позиция уже определена по ключу
+      } else if (progress && typeof progress.chapterRatio === "number") {
         // Переключение источника: ищем точку по доле высоты уже ОЧИЩЕННОЙ главы
         const wts = pagesList.map((p) =>
           p.width > 0 && p.height > 0 ? p.height / p.width : 1.5,
