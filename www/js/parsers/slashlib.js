@@ -420,7 +420,8 @@ async function runSlashlibSearch() {
       return (
         '<div class="tmdb-result" data-idx="' + idx + '">' +
           '<div class="tmdb-result-poster">' +
-            (cover ? '<img src="' + esc(cover) + '" alt="">' : SVG_ICONS.book) +
+            // Через прокси, как в карточке и в поиске Comizy: CDN Slashlib не отдаёт картинки «напрямую» из приложения
+            (cover ? '<img src="' + esc(coverProxy(cover, 92)) + '" alt="" loading="lazy" referrerpolicy="no-referrer">' : SVG_ICONS.book) +
           '</div>' +
           '<div class="tmdb-result-info">' +
             '<div class="tmdb-result-title">' + esc(title) + '</div>' +
