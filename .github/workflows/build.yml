@@ -66,6 +66,12 @@ jobs:
           if 'FOREGROUND_SERVICE_MEDIA_PLAYBACK' not in content:
               content = content.replace('<application', permissions, 1)
 
+          # Работа в фоне: тип службы dataSync (Android 14+ требует явный тип) + сама служба
+          if 'FOREGROUND_SERVICE_DATA_SYNC' not in content:
+              content = content.replace('<application', '<uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />\n    <application', 1)
+          if 'KeepAliveService' not in content:
+              content = content.replace('</application>', '    <service android:name=".KeepAliveService" android:exported="false" android:foregroundServiceType="dataSync" />\n    </application>', 1)
+
           vkx_pkg = '        <package android:name="ua.itaysonlab.vkx" />'
           if '<queries>' not in content:
               content = content.replace('</manifest>', '    <queries>\n' + vkx_pkg + '\n    </queries>\n</manifest>')
@@ -143,11 +149,207 @@ jobs:
           }
           EOF
       
+          cat << 'EOF' > "$PKG_DIR/KeepAliveService.java"
+          package app.polka.tracker;
+          
+          import android.app.Notification;
+          import android.app.NotificationChannel;
+          import android.app.NotificationManager;
+          import android.app.PendingIntent;
+          import android.app.Service;
+          import android.content.Context;
+          import android.content.Intent;
+          import android.content.pm.ServiceInfo;
+          import android.os.Build;
+          import android.os.Handler;
+          import android.os.IBinder;
+          import android.os.Looper;
+          import android.os.PowerManager;
+          
+          /**
+           * Короткая «служба переднего плана» для работы в свёрнутом состоянии.
+           * Стартует при сворачивании, сама гаснет через DEFAULT_MS без продлений.
+           * JS продлевает её (hold) только пока есть незавершённые запросы — батарею не тратит.
+           */
+          public class KeepAliveService extends Service {
+              static final String CHANNEL_ID = "polka_keepalive";
+              static final int NOTIF_ID = 7421;
+              static final long DEFAULT_MS = 3 * 60 * 1000L;
+              static final long MIN_MS = 15 * 1000L;
+              static final long MAX_MS = 10 * 60 * 1000L;
+              static volatile KeepAliveService instance;
+          
+              private final Handler handler = new Handler(Looper.getMainLooper());
+              private final Runnable stopper = new Runnable() {
+                  @Override
+                  public void run() { shutdown(); }
+              };
+              private PowerManager.WakeLock wakeLock;
+          
+              static void start(Context ctx, long ms) {
+                  KeepAliveService s = instance;
+                  if (s != null) { s.extend(ms); return; }
+                  try {
+                      Intent i = new Intent(ctx, KeepAliveService.class);
+                      i.putExtra("ms", ms);
+                      if (Build.VERSION.SDK_INT >= 26) ctx.startForegroundService(i);
+                      else ctx.startService(i);
+                  } catch (Exception e) {
+                      // Система не разрешила старт из фона — не критично, работаем как раньше
+                  }
+              }
+          
+              static void stop(Context ctx) {
+                  KeepAliveService s = instance;
+                  if (s != null) s.shutdown();
+              }
+          
+              @Override
+              public void onCreate() {
+                  super.onCreate();
+                  instance = this;
+                  createChannel();
+                  Notification n = buildNotification();
+                  // startForeground сразу в onCreate — иначе при быстром stop система роняет приложение
+                  if (Build.VERSION.SDK_INT >= 29) {
+                      startForeground(NOTIF_ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC);
+                  } else {
+                      startForeground(NOTIF_ID, n);
+                  }
+              }
+          
+              @Override
+              public int onStartCommand(Intent intent, int flags, int startId) {
+                  long ms = intent != null ? intent.getLongExtra("ms", DEFAULT_MS) : DEFAULT_MS;
+                  extend(ms);
+                  return START_NOT_STICKY;
+              }
+          
+              void extend(long ms) {
+                  ms = Math.max(MIN_MS, Math.min(ms, MAX_MS));
+                  handler.removeCallbacks(stopper);
+                  handler.postDelayed(stopper, ms);
+                  try {
+                      if (wakeLock == null) {
+                          PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
+                          if (pm != null) {
+                              wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "polka:keepalive");
+                              wakeLock.setReferenceCounted(false);
+                          }
+                      }
+                      // Wake lock с таймаутом: сам отпустится, даже если мы про него забудем
+                      if (wakeLock != null) wakeLock.acquire(ms + 5000L);
+                  } catch (Exception e) { }
+              }
+          
+              void shutdown() {
+                  handler.removeCallbacks(stopper);
+                  try {
+                      if (wakeLock != null && wakeLock.isHeld()) wakeLock.release();
+                  } catch (Exception e) { }
+                  try { stopForeground(Service.STOP_FOREGROUND_REMOVE); } catch (Exception e) { }
+                  stopSelf();
+              }
+          
+              // Android 14/15: система сообщает, что лимит времени службы вышел — обязаны остановиться
+              public void onTimeout(int startId) { shutdown(); }
+              public void onTimeout(int startId, int fgsType) { shutdown(); }
+          
+              @Override
+              public void onDestroy() {
+                  handler.removeCallbacks(stopper);
+                  try {
+                      if (wakeLock != null && wakeLock.isHeld()) wakeLock.release();
+                  } catch (Exception e) { }
+                  instance = null;
+                  super.onDestroy();
+              }
+          
+              @Override
+              public IBinder onBind(Intent intent) { return null; }
+          
+              private void createChannel() {
+                  if (Build.VERSION.SDK_INT < 26) return;
+                  NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+                  if (nm == null || nm.getNotificationChannel(CHANNEL_ID) != null) return;
+                  NotificationChannel ch = new NotificationChannel(CHANNEL_ID, "Работа в фоне", NotificationManager.IMPORTANCE_MIN);
+                  ch.setDescription("Показывается несколько минут после сворачивания, пока Полка завершает синхронизацию");
+                  ch.setShowBadge(false);
+                  nm.createNotificationChannel(ch);
+              }
+          
+              private Notification buildNotification() {
+                  Intent launch = getPackageManager().getLaunchIntentForPackage(getPackageName());
+                  PendingIntent pi = null;
+                  if (launch != null) {
+                      pi = PendingIntent.getActivity(this, 0, launch, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
+                  }
+                  Notification.Builder b = new Notification.Builder(this, CHANNEL_ID)
+                      .setSmallIcon(android.R.drawable.stat_notify_sync)
+                      .setContentTitle("Полка")
+                      .setContentText("Завершаю синхронизацию в фоне")
+                      .setOngoing(true)
+                      .setCategory(Notification.CATEGORY_SERVICE);
+                  if (pi != null) b.setContentIntent(pi);
+                  if (Build.VERSION.SDK_INT >= 31) b.setForegroundServiceBehavior(Notification.FOREGROUND_SERVICE_IMMEDIATE);
+                  return b.build();
+              }
+          }
+          EOF
+
+          cat << 'EOF' > "$PKG_DIR/KeepAlivePlugin.java"
+          package app.polka.tracker;
+          
+          import android.content.Context;
+          import com.getcapacitor.JSObject;
+          import com.getcapacitor.Plugin;
+          import com.getcapacitor.PluginCall;
+          import com.getcapacitor.PluginMethod;
+          import com.getcapacitor.annotation.CapacitorPlugin;
+          
+          @CapacitorPlugin(name = "KeepAlive")
+          public class KeepAlivePlugin extends Plugin {
+              static boolean enabled(Context c) {
+                  return c.getSharedPreferences("polka_bg", Context.MODE_PRIVATE).getBoolean("enabled", true);
+              }
+          
+              // Продлить работу в фоне (JS зовёт, пока есть незавершённые запросы)
+              @PluginMethod
+              public void hold(PluginCall call) {
+                  if (enabled(getContext())) {
+                      Integer ms = call.getInt("ms", 120000);
+                      KeepAliveService.start(getContext(), ms == null ? 120000L : ms.longValue());
+                  }
+                  call.resolve();
+              }
+          
+              @PluginMethod
+              public void setEnabled(PluginCall call) {
+                  Boolean v = call.getBoolean("value", true);
+                  boolean on = v == null || v;
+                  getContext().getSharedPreferences("polka_bg", Context.MODE_PRIVATE).edit().putBoolean("enabled", on).apply();
+                  if (!on) KeepAliveService.stop(getContext());
+                  call.resolve();
+              }
+          
+              @PluginMethod
+              public void status(PluginCall call) {
+                  JSObject r = new JSObject();
+                  r.put("enabled", enabled(getContext()));
+                  r.put("running", KeepAliveService.instance != null);
+                  call.resolve(r);
+              }
+          }
+          EOF
+
           cat << 'EOF' > "$PKG_DIR/MainActivity.java"
           package app.polka.tracker;
           import android.content.ClipData;
           import android.content.Intent;
           import android.os.Bundle;
+          import android.os.Handler;
+          import android.os.Looper;
+          import android.webkit.WebView;
           import android.webkit.JavascriptInterface;
           import androidx.core.view.WindowCompat;
           import androidx.core.view.WindowInsetsCompat;
@@ -161,14 +363,40 @@ jobs:
               @Override
               public void onCreate(Bundle savedInstanceState) {
                   registerPlugin(AppSearchPlugin.class);
+                  registerPlugin(KeepAlivePlugin.class);
                   super.onCreate(savedInstanceState);
                   WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
                   if (this.bridge != null && this.bridge.getWebView() != null) {
                       this.bridge.getWebView().addJavascriptInterface(new FullscreenBridge(), "FullscreenBridge");
+                      // Движок страницы не «понижается» в свёрнутом приложении — запросы не замораживаются
+                      this.bridge.getWebView().setRendererPriorityPolicy(WebView.RENDERER_PRIORITY_IMPORTANT, false);
                   }
                   handleShareIntent(getIntent());
               }
       
+
+              private final Handler uiHandler = new Handler(Looper.getMainLooper());
+              private final Runnable stopKeepAlive = new Runnable() {
+                  @Override
+                  public void run() { KeepAliveService.stop(MainActivity.this); }
+              };
+
+              // Сворачивание: на пару минут включаем службу, чтобы Android не резал сеть
+              @Override
+              public void onPause() {
+                  super.onPause();
+                  uiHandler.removeCallbacks(stopKeepAlive);
+                  if (KeepAlivePlugin.enabled(this)) KeepAliveService.start(this, KeepAliveService.DEFAULT_MS);
+              }
+
+              // Возврат: служба не нужна, гасим (с небольшой задержкой — чтобы не гасить её раньше запуска)
+              @Override
+              public void onResume() {
+                  super.onResume();
+                  uiHandler.removeCallbacks(stopKeepAlive);
+                  uiHandler.postDelayed(stopKeepAlive, 1500);
+              }
+
               @Override
               protected void onNewIntent(Intent intent) {
                   super.onNewIntent(intent);
